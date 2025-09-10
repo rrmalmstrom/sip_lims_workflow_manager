@@ -59,6 +59,66 @@ def auto_scroll_terminal():
     """
     components.html(js_code, height=0)
 
+def scroll_to_top():
+    """
+    Injects JavaScript to scroll the page to the top when the terminal opens.
+    Uses multiple methods to ensure compatibility with Streamlit's iframe structure.
+    """
+    js_code = """
+    <script>
+    (function() {
+        // Multiple aggressive attempts to scroll to top
+        function scrollToTop() {
+            try {
+                // Method 1: Immediate scroll attempts
+                if (window.parent) {
+                    window.parent.scrollTo(0, 0);
+                    window.parent.scrollTo({top: 0, behavior: 'instant'});
+                }
+                window.scrollTo(0, 0);
+                window.scrollTo({top: 0, behavior: 'instant'});
+                
+                // Method 2: Target Streamlit containers
+                const streamlitDoc = window.parent.document;
+                if (streamlitDoc) {
+                    // Try multiple container selectors
+                    const containers = [
+                        streamlitDoc.querySelector('[data-testid="stAppViewContainer"]'),
+                        streamlitDoc.querySelector('.main'),
+                        streamlitDoc.querySelector('[data-testid="stApp"]'),
+                        streamlitDoc.querySelector('.stApp'),
+                        streamlitDoc.body,
+                        streamlitDoc.documentElement
+                    ];
+                    
+                    containers.forEach(container => {
+                        if (container) {
+                            container.scrollTop = 0;
+                            if (container.scrollTo) {
+                                container.scrollTo(0, 0);
+                                container.scrollTo({top: 0, behavior: 'instant'});
+                            }
+                        }
+                    });
+                }
+            } catch (e) {
+                console.log('Scroll attempt failed:', e);
+            }
+        }
+        
+        // Try immediately
+        scrollToTop();
+        
+        // Try again after short delays
+        setTimeout(scrollToTop, 50);
+        setTimeout(scrollToTop, 100);
+        setTimeout(scrollToTop, 200);
+        setTimeout(scrollToTop, 500);
+    })();
+    </script>
+    """
+    components.html(js_code, height=0)
+
 def send_and_clear_input(project, user_input):
     """Callback to send input to the script and clear the input box."""
     if project.script_runner.is_running():
@@ -79,6 +139,58 @@ def select_folder_via_subprocess():
     process = subprocess.run([python_executable, str(script_path)], capture_output=True, text=True)
     return process.stdout.strip()
 
+def perform_undo(project):
+    """
+    Performs undo operation by reverting to the previous completed step state.
+    Uses the complete snapshot system for comprehensive rollback.
+    """
+    # Find all completed steps
+    completed_steps = []
+    for step in project.workflow.steps:
+        if project.get_state(step['id']) == 'completed':
+            completed_steps.append(step)
+    
+    if not completed_steps:
+        return False  # Nothing to undo
+    
+    # Get the last completed step
+    last_step = completed_steps[-1]
+    last_step_id = last_step['id']
+    
+    # Find the step index
+    step_index = next(i for i, s in enumerate(project.workflow.steps) if s['id'] == last_step_id)
+    
+    try:
+        if step_index == 0:
+            # If undoing the first step, restore to the state before any steps were run
+            # We'll restore from the complete snapshot taken before this step
+            project.snapshot_manager.restore_complete_snapshot(last_step_id)
+            print(f"UNDO: Restored project to initial state (before step {last_step_id})")
+        else:
+            # Revert to the previous step's complete snapshot
+            previous_step_id = project.workflow.steps[step_index - 1]['id']
+            project.snapshot_manager.restore_complete_snapshot(previous_step_id)
+            print(f"UNDO: Restored project to state after step {previous_step_id}")
+        
+        # Remove the success marker file for the step we're undoing
+        script_name = last_step.get('script', '').replace('.py', '')
+        success_marker = project.path / ".workflow_status" / f"{script_name}.success"
+        if success_marker.exists():
+            success_marker.unlink()
+            print(f"UNDO: Removed success marker for {script_name}")
+        
+        # Update state: mark the undone step as pending
+        project.update_state(last_step_id, "pending")
+        
+        return True
+        
+    except FileNotFoundError as e:
+        print(f"UNDO ERROR: {e}")
+        print("Complete snapshot not found. This may be because the step was run before the enhanced snapshot system was implemented.")
+        return False
+    except Exception as e:
+        print(f"UNDO ERROR: Unexpected error during undo: {e}")
+        return False
 
 def run_step_background(project, step_id, user_inputs):
     """
@@ -138,6 +250,39 @@ def main():
                 st.session_state.project_path = Path(folder)
                 st.session_state.project = None
                 st.rerun()
+        
+        # Undo functionality
+        if st.session_state.project:
+            st.subheader("Workflow Controls")
+            
+            # Check if undo is possible
+            can_undo = False
+            for step in st.session_state.project.workflow.steps:
+                if st.session_state.project.get_state(step['id']) == 'completed':
+                    can_undo = True
+                    break
+            
+            # Undo button with confirmation
+            if st.session_state.get('undo_confirmation', False):
+                st.warning("⚠️ This will revert to the previous step state and cannot be undone!")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("✅ Yes, Undo", key="confirm_undo"):
+                        perform_undo(st.session_state.project)
+                        st.session_state.undo_confirmation = False
+                        st.success("✅ Undo completed!")
+                        st.rerun()
+                with col2:
+                    if st.button("❌ Cancel", key="cancel_undo"):
+                        st.session_state.undo_confirmation = False
+                        st.rerun()
+            else:
+                if st.button("↶ Undo Last Step", key="undo_button", disabled=not can_undo):
+                    st.session_state.undo_confirmation = True
+                    st.rerun()
+            
+            if not can_undo:
+                st.caption("No completed steps to undo")
 
     if st.session_state.project_path and not st.session_state.project:
         project_path = st.session_state.project_path
@@ -205,19 +350,35 @@ def main():
 
         # --- Terminal Output and Interaction ---
         if st.session_state.running_step_id:
-            with st.expander("Live Terminal Output", expanded=True):
-                st.text_area("Output", value=st.session_state.terminal_output, height=300, key="terminal_view", disabled=True)
-                
-                col1, col2 = st.columns([4, 1])
-                with col1:
-                    user_input = st.text_input("Input:", key="terminal_input_box")
-                with col2:
-                    st.button(
-                        "Send Input",
-                        key="send_terminal_input",
-                        on_click=send_and_clear_input,
-                        args=(project, user_input)
-                    )
+            # Make terminal very prominent with visual indicators
+            running_step = project.workflow.get_step_by_id(st.session_state.running_step_id)
+            
+            # Large, prominent header
+            st.markdown("# 🖥️ LIVE TERMINAL")
+            st.error(f"🚨 **SCRIPT RUNNING**: {running_step['name'] if running_step else 'Unknown Step'}")
+            st.warning("⚠️ **IMPORTANT**: Interactive input required below!")
+            
+            # Terminal with prominent styling
+            st.text_area(
+                "Terminal Output",
+                value=st.session_state.terminal_output,
+                height=300,
+                key="terminal_view",
+                disabled=True,
+                help="This is the live terminal output. Watch for prompts that require your input."
+            )
+            
+            # Input section for terminal
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                user_input = st.text_input("Input:", key="terminal_input_box")
+            with col2:
+                st.button(
+                    "Send Input",
+                    key="send_terminal_input",
+                    on_click=send_and_clear_input,
+                    args=(project, user_input)
+                )
         
         st.markdown("---")
 
@@ -243,9 +404,18 @@ def main():
                 else:
                     st.info(f"⚪ {step_name}")
 
-                # Input widgets...
-                if 'inputs' in step and status != 'completed' and not is_running_this_step:
+                # Input widgets - now shown for completed steps too (for re-runs)
+                if 'inputs' in step and not is_running_this_step:
                     st.session_state.user_inputs.setdefault(step_id, {})
+                    
+                    # For completed steps, show a note about re-run inputs
+                    if status == 'completed':
+                        st.info("💡 **Re-run Setup**: Please select input files for this re-run. Previous inputs are cleared to ensure fresh data.")
+                        # Clear previous inputs for re-run to force user to select new files
+                        if f"rerun_inputs_cleared_{step_id}" not in st.session_state:
+                            st.session_state.user_inputs[step_id] = {}
+                            st.session_state[f"rerun_inputs_cleared_{step_id}"] = True
+                    
                     for i, input_def in enumerate(step['inputs']):
                         input_key = f"{step_id}_input_{i}"
                         if input_def['type'] == 'file':
@@ -268,11 +438,24 @@ def main():
                 # Run/Re-run buttons...
                 run_button_disabled = st.session_state.running_step_id is not None
                 if status == "completed":
-                    if st.button("Re-run", key=f"rerun_{step_id}", disabled=run_button_disabled):
+                    # Check if all required inputs for re-run are filled
+                    rerun_button_disabled = run_button_disabled
+                    if 'inputs' in step:
+                        step_inputs = st.session_state.user_inputs.get(step_id, {})
+                        required_inputs = step['inputs']
+                        if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
+                            rerun_button_disabled = True
+                    
+                    if st.button("Re-run", key=f"rerun_{step_id}", disabled=rerun_button_disabled):
+                        # Clear the rerun flag so inputs get cleared again next time
+                        if f"rerun_inputs_cleared_{step_id}" in st.session_state:
+                            del st.session_state[f"rerun_inputs_cleared_{step_id}"]
+                        
                         st.session_state.running_step_id = step_id
                         st.session_state.terminal_output = ""
                         step_user_inputs = st.session_state.user_inputs.get(step_id, {})
                         start_script_thread(project, step_id, step_user_inputs)
+                        st.rerun()  # Force immediate rerun to show terminal
                 else:
                     is_next_step = (step_id == first_pending_step['id']) if first_pending_step else False
                     if not is_next_step:
@@ -290,6 +473,7 @@ def main():
                         st.session_state.terminal_output = ""
                         step_user_inputs = st.session_state.user_inputs.get(step_id, {})
                         start_script_thread(project, step_id, step_user_inputs)
+                        st.rerun()  # Force immediate rerun to show terminal
             
             # ... (rest of the step display logic) ...
             st.markdown("---")

@@ -72,7 +72,9 @@ class Project:
         snapshot_items = step.get("snapshot_items", [])
 
         if is_first_run:
+            # Take both the old-style snapshot (for compatibility) and complete snapshot
             self.snapshot_manager.take(step_id, snapshot_items)
+            self.snapshot_manager.take_complete_snapshot(step_id)
 
         # Prepare arguments for the script
         args = []
@@ -159,6 +161,9 @@ class Project:
         if not script_name:
             return True  # No script name, can't check marker
             
+        # Extract just the filename without path and extension
+        script_filename = Path(script_name).stem
+        
         status_dir = self.path / ".workflow_status"
-        success_file = status_dir / f"{script_name}.success"
+        success_file = status_dir / f"{script_filename}.success"
         return success_file.exists()

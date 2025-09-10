@@ -8,7 +8,8 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   One-click execution of Python scripts.
 -   Automatic state tracking with enhanced reliability.
 -   Robust error handling with automatic rollback and success marker verification.
--   Undo/Redo functionality via project state snapshots.
+-   **Enhanced Undo functionality** with complete project state restoration.
+-   **Smart re-run behavior** that always prompts for new file inputs.
 -   Interactive script support with real-time terminal output.
 -   Cross-platform support for macOS and Windows.
 
@@ -51,9 +52,9 @@ A terminal window will open, and after a few moments, the application's user int
 
 1.  **Load a Project**: Click the "Browse for Project Folder" button in the sidebar and navigate to your project folder on the shared drive. The project folder must contain a `workflow.yml` file.
 2.  **Run Steps**: The workflow steps will be displayed in the main area. The next available step will have an active "Run" button. Click it to execute the script.
-3.  **Interactive Scripts**: If a script requires your input, a "Live Terminal Output" window will appear. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue.
-3.  **Undo/Redo**: Use the "Undo Last Step" and "Redo" buttons in the sidebar to move backward and forward through the workflow's history.
-4.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. This is useful for reprocessing failed samples.
+3.  **Interactive Scripts**: If a script requires your input, a prominent "🖥️ LIVE TERMINAL" section will appear at the top of the page with colored alert banners. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue. The enhanced visual indicators make it impossible to miss when a script needs your input.
+4.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state.
+5.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
 
 ## Creating a New Workflow
 

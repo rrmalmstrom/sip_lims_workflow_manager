@@ -49,13 +49,53 @@ We have successfully completed a major refactoring of the application's core log
     * Fixed `fill_clarity_lib_creation_sheet.py` → `fill.clarity.lib.creation.sheet.py`
 5. **User Verification**: Confirmed that interactive prompts display properly, rollback detection works correctly, and "ROLLBACK:" messages appear when scripts fail.
 
+### Session 4: Enhanced GUI Features & Complete Snapshot System
+1. **Enhanced Re-run File Input Behavior**: Implemented smart re-run functionality that always prompts for new file inputs.
+    * Modified GUI logic to show file input widgets for completed steps during re-run preparation
+    * Added automatic input clearing with user notification for re-runs
+    * Enhanced re-run button logic to require new file inputs before enabling
+    * Users now see clear messaging about re-run setup and input requirements
+2. **Complete Undo Functionality**: Implemented comprehensive undo system with complete project state restoration.
+    * **Enhanced Snapshot System**: Added `take_complete_snapshot()` and `restore_complete_snapshot()` methods
+    * **Complete Project Restoration**: Undo now restores entire project directory to previous state
+    * **Smart File Management**: Excludes system files and preserves essential directories during restoration
+    * **GUI Integration**: Added undo button with two-click confirmation system in sidebar
+3. **Critical Bug Fixes**: Resolved success marker naming issues across all workflow scripts.
+    * Fixed success marker file naming convention in all 19 workflow scripts
+    * Updated scripts to use `Path(__file__).stem` for consistent naming
+    * Enhanced core logic to support both legacy and complete snapshot systems
+4. **Test-Driven Development**: Created comprehensive test suite for new GUI features.
+    * Added `tests/test_gui_features.py` with 9 test cases covering both new features
+    * All tests passing (20 total: 9 new + 11 existing core logic tests)
+    * Enhanced existing tests for success marker compatibility
+
+### Session 5: Pseudo-Terminal Bug Fix & Enhanced Terminal Visibility
+1. **Critical Pseudo-Terminal Bug Resolution**: Systematically debugged and fixed the ultracentrifuge script pseudo-terminal issue.
+    * **Root Cause Analysis**: Identified multiple contributing factors preventing terminal display
+    * **YAML Syntax Fix**: Removed duplicate `inputs:` sections in workflow.yml causing parsing errors
+    * **Path Construction Bug**: Fixed script logic creating duplicate directory paths causing FileNotFoundError
+    * **Script Structure Cleanup**: Standardized script structure to match working setup isotope script
+2. **Enhanced Terminal Visibility**: Implemented prominent visual indicators for better user experience.
+    * **Visual Enhancement Strategy**: Replaced complex JavaScript auto-scroll with native Streamlit indicators
+    * **Prominent Terminal Display**: Added large "🖥️ LIVE TERMINAL" header with colored alert banners
+    * **User Guidance**: Clear messaging about interactive input requirements and terminal location
+    * **Consistent Behavior**: Ultracentrifuge script now works identically to setup isotope script
+3. **Technical Implementation**: Fixed core issues in multiple components.
+    * **workflow.yml**: Corrected invalid YAML syntax in dummy_chakraborty_ultra project
+    * **ultracentrifuge.transfer.py**: Fixed path construction logic for GUI-provided file paths
+    * **app.py**: Enhanced terminal display with prominent visual indicators and user guidance
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
 -   [x] **Update all workflow scripts with success markers**: All 19 scripts now include success marker functionality.
 -   [x] **Restore interactive script functionality**: Reverted to pseudo-terminal approach while maintaining enhanced failure detection.
 -   [x] **Fix workflow configuration files**: Corrected script name references in all workflow.yml files.
--   [ ] **Investigate and fix terminal auto-scrolling**: The JavaScript-based auto-scrolling is still not working reliably and needs further investigation.
+-   [x] **Implement enhanced re-run file input behavior**: Re-runs now always prompt for new file inputs.
+-   [x] **Implement comprehensive undo functionality**: Complete project state restoration with enhanced snapshot system.
+-   [x] **Fix success marker naming issues**: All workflow scripts now use consistent naming convention.
+-   [x] **Fix pseudo-terminal display issues**: Resolved ultracentrifuge script terminal visibility and interaction problems.
+-   [x] **Enhance terminal visibility**: Implemented prominent visual indicators for better user experience.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

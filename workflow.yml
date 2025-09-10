@@ -24,6 +24,10 @@ steps:
     snapshot_items: ["Project_Database.db", "outputs/"]
     inputs:
       - type: file
+        name: "Ultracentrifuge CSV File"
+        arg: ""
+    inputs:
+      - type: file
         name: "Sample List"
         arg: ""
 

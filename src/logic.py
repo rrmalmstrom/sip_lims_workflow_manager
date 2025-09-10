@@ -73,6 +73,104 @@ class SnapshotManager:
                     else:
                         zf.write(item_path, item_name)
 
+    def take_complete_snapshot(self, step_id: str):
+        """
+        Creates a complete snapshot of the entire project directory.
+        Excludes the .snapshots directory itself to avoid recursion.
+        """
+        zip_path = self.snapshots_dir / f"{step_id}_complete.zip"
+        
+        # Files and directories to exclude from snapshot
+        exclude_patterns = {
+            '.snapshots',
+            '.workflow_status',
+            '__pycache__',
+            '.DS_Store',
+            'debug_script_execution.log',
+            'last_script_result.txt',
+            'workflow_debug.log'
+        }
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for file_path in self.project_path.rglob('*'):
+                # Skip if any part of the path matches exclude patterns
+                if any(part in exclude_patterns for part in file_path.parts):
+                    continue
+                
+                # Skip if it's a file/directory we want to exclude
+                if file_path.name in exclude_patterns:
+                    continue
+                
+                # Only add files, not directories (directories are created automatically)
+                if file_path.is_file():
+                    relative_path = file_path.relative_to(self.project_path)
+                    zf.write(file_path, relative_path)
+        
+        print(f"SNAPSHOT: Complete project snapshot saved for step {step_id}")
+
+    def restore_complete_snapshot(self, step_id: str):
+        """
+        Restores the complete project directory from a snapshot.
+        This will remove all files not in the snapshot and restore the exact state.
+        """
+        zip_path = self.snapshots_dir / f"{step_id}_complete.zip"
+        if not zip_path.exists():
+            raise FileNotFoundError(f"Complete snapshot for step '{step_id}' not found.")
+        
+        # Files and directories to preserve (never delete)
+        preserve_patterns = {
+            '.snapshots',
+            '.workflow_status',
+            'workflow.yml',
+            '__pycache__'
+        }
+        
+        # Get list of files currently in project
+        current_files = set()
+        for file_path in self.project_path.rglob('*'):
+            if file_path.is_file():
+                # Skip preserved files
+                if any(part in preserve_patterns for part in file_path.parts):
+                    continue
+                if file_path.name in preserve_patterns:
+                    continue
+                current_files.add(file_path.relative_to(self.project_path))
+        
+        # Get list of files in snapshot
+        snapshot_files = set()
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            snapshot_files = set(Path(name) for name in zf.namelist() if not name.endswith('/'))
+        
+        # Remove files that exist now but weren't in the snapshot
+        files_to_remove = current_files - snapshot_files
+        for rel_path in files_to_remove:
+            file_path = self.project_path / rel_path
+            if file_path.exists():
+                file_path.unlink()
+                print(f"RESTORE: Removed {rel_path}")
+        
+        # Remove empty directories
+        for dir_path in sorted(self.project_path.rglob('*'), key=lambda p: len(p.parts), reverse=True):
+            if dir_path.is_dir() and dir_path != self.project_path:
+                # Skip preserved directories
+                if any(part in preserve_patterns for part in dir_path.parts):
+                    continue
+                if dir_path.name in preserve_patterns:
+                    continue
+                
+                try:
+                    if not any(dir_path.iterdir()):  # Directory is empty
+                        dir_path.rmdir()
+                        print(f"RESTORE: Removed empty directory {dir_path.relative_to(self.project_path)}")
+                except OSError:
+                    pass  # Directory not empty or other error
+        
+        # Extract snapshot files
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(self.project_path)
+        
+        print(f"RESTORE: Complete project state restored from step {step_id}")
+
     def restore(self, step_id: str, items: List[str]):
         """Restores the project state from a snapshot."""
         zip_path = self.snapshots_dir / f"{step_id}.zip"

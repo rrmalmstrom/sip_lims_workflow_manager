@@ -138,7 +138,19 @@ def test_script_runner_success(project_directory: Path):
     app_scripts_dir = Path(__file__).parent.parent / "scripts"
     app_scripts_dir.mkdir(exist_ok=True)
     script_file = app_scripts_dir / "step1.py"
-    script_file.write_text("print('Success!'); import sys; sys.exit(0)")
+    script_file.write_text("""
+print('Success!')
+# Create success marker
+import os
+from pathlib import Path
+script_name = Path(__file__).stem
+status_dir = Path(".workflow_status")
+status_dir.mkdir(exist_ok=True)
+success_file = status_dir / f"{script_name}.success"
+success_file.touch()
+print(f"SUCCESS: {script_name} completed successfully")
+import sys; sys.exit(0)
+""")
     
     runner = ScriptRunner(project_directory)
     
@@ -172,7 +184,18 @@ def test_project_run_step_integration_success(project_directory: Path):
     app_scripts_dir = Path(__file__).parent.parent / "scripts"
     app_scripts_dir.mkdir(exist_ok=True)
     script_file = app_scripts_dir / "step1.py"
-    script_file.write_text("print('Success!')")
+    script_file.write_text("""
+print('Success!')
+# Create success marker
+import os
+from pathlib import Path
+script_name = Path(__file__).stem
+status_dir = Path(".workflow_status")
+status_dir.mkdir(exist_ok=True)
+success_file = status_dir / f"{script_name}.success"
+success_file.touch()
+print(f"SUCCESS: {script_name} completed successfully")
+""")
 
     project = Project(project_directory)
     snapshot_file = project.snapshot_manager.snapshots_dir / "step_1.zip"

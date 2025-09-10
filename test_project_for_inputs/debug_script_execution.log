@@ -1,0 +1,13 @@
+[2025-09-10 09:35:35] Process PID: <MagicMock name='Popen().pid' id='4385066960'>
+[2025-09-10 09:35:35] Master FD: 11
+[2025-09-10 09:35:35] Project path: test_project_for_inputs
+[2025-09-10 09:35:35] === PROCESS FINISHED WITH POLL RESULT: <MagicMock name='Popen().poll()' id='4387223504'> ===
+[2025-09-10 09:35:35] 
+=== SCRIPT EXECUTION COMPLETE (PTY) ===
+Exit Code: <MagicMock name='Popen().wait()' id='4386977168'>
+Success: False
+Process Poll Result: <MagicMock name='Popen().poll()' id='4387223504'>
+Return Code Type: <class 'unittest.mock.MagicMock'>
+=== END DEBUG INFO ===
+[2025-09-10 09:35:35] === PUTTING RESULT IN QUEUE: success=False, return_code=<MagicMock name='Popen().wait()' id='4386977168'> ===
+[2025-09-10 09:35:35] === SCRIPT RUNNER THREAD ENDING ===

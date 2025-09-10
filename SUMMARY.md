@@ -5,10 +5,12 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 
 ## 2. Current Status
 - **Phase 1 (Core Engine):** Complete. All logic for parsing, state management, snapshots, and script execution is implemented and tested. Success marker system implemented for reliable rollback functionality.
-- **Phase 2 (GUI):** Complete. The Streamlit UI is fully featured with interactive script execution and enhanced failure detection.
+- **Phase 2 (GUI):** Complete. The Streamlit UI is fully featured with interactive script execution, enhanced failure detection, smart re-run behavior, and comprehensive undo functionality.
 - **Phase 3 (Distribution):** Complete. The script-based distribution model using Git is implemented and tested on macOS. Awaiting final Windows test.
 - **Phase 4 (Workflow Implementation):** Complete. The production `workflow.yml` and user `README.md` are authored. All 19 workflow scripts updated with success markers.
 - **Phase 5 (Rollback & Reliability):** Complete. Critical rollback functionality fixed with success marker implementation.
+- **Phase 6 (Enhanced GUI Features):** Complete. Smart re-run file input behavior and comprehensive undo functionality with complete project state restoration.
+- **Phase 7 (Pseudo-Terminal Bug Fixes):** Complete. Resolved critical pseudo-terminal display issues and enhanced terminal visibility for all interactive scripts.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -25,10 +27,39 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 3. **Script Updates**: All 19 workflow scripts updated with success marker functionality.
 4. **Configuration Fixes**: Corrected script name mismatches in workflow.yml files.
 5. **Interactive Functionality**: Restored proper interactive script execution while maintaining enhanced failure detection.
+6. **Enhanced Re-run Behavior**: Implemented smart re-run functionality that always prompts for new file inputs, preventing accidental reuse of old data.
+7. **Complete Undo System**: Implemented comprehensive undo functionality with complete project state restoration using enhanced snapshot system.
+8. **Success Marker Bug Fixes**: Fixed naming convention issues across all 19 workflow scripts for reliable completion detection.
+9. **Pseudo-Terminal Bug Resolution**: Systematically debugged and fixed critical pseudo-terminal display issues for ultracentrifuge script.
+10. **Enhanced Terminal Visibility**: Implemented prominent visual indicators to make interactive terminals impossible to miss.
 
 ## 5. Next Steps (Optional Enhancements)
-1. **Terminal Auto-scrolling**: Investigate and fix JavaScript-based auto-scrolling reliability.
-2. **Enhanced Logging**: Improve GUI feedback and real-time information display.
-3. **Script Update Mechanism**: Enhance reliability and user experience of script updates.
-4. **Workflow Validation**: Implement validation for `workflow.yml` file syntax and structure.
-5. **Comprehensive Testing**: Perform full end-to-end testing on both macOS and Windows platforms.
+1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
+2. **Script Update Mechanism**: Enhance reliability and user experience of script updates.
+3. **Workflow Validation**: Implement validation for `workflow.yml` file syntax and structure.
+4. **Comprehensive Testing**: Perform full end-to-end testing on both macOS and Windows platforms.
+
+## 6. Latest Features (Session 4)
+### Enhanced Re-run File Input Behavior
+- **Problem Solved**: Re-runs now always prompt for new file inputs instead of reusing previous selections
+- **User Experience**: Clear messaging and automatic input clearing for fresh data selection
+- **Implementation**: Modified GUI logic in `app.py` with smart input widget management
+
+### Complete Undo Functionality
+- **Problem Solved**: Comprehensive project state restoration that removes all files/directories created by undone steps
+- **Technical Implementation**: Enhanced snapshot system with `take_complete_snapshot()` and `restore_complete_snapshot()` methods
+- **User Experience**: Two-click confirmation system with detailed restoration feedback
+- **Reliability**: Smart file exclusions and complete directory structure restoration
+
+## 7. Latest Features (Session 5)
+### Pseudo-Terminal Bug Resolution
+- **Problem Solved**: Ultracentrifuge script pseudo-terminal was not appearing, preventing interactive user input
+- **Root Causes Fixed**: Invalid YAML syntax, path construction bugs, and script structure inconsistencies
+- **Technical Implementation**: Fixed workflow.yml parsing, corrected file path logic, and standardized script structure
+- **Result**: Ultracentrifuge script now works identically to setup isotope script
+
+### Enhanced Terminal Visibility
+- **Problem Solved**: Users couldn't easily locate the terminal when it appeared at the top of the page
+- **Solution**: Replaced complex JavaScript auto-scroll with prominent native Streamlit visual indicators
+- **User Experience**: Large "🖥️ LIVE TERMINAL" header, colored alert banners, and clear messaging
+- **Reliability**: Works consistently across all browsers and doesn't depend on JavaScript execution
