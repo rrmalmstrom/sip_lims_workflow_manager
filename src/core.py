@@ -100,11 +100,65 @@ class Project:
         is_first_run = self.get_state(step_id) == "pending"
         snapshot_items = step.get("snapshot_items", [])
 
-        # Handle the result
-        if result.success:
+        # Enhanced success detection: check both exit code AND success marker
+        exit_code_success = result.success
+        script_name = step.get("script", "")
+        marker_file_success = self._check_success_marker(script_name)
+        
+        # Both conditions must be true for actual success
+        actual_success = exit_code_success and marker_file_success
+        
+        # Log what happened for debugging
+        if exit_code_success and not marker_file_success:
+            debug_msg = f"Script {script_name} exited with code 0 but no success marker found - treating as failure"
+            print(debug_msg)
+            try:
+                debug_file = self.path / "workflow_debug.log"
+                with open(debug_file, "a") as f:
+                    import datetime
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"[{timestamp}] {debug_msg}\n")
+            except:
+                pass
+
+        # Handle the result based on our enhanced success detection
+        if actual_success:
             self.update_state(step_id, "completed")
         else:
             # If this was the first run and it failed, restore the snapshot
             if is_first_run:
+                rollback_msg = f"ROLLBACK: Restoring snapshot for failed step '{step_id}'"
+                print(rollback_msg)
+                try:
+                    debug_file = self.path / "workflow_debug.log"
+                    with open(debug_file, "a") as f:
+                        import datetime
+                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"[{timestamp}] {rollback_msg}\n")
+                        f.write(f"[{timestamp}] Snapshot items to restore: {snapshot_items}\n")
+                except:
+                    pass
+                
                 self.snapshot_manager.restore(step_id, snapshot_items)
+                
+                # Log completion of rollback
+                rollback_complete_msg = f"ROLLBACK COMPLETE: Snapshot restored for step '{step_id}'"
+                print(rollback_complete_msg)
+                try:
+                    with open(debug_file, "a") as f:
+                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"[{timestamp}] {rollback_complete_msg}\n")
+                except:
+                    pass
             # Keep the state as "pending" for failed steps
+
+    def _check_success_marker(self, script_name: str) -> bool:
+        """
+        Check if a script completed successfully by looking for its success marker file.
+        """
+        if not script_name:
+            return True  # No script name, can't check marker
+            
+        status_dir = self.path / ".workflow_status"
+        success_file = status_dir / f"{script_name}.success"
+        return success_file.exists()

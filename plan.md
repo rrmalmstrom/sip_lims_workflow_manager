@@ -1,7 +1,7 @@
 # LIMS Workflow Manager - Detailed Design Document
 
-**Version:** 1.0
-**Date:** 2025-09-08
+**Version:** 1.1
+**Date:** 2025-09-10
 
 ## 1. Introduction & Vision
 
@@ -32,7 +32,11 @@ project_folder/
 ├── script_managed.db
 ├── inputs/
 ├── outputs/
-└── .snapshots/
+├── .snapshots/
+└── .workflow_status/
+    ├── script1.success
+    ├── script2.success
+    └── ...
 ```
 
 ### 2.3. Core Logic Classes
@@ -61,8 +65,15 @@ The system is a flexible, interactive checklist, managed by the `StateManager`.
 - **Snapshot Trigger**: A snapshot is created **only** when a step is successfully completed for the **first time**. This is handled by the `SnapshotManager`.
 - **Undo Action**: Reverts the entire project to the state before the last completed step was run.
 
-### 3.4. Error Handling
-A script error will never leave the project in a corrupted state. If a script fails, the `Project` class will instruct the `SnapshotManager` to automatically restore the pre-run snapshot.
+### 3.4. Error Handling & Success Marker System
+A script error will never leave the project in a corrupted state. The system uses a dual-verification approach for reliable failure detection:
+
+- **Success Marker Files**: Each script creates a `.workflow_status/{script_name}.success` file only upon successful completion
+- **Exit Code Verification**: Traditional exit code checking is maintained as a secondary verification
+- **Dual Verification**: The GUI checks both exit codes AND success marker presence before marking a step as completed
+- **Automatic Rollback**: If either verification fails, the `Project` class instructs the `SnapshotManager` to automatically restore the pre-run snapshot
+
+This approach solves the critical issue where Python scripts could exit with code 0 (success) even when encountering errors, ensuring reliable rollback functionality.
 
 ### 3.5. Distribution & Updates
 - **Automated Release Script (`release.py`):** A dedicated release script will automate the creation of new versions. It will:
@@ -80,6 +91,25 @@ A script error will never leave the project in a corrupted state. If a script fa
 A critical feature of the system is how it provides a consistent environment for the executed scripts.
 - **Working Directory**: The `ScriptRunner` class explicitly sets the current working directory (CWD) of the script being executed to the path of the user's selected **project folder**.
 - **Benefit**: This allows script authors to use simple, reliable relative paths (e.g., `inputs/data.csv`) without needing to know the absolute path of the project folder or the location of the main application.
+- **Success Marker Integration**: Scripts automatically create success marker files in `.workflow_status/` upon successful completion, enabling reliable failure detection and rollback functionality.
+
+### 3.7. Script Development Guidelines
+For new workflow scripts, developers should follow this pattern for success marker integration:
+
+```python
+import os
+from pathlib import Path
+
+# Script logic here...
+
+# Create success marker on successful completion
+script_name = Path(__file__).stem
+status_dir = Path(".workflow_status")
+status_dir.mkdir(exist_ok=True)
+success_file = status_dir / f"{script_name}.success"
+success_file.touch()
+print(f"SUCCESS: {script_name} completed successfully")
+```
 
 ## 4. GUI Design
 - **Layout**: A two-column Streamlit application.

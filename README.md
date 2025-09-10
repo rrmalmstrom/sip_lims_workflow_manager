@@ -6,9 +6,10 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 
 -   Visual, interactive checklist of workflow steps.
 -   One-click execution of Python scripts.
--   Automatic state tracking.
--   Robust error handling with automatic rollback.
+-   Automatic state tracking with enhanced reliability.
+-   Robust error handling with automatic rollback and success marker verification.
 -   Undo/Redo functionality via project state snapshots.
+-   Interactive script support with real-time terminal output.
 -   Cross-platform support for macOS and Windows.
 
 ## Prerequisites
@@ -131,3 +132,32 @@ my_science_project/
 ```
 
 A script can reliably access `raw_data.csv` using the path `"inputs/raw_data.csv"` and write results to `"outputs/results.csv"` without needing to know the full path to `my_science_project`. The application handles the context for you.
+
+## Success Marker System for Script Authors
+
+The LIMS Workflow Manager uses a **success marker system** to ensure reliable detection of script completion and proper rollback functionality. This system is automatically handled by the workflow scripts, but script authors should be aware of how it works:
+
+### How It Works
+- When a script completes successfully, it creates a success marker file in `.workflow_status/{script_name}.success`
+- The GUI checks for both the script's exit code AND the presence of this success marker file
+- If a script fails or is interrupted, no success marker is created, triggering automatic rollback
+
+### For New Script Development
+If you're creating new workflow scripts, ensure they follow this pattern at the end of successful execution:
+
+```python
+import os
+from pathlib import Path
+
+# Your script logic here...
+
+# Create success marker on successful completion
+script_name = Path(__file__).stem
+status_dir = Path(".workflow_status")
+status_dir.mkdir(exist_ok=True)
+success_file = status_dir / f"{script_name}.success"
+success_file.touch()
+print(f"SUCCESS: {script_name} completed successfully")
+```
+
+This ensures your scripts integrate properly with the rollback system and provide reliable completion detection.

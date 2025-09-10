@@ -3,6 +3,13 @@ import zipfile
 import shutil
 import subprocess
 import sys
+import datetime
+import pty
+import os
+import select
+import threading
+import queue
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
@@ -97,17 +104,13 @@ class SnapshotManager:
                 return True
         return False
 
-import os
-import pty
-import threading
-import queue
-import time
 class ScriptRunner:
-    """Executes workflow scripts in a pseudo-terminal."""
+    """Executes workflow scripts using pseudo-terminal for interactive execution."""
     def __init__(self, project_path: Path):
         self.project_path = project_path
         self.master_fd = None
-        self.pid = None
+        self.slave_fd = None
+        self.process = None
         self.output_queue = queue.Queue()
         self.result_queue = queue.Queue()
         self.reader_thread = None
@@ -116,42 +119,120 @@ class ScriptRunner:
     def is_running(self):
         return self.is_running_flag.is_set()
 
-    def _read_and_wait_loop(self):
+    def _read_output_loop(self):
         """
-        Reads output from the pty until the child process closes it,
-        then waits for the process to get the exit code.
+        Reads output from the pseudo-terminal until the process finishes,
+        then puts the final result in the result queue.
         """
+        debug_log_path = self.project_path / "debug_script_execution.log"
+        
+        def log_debug(message):
+            """Log to both output queue and file for backup"""
+            self.output_queue.put(message)
+            try:
+                with open(debug_log_path, "a") as f:
+                    import datetime
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"[{timestamp}] {message}")
+                    f.flush()
+            except:
+                pass  # Don't let logging errors break execution
+        
         try:
-            while self.is_running_flag.is_set():
+            log_debug("=== SCRIPT STARTING (PTY) ===\n")
+            log_debug(f"Process PID: {self.process.pid if self.process else 'None'}\n")
+            log_debug(f"Master FD: {self.master_fd}\n")
+            log_debug(f"Project path: {self.project_path}\n")
+            
+            # Read output from pseudo-terminal in real-time
+            while self.is_running_flag.is_set() and self.master_fd is not None:
                 try:
-                    output = os.read(self.master_fd, 1024)
-                    if not output:  # This indicates the child has closed the pty fd, usually on exit
-                        break
-                    self.output_queue.put(output.decode(errors='ignore'))
-                except (OSError, IOError):
+                    # Check if process is still running
+                    if self.process:
+                        poll_result = self.process.poll()
+                        if poll_result is not None:
+                            # Process finished
+                            log_debug(f"=== PROCESS FINISHED WITH POLL RESULT: {poll_result} ===\n")
+                            break
+                    
+                    # Use select to check if there's data to read
+                    ready, _, _ = select.select([self.master_fd], [], [], 0.1)
+                    if ready:
+                        try:
+                            output = os.read(self.master_fd, 1024).decode('utf-8', errors='replace')
+                            if output:
+                                self.output_queue.put(output)
+                        except OSError:
+                            # PTY closed
+                            break
+                    
+                except Exception as e:
+                    log_debug(f"Error reading PTY output: {str(e)}\n")
                     break
             
-            # Once the output stream is closed, wait for the process to terminate
-            _, status = os.waitpid(self.pid, 0)
-            return_code = os.WEXITSTATUS(status)
-            
-            # Add debugging output to the terminal
-            debug_msg = f"\n[DEBUG] Script finished with exit code: {return_code}, success: {return_code == 0}\n"
-            self.output_queue.put(debug_msg)
-            
-            self.result_queue.put(RunResult(success=return_code == 0, stdout="", stderr="", return_code=return_code))
+            # Get the final exit code
+            if self.process:
+                return_code = self.process.wait()  # Ensure process is fully finished
+                success = return_code == 0
+                
+                # Add comprehensive debug info to output AND file
+                debug_msg = f"""
+=== SCRIPT EXECUTION COMPLETE (PTY) ===
+Exit Code: {return_code}
+Success: {success}
+Process Poll Result: {self.process.poll()}
+Return Code Type: {type(return_code)}
+=== END DEBUG INFO ===
+"""
+                log_debug(debug_msg)
+                
+                # Put the result in the queue
+                result = RunResult(
+                    success=success,
+                    stdout="",  # We stream output in real-time, so this is empty
+                    stderr="",  # PTY merges stderr into stdout
+                    return_code=return_code
+                )
+                log_debug(f"=== PUTTING RESULT IN QUEUE: success={success}, return_code={return_code} ===\n")
+                self.result_queue.put(result)
+                
+                # ALSO write a summary file that we can easily check
+                summary_path = self.project_path / "last_script_result.txt"
+                try:
+                    with open(summary_path, "w") as f:
+                        f.write(f"Last Script Execution Summary\n")
+                        f.write(f"Exit Code: {return_code}\n")
+                        f.write(f"Success: {success}\n")
+                        f.write(f"Timestamp: {datetime.datetime.now()}\n")
+                except:
+                    pass
 
         except Exception as e:
+            error_msg = f"[ERROR] Exception in script runner: {str(e)}\n"
+            log_debug(error_msg)
             self.result_queue.put(RunResult(success=False, stdout="", stderr=str(e), return_code=-1))
         finally:
             self.is_running_flag.clear()
+            log_debug("=== SCRIPT RUNNER THREAD ENDING ===\n")
             self.output_queue.put(None)  # Sentinel for end of output
-            if self.master_fd:
-                os.close(self.master_fd)
+            
+            # Clean up PTY
+            if self.master_fd is not None:
+                try:
+                    os.close(self.master_fd)
+                except:
+                    pass
+                self.master_fd = None
+            if self.slave_fd is not None:
+                try:
+                    os.close(self.slave_fd)
+                except:
+                    pass
+                self.slave_fd = None
 
     def run(self, script_path_str: str, args: List[str] = None):
         """
-        Executes a script in a pseudo-terminal, managed by a background thread.
+        Executes a script using pseudo-terminal for interactive execution.
         This method is non-blocking.
         """
         if self.is_running():
@@ -172,24 +253,33 @@ class ScriptRunner:
             raise FileNotFoundError(f"Script '{script_filename}' not found in '{app_dir / 'scripts'}'")
 
         python_executable = sys.executable
-        # Use a simpler approach: run the script directly but with proper error handling
         command = [python_executable, "-u", str(script_path)] + args
 
-        self.pid, self.master_fd = pty.fork()
+        # Create pseudo-terminal
+        self.master_fd, self.slave_fd = pty.openpty()
 
-        if self.pid == 0:  # Child process
-            os.chdir(self.project_path)
-            os.execvp(command[0], command)
-        else:  # Parent process
-            self.is_running_flag.set()
-            self.reader_thread = threading.Thread(target=self._read_and_wait_loop)
-            self.reader_thread.start()
+        # Start the subprocess with PTY
+        self.process = subprocess.Popen(
+            command,
+            stdin=self.slave_fd,
+            stdout=self.slave_fd,
+            stderr=self.slave_fd,
+            cwd=self.project_path,
+            preexec_fn=os.setsid  # Create new session
+        )
 
+        # Start the output reading thread
+        self.is_running_flag.set()
+        self.reader_thread = threading.Thread(target=self._read_output_loop)
+        self.reader_thread.start()
 
     def send_input(self, user_input: str):
-        """Sends user input to the running script's stdin."""
+        """Sends user input to the running script's stdin via PTY."""
         if self.master_fd is not None and self.is_running():
-            os.write(self.master_fd, (user_input + "\n").encode())
+            try:
+                os.write(self.master_fd, (user_input + "\n").encode('utf-8'))
+            except Exception as e:
+                self.output_queue.put(f"Error sending input: {str(e)}\n")
 
     def stop(self):
         """Forcefully stops the running script and reader thread."""
@@ -198,15 +288,39 @@ class ScriptRunner:
 
         self.is_running_flag.clear()
         
-        if self.pid:
+        if self.process:
             try:
-                os.kill(self.pid, 9)
-            except OSError:
-                pass  # Process may already be dead
+                # Kill the process group to ensure all child processes are terminated
+                os.killpg(os.getpgid(self.process.pid), 9)
+            except Exception:
+                try:
+                    self.process.terminate()
+                    # Give it a moment to terminate gracefully
+                    try:
+                        self.process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        # Force kill if it doesn't terminate
+                        self.process.kill()
+                        self.process.wait()
+                except Exception:
+                    pass  # Process may already be dead
         
         if self.reader_thread and self.reader_thread.is_alive():
             self.reader_thread.join(timeout=1)
 
-        self.master_fd = None
-        self.pid = None
+        # Clean up PTY file descriptors
+        if self.master_fd is not None:
+            try:
+                os.close(self.master_fd)
+            except:
+                pass
+            self.master_fd = None
+        if self.slave_fd is not None:
+            try:
+                os.close(self.slave_fd)
+            except:
+                pass
+            self.slave_fd = None
+
+        self.process = None
         self.reader_thread = None

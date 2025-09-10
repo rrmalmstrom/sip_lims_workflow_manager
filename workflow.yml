@@ -81,12 +81,12 @@ steps:
 
   - id: make_clarity_summary
     name: "13. Make Clarity Summary"
-    script: "make_clarity_summary.py"
+    script: "make.clarity.summary.py"
     snapshot_items: ["outputs/clarity_upload.csv"]
 
   - id: fill_clarity_lib_creation
     name: "14. Fill Clarity Lib Creation Sheet"
-    script: "fill_clarity_lib_creation_sheet.py"
+    script: "fill.clarity.lib.creation.sheet.py"
     snapshot_items: ["clarity_files/"]
 
   - id: generate_pool_tool
