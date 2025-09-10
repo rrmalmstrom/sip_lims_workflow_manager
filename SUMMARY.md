@@ -11,6 +11,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 5 (Rollback & Reliability):** Complete. Critical rollback functionality fixed with success marker implementation.
 - **Phase 6 (Enhanced GUI Features):** Complete. Smart re-run file input behavior and comprehensive undo functionality with complete project state restoration.
 - **Phase 7 (Pseudo-Terminal Bug Fixes):** Complete. Resolved critical pseudo-terminal display issues and enhanced terminal visibility for all interactive scripts.
+- **Phase 8 (Granular Undo System):** Complete. Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support and intelligent step status management.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -32,6 +33,9 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 8. **Success Marker Bug Fixes**: Fixed naming convention issues across all 19 workflow scripts for reliable completion detection.
 9. **Pseudo-Terminal Bug Resolution**: Systematically debugged and fixed critical pseudo-terminal display issues for ultracentrifuge script.
 10. **Enhanced Terminal Visibility**: Implemented prominent visual indicators to make interactive terminals impossible to miss.
+11. **Granular Undo System**: Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support.
+12. **Intelligent Step Status Management**: Enhanced step status to accurately reflect completion state across multiple re-runs.
+13. **Progressive Undo Logic**: Each undo operation targets exactly one run, not entire steps, with proper snapshot tracking.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -63,3 +67,16 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Solution**: Replaced complex JavaScript auto-scroll with prominent native Streamlit visual indicators
 - **User Experience**: Large "🖥️ LIVE TERMINAL" header, colored alert banners, and clear messaging
 - **Reliability**: Works consistently across all browsers and doesn't depend on JavaScript execution
+
+## 8. Latest Features (Session 6)
+### Granular Undo for Individual Step Re-runs
+- **Problem Solved**: Users needed to undo individual re-runs of steps, not entire steps when multiple runs existed
+- **Root Causes Fixed**: Original undo system designed for linear workflows, couldn't handle multiple runs per step
+- **Technical Implementation**: Enhanced snapshot system with run-specific tracking and progressive undo logic
+- **Key Features**:
+  - **Unlimited Re-runs**: Any step can be re-run unlimited times with proper tracking
+  - **Granular Undo**: Each undo goes back exactly one run, not entire steps
+  - **Intelligent Status**: Step remains "completed" as long as successful runs exist
+  - **Progressive Restoration**: Files from only the most recent run are removed per undo
+- **Snapshot Strategy**: Dual snapshot system (before/after each run) for precise state restoration
+- **Universal Compatibility**: Works for all steps in any workflow configuration with backward compatibility

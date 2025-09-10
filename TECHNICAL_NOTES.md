@@ -385,3 +385,173 @@ Combined with the Session 4 features, the LIMS Workflow Manager now provides:
 - Enhanced terminal visibility for all interactive scripts
 
 The implementation maintains high standards for maintainability, performance, and user experience while ensuring backward compatibility with existing workflows.
+
+## Feature 5: Granular Undo for Individual Step Re-runs (Session 6)
+
+### Problem Statement
+The original undo system was designed for linear workflows where each step runs once. However, users needed the ability to re-run steps multiple times and undo individual re-runs rather than reverting entire steps. When a step was re-run multiple times, undo would revert all runs instead of just the most recent one, and step status management was incorrect.
+
+### Solution Implementation
+
+#### Enhanced Snapshot System for Run Tracking
+
+##### New Snapshot Strategy
+The system now creates two types of snapshots for each run:
+1. **Before snapshots**: `{step_id}_run_{N}_complete.zip` - taken before each run starts
+2. **After snapshots**: `{step_id}_run_{N}_after_complete.zip` - taken after successful completion
+
+##### Core Logic Integration (`src/core.py`)
+```python
+# Enhanced run_step method (lines 75-77)
+run_number = self.snapshot_manager.get_next_run_number(step_id)
+self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}")
+
+# Enhanced handle_step_result method (lines 128-131)
+if actual_success:
+    self.update_state(step_id, "completed")
+    run_number = self.snapshot_manager.get_current_run_number(step_id)
+    if run_number > 0:
+        self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}_after")
+```
+
+#### New SnapshotManager Methods (`src/logic.py`)
+
+##### Run Number Management (lines 60-79)
+```python
+def get_next_run_number(self, step_id: str) -> int:
+    """Gets the next run number for a step by checking existing run snapshots."""
+```
+
+##### Effective Run Tracking (lines 135-154)
+```python
+def get_effective_run_number(self, step_id: str) -> int:
+    """Gets the effective current run number by checking which 'after' snapshots exist."""
+```
+
+##### Snapshot Cleanup (lines 156-175)
+```python
+def remove_run_snapshots_from(self, step_id: str, run_number: int):
+    """Remove all run snapshots from the specified run number onwards."""
+```
+
+#### Granular Undo Logic (`app.py`)
+
+##### Progressive Undo Implementation (lines 163-190)
+```python
+def perform_undo(project):
+    # Get the effective current run number (what we're currently at)
+    effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
+    
+    if effective_run > 1:
+        # Restore to the previous run's state (after previous run completed)
+        previous_run_snapshot = f"{last_step_id}_run_{effective_run - 1}_after"
+        project.snapshot_manager.restore_complete_snapshot(previous_run_snapshot)
+        # Remove the current run's 'after' snapshot to track that it's been undone
+        project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+        # Step remains "completed" since previous runs still exist
+        
+    elif effective_run == 1:
+        # This is the last run - undo the entire step
+        run_1_before_snapshot = f"{last_step_id}_run_1"
+        project.snapshot_manager.restore_complete_snapshot(run_1_before_snapshot)
+        # Remove all run snapshots and mark step as "pending"
+```
+
+##### Smart Step Status Management (lines 191-202)
+```python
+# Check the effective run number after undo to determine step status
+effective_run_after_undo = project.snapshot_manager.get_effective_run_number(last_step_id)
+
+if effective_run_after_undo > 0:
+    # Step remains "completed" since previous runs still exist
+else:
+    # Mark step as "pending" and remove success marker
+    project.update_state(last_step_id, "pending")
+```
+
+### Technical Details
+
+#### Snapshot Naming Convention
+- **Before run**: `step_id_run_1_complete.zip`, `step_id_run_2_complete.zip`, etc.
+- **After run**: `step_id_run_1_after_complete.zip`, `step_id_run_2_after_complete.zip`, etc.
+
+#### Undo Progression Logic
+1. **Multiple runs exist**: Restore to previous run's "after" state, step stays "completed"
+2. **Single run exists**: Restore to step's "before" state, step becomes "pending"
+3. **Snapshot tracking**: Remove "after" snapshots to track undo progress
+
+#### Step Status Rules
+- **Step remains "completed"**: As long as `effective_run_number > 0`
+- **Step becomes "pending"**: Only when all runs have been undone (`effective_run_number = 0`)
+
+### User Experience
+
+#### Unlimited Re-runs
+- Users can re-run any step unlimited times
+- Each re-run creates independent snapshots
+- No hardcoded limits on number of re-runs
+
+#### Progressive Granular Undo
+- Each undo goes back exactly one run
+- Files from only the most recent run are removed
+- Project state restored to immediately before that run
+
+#### Intelligent Step Status
+- Step status reflects actual completion state
+- "Completed" preserved until all runs undone
+- Clear feedback about which run state is active
+
+### Example Workflow
+
+**Step 2 with 3 runs**:
+1. Run 1 → Creates `step2_run_1_complete.zip` + `step2_run_1_after_complete.zip`
+2. Run 2 → Creates `step2_run_2_complete.zip` + `step2_run_2_after_complete.zip`
+3. Run 3 → Creates `step2_run_3_complete.zip` + `step2_run_3_after_complete.zip`
+
+**Undo sequence**:
+1. 1st Undo → Restore to `step2_run_2_after`, remove `step2_run_3_after`, status: "completed"
+2. 2nd Undo → Restore to `step2_run_1_after`, remove `step2_run_2_after`, status: "completed"
+3. 3rd Undo → Restore to `step2_run_1`, remove `step2_run_1_after`, status: "pending"
+
+### Performance Considerations
+
+#### Storage Efficiency
+- Only stores incremental changes between runs
+- Automatic cleanup of undone run snapshots
+- Compressed ZIP storage for all snapshots
+
+#### Memory Usage
+- Lazy loading of snapshots only when needed
+- Streaming ZIP operations to minimize memory footprint
+- Efficient file comparison for restoration
+
+### Backward Compatibility
+
+#### Legacy Support
+- Maintains compatibility with existing single-run workflows
+- Graceful fallback to original snapshot naming if run snapshots don't exist
+- No breaking changes to existing workflow definitions
+
+#### Migration Path
+- Existing projects continue to work without modification
+- New granular features activate automatically for new runs
+- No data migration required
+
+## Conclusion (Updated for Session 6)
+
+The Session 6 enhancements provide a comprehensive granular undo system that transforms the LIMS Workflow Manager from a linear workflow tool into a flexible, re-run-capable system:
+
+1. **Unlimited Re-runs**: Any step can be re-run unlimited times with proper tracking
+2. **Granular Undo**: Each undo operation targets exactly one run, not entire steps
+3. **Intelligent Status Management**: Step status accurately reflects completion state
+4. **Universal Compatibility**: Works for all steps in any workflow configuration
+5. **Backward Compatibility**: Existing workflows continue to function without changes
+
+Combined with previous session features, the LIMS Workflow Manager now provides:
+- Reliable interactive script execution with enhanced terminal visibility
+- Comprehensive project state management with empty directory preservation
+- Smart re-run behavior with fresh input prompts for each execution
+- Complete undo functionality with both step-level and run-level granularity
+- Robust error handling with automatic rollback and success marker verification
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the flexibility needed for complex laboratory workflows.

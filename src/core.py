@@ -71,10 +71,16 @@ class Project:
         is_first_run = self.get_state(step_id) == "pending"
         snapshot_items = step.get("snapshot_items", [])
 
+        # Get the next run number for this step
+        run_number = self.snapshot_manager.get_next_run_number(step_id)
+        
+        # Always take a snapshot before running (for both first runs and re-runs)
         if is_first_run:
             # Take both the old-style snapshot (for compatibility) and complete snapshot
             self.snapshot_manager.take(step_id, snapshot_items)
-            self.snapshot_manager.take_complete_snapshot(step_id)
+        
+        # Take a run-specific complete snapshot for granular undo
+        self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}")
 
         # Prepare arguments for the script
         args = []
@@ -126,6 +132,11 @@ class Project:
         # Handle the result based on our enhanced success detection
         if actual_success:
             self.update_state(step_id, "completed")
+            
+            # Take an "after" snapshot when step completes successfully for granular undo
+            run_number = self.snapshot_manager.get_current_run_number(step_id)
+            if run_number > 0:
+                self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}_after")
         else:
             # If this was the first run and it failed, restore the snapshot
             if is_first_run:

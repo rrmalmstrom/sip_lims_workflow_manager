@@ -161,26 +161,55 @@ def perform_undo(project):
     step_index = next(i for i, s in enumerate(project.workflow.steps) if s['id'] == last_step_id)
     
     try:
-        if step_index == 0:
-            # If undoing the first step, restore to the state before any steps were run
-            # We'll restore from the complete snapshot taken before this step
-            project.snapshot_manager.restore_complete_snapshot(last_step_id)
-            print(f"UNDO: Restored project to initial state (before step {last_step_id})")
-        else:
-            # Revert to the previous step's complete snapshot
-            previous_step_id = project.workflow.steps[step_index - 1]['id']
-            project.snapshot_manager.restore_complete_snapshot(previous_step_id)
-            print(f"UNDO: Restored project to state after step {previous_step_id}")
+        # Get the effective current run number (what we're currently at)
+        effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
         
-        # Remove the success marker file for the step we're undoing
+        if effective_run > 1:
+            # Restore to the previous run's state (after previous run completed)
+            previous_run_snapshot = f"{last_step_id}_run_{effective_run - 1}_after"
+            if project.snapshot_manager.snapshot_exists(previous_run_snapshot):
+                project.snapshot_manager.restore_complete_snapshot(previous_run_snapshot)
+                # Remove the current run's 'after' snapshot to track that it's been undone
+                project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+                print(f"UNDO: Restored project to state after run {effective_run - 1} of step {last_step_id}")
+                # Step should remain "completed" since we still have a previous run
+                return True
+            
+        elif effective_run == 1:
+            # This is the last run - undo the entire step
+            # Use the run 1 "before" snapshot (taken before first run)
+            run_1_before_snapshot = f"{last_step_id}_run_1"
+            if project.snapshot_manager.snapshot_exists(run_1_before_snapshot):
+                project.snapshot_manager.restore_complete_snapshot(run_1_before_snapshot)
+                print(f"UNDO: Restored project to state before step {last_step_id} ran")
+            else:
+                # Fallback to legacy snapshot naming if run snapshot doesn't exist
+                project.snapshot_manager.restore_complete_snapshot(last_step_id)
+                print(f"UNDO: Restored project to state before step {last_step_id} ran (legacy)")
+            # Remove all run snapshots since we're undoing the entire step
+            project.snapshot_manager.remove_run_snapshots_from(last_step_id, 1)
+        else:
+            # No run snapshots exist - fallback to original behavior
+            project.snapshot_manager.restore_complete_snapshot(last_step_id)
+            print(f"UNDO: Restored project to state before step {last_step_id} ran")
+        
+        # Handle success marker and step status based on undo type
         script_name = last_step.get('script', '').replace('.py', '')
         success_marker = project.path / ".workflow_status" / f"{script_name}.success"
-        if success_marker.exists():
-            success_marker.unlink()
-            print(f"UNDO: Removed success marker for {script_name}")
         
-        # Update state: mark the undone step as pending
-        project.update_state(last_step_id, "pending")
+        # Check the effective run number after undo to determine step status
+        effective_run_after_undo = project.snapshot_manager.get_effective_run_number(last_step_id)
+        
+        if effective_run_after_undo > 0:
+            # Granular undo - step should remain "completed" since we still have previous runs
+            print(f"UNDO: Step {last_step_id} remains completed (run {effective_run_after_undo} still exists)")
+        else:
+            # Full step undo - mark as pending and remove success marker
+            if success_marker.exists():
+                success_marker.unlink()
+                print(f"UNDO: Removed success marker for {script_name}")
+            project.update_state(last_step_id, "pending")
+            print(f"UNDO: Marked step {last_step_id} as pending")
         
         return True
         
@@ -334,6 +363,8 @@ def main():
             try:
                 st.session_state.project = Project(project_path)
                 st.success(f"Loaded: {st.session_state.project.path.name}")
+                # Trigger rerun so sidebar re-renders with undo button if there are completed steps
+                st.rerun()
             except Exception as e:
                 st.error(f"Error loading project: {e}")
                 st.session_state.project = None

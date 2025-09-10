@@ -85,6 +85,26 @@ We have successfully completed a major refactoring of the application's core log
     * **ultracentrifuge.transfer.py**: Fixed path construction logic for GUI-provided file paths
     * **app.py**: Enhanced terminal display with prominent visual indicators and user guidance
 
+### Session 6: Granular Undo System for Individual Step Re-runs
+1. **Comprehensive Granular Undo Implementation**: Developed complete system for undoing individual step re-runs.
+    * **Enhanced Snapshot System**: Implemented dual snapshot strategy (before/after each run) for precise state tracking
+    * **Run Number Management**: Added methods to track and manage unlimited re-runs per step
+    * **Progressive Undo Logic**: Each undo operation targets exactly one run, not entire steps
+    * **Intelligent Step Status**: Step remains "completed" as long as successful runs exist
+2. **Universal Compatibility**: Ensured granular undo works for all steps in any workflow configuration.
+    * **Generic Implementation**: All methods work with dynamic step identification, not hardcoded step names
+    * **Backward Compatibility**: Existing single-run workflows continue to work without modification
+    * **Graceful Fallback**: Legacy snapshot naming supported for existing projects
+3. **Enhanced SnapshotManager Methods**: Added comprehensive run tracking and management capabilities.
+    * **`get_next_run_number()`**: Determines run number for new executions by analyzing existing snapshots
+    * **`get_effective_run_number()`**: Tracks current effective run after undos by checking remaining snapshots
+    * **`remove_run_snapshots_from()`**: Removes snapshots to track undo progress and prevent repeated undos
+4. **Robust Testing and Validation**: Thoroughly tested complete granular undo sequence with multiple scenarios.
+    * **Multi-run Testing**: Verified unlimited re-runs with proper snapshot creation and tracking
+    * **Progressive Undo Testing**: Confirmed each undo goes back exactly one run with correct file restoration
+    * **Step Status Validation**: Verified intelligent step status management across all undo scenarios
+    * **Final Undo Testing**: Confirmed proper transition to "pending" status when all runs are undone
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
@@ -96,6 +116,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Fix success marker naming issues**: All workflow scripts now use consistent naming convention.
 -   [x] **Fix pseudo-terminal display issues**: Resolved ultracentrifuge script terminal visibility and interaction problems.
 -   [x] **Enhance terminal visibility**: Implemented prominent visual indicators for better user experience.
+-   [x] **Implement granular undo for individual step re-runs**: Complete granular undo system with unlimited re-run support and intelligent step status management.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

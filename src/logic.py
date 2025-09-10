@@ -57,6 +57,134 @@ class SnapshotManager:
         self.snapshots_dir = snapshots_dir
         self.snapshots_dir.mkdir(exist_ok=True)
 
+    def get_next_run_number(self, step_id: str) -> int:
+        """
+        Gets the next run number for a step by checking existing run snapshots.
+        Returns 1 for first run, 2 for second run, etc.
+        """
+        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
+        if not existing_runs:
+            return 1
+        
+        # Extract run numbers from existing snapshots
+        run_numbers = []
+        for snapshot in existing_runs:
+            try:
+                # Parse filename like "step_id_run_2_complete.zip"
+                parts = snapshot.stem.split('_')
+                # Find 'run' and get the number after it
+                for i, part in enumerate(parts):
+                    if part == 'run' and i + 1 < len(parts):
+                        run_numbers.append(int(parts[i + 1]))
+                        break
+            except (ValueError, IndexError):
+                continue
+        
+        return max(run_numbers, default=0) + 1
+
+    def get_latest_run_snapshot(self, step_id: str) -> str:
+        """
+        Gets the snapshot name for the most recent run of a step.
+        Returns None if no run snapshots exist.
+        """
+        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
+        if not existing_runs:
+            return None
+        
+        # Find the highest run number
+        latest_run = 0
+        for snapshot in existing_runs:
+            try:
+                parts = snapshot.stem.split('_')
+                # Find 'run' and get the number after it
+                for i, part in enumerate(parts):
+                    if part == 'run' and i + 1 < len(parts):
+                        run_num = int(parts[i + 1])
+                        if run_num > latest_run:
+                            latest_run = run_num
+                        break
+            except (ValueError, IndexError):
+                continue
+        
+        return f"{step_id}_run_{latest_run}" if latest_run > 0 else None
+
+    def get_current_run_number(self, step_id: str) -> int:
+        """
+        Gets the current run number for a step (highest existing run).
+        Returns 0 if no runs exist.
+        """
+        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
+        if not existing_runs:
+            return 0
+        
+        # Find the highest run number
+        latest_run = 0
+        for snapshot in existing_runs:
+            try:
+                parts = snapshot.stem.split('_')
+                for i, part in enumerate(parts):
+                    if part == 'run' and i + 1 < len(parts):
+                        run_num = int(parts[i + 1])
+                        if run_num > latest_run:
+                            latest_run = run_num
+                        break
+            except (ValueError, IndexError):
+                continue
+        
+        return latest_run
+
+    def snapshot_exists(self, snapshot_name: str) -> bool:
+        """Check if a snapshot exists."""
+        zip_path = self.snapshots_dir / f"{snapshot_name}_complete.zip"
+        return zip_path.exists()
+
+    def get_effective_run_number(self, step_id: str) -> int:
+        """
+        Gets the effective current run number by checking which 'after' snapshots exist
+        and finding the highest one that represents the current state.
+        """
+        # Check which 'after' snapshots exist
+        after_snapshots = list(self.snapshots_dir.glob(f"{step_id}_run_*_after_complete.zip"))
+        if not after_snapshots:
+            return 0
+        
+        # Find the highest run number with an 'after' snapshot
+        highest_run = 0
+        for snapshot in after_snapshots:
+            try:
+                parts = snapshot.stem.split('_')
+                for i, part in enumerate(parts):
+                    if part == 'run' and i + 1 < len(parts):
+                        run_num = int(parts[i + 1])
+                        if run_num > highest_run:
+                            highest_run = run_num
+                        break
+            except (ValueError, IndexError):
+                continue
+        
+        return highest_run
+
+    def remove_run_snapshots_from(self, step_id: str, run_number: int):
+        """
+        Remove all run snapshots from the specified run number onwards.
+        This is used to track which runs have been undone.
+        """
+        # Remove 'after' snapshots from this run onwards
+        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_after_complete.zip"))
+        
+        for snapshot in snapshots_to_remove:
+            try:
+                parts = snapshot.stem.split('_')
+                for i, part in enumerate(parts):
+                    if part == 'run' and i + 1 < len(parts):
+                        run_num = int(parts[i + 1])
+                        if run_num >= run_number:
+                            snapshot.unlink()
+                            print(f"UNDO: Removed snapshot {snapshot.name}")
+                        break
+            except (ValueError, IndexError):
+                continue
+
     def take(self, step_id: str, items: List[str]):
         """Creates a zip archive of the specified items."""
         if not items:
@@ -92,6 +220,7 @@ class SnapshotManager:
         }
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # First, add all files
             for file_path in self.project_path.rglob('*'):
                 # Skip if any part of the path matches exclude patterns
                 if any(part in exclude_patterns for part in file_path.parts):
@@ -101,10 +230,28 @@ class SnapshotManager:
                 if file_path.name in exclude_patterns:
                     continue
                 
-                # Only add files, not directories (directories are created automatically)
                 if file_path.is_file():
                     relative_path = file_path.relative_to(self.project_path)
                     zf.write(file_path, relative_path)
+            
+            # Then, explicitly add empty directories by creating placeholder files
+            for dir_path in self.project_path.rglob('*'):
+                if dir_path.is_dir() and dir_path != self.project_path:
+                    # Skip if any part of the path matches exclude patterns
+                    if any(part in exclude_patterns for part in dir_path.parts):
+                        continue
+                    if dir_path.name in exclude_patterns:
+                        continue
+                    
+                    # Check if directory is empty
+                    try:
+                        if not any(dir_path.iterdir()):
+                            # Add a placeholder file to preserve empty directory
+                            relative_dir = dir_path.relative_to(self.project_path)
+                            placeholder_path = str(relative_dir / ".keep_empty_dir")
+                            zf.writestr(placeholder_path, "")
+                    except OSError:
+                        pass  # Skip if we can't read directory
         
         print(f"SNAPSHOT: Complete project snapshot saved for step {step_id}")
 
@@ -136,10 +283,18 @@ class SnapshotManager:
                     continue
                 current_files.add(file_path.relative_to(self.project_path))
         
-        # Get list of files in snapshot
+        # Get list of files in snapshot and identify empty directory placeholders
         snapshot_files = set()
+        empty_dirs_to_preserve = set()
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            snapshot_files = set(Path(name) for name in zf.namelist() if not name.endswith('/'))
+            for name in zf.namelist():
+                if not name.endswith('/'):
+                    path = Path(name)
+                    if path.name == ".keep_empty_dir":
+                        # This is a placeholder for an empty directory
+                        empty_dirs_to_preserve.add(path.parent)
+                    else:
+                        snapshot_files.add(path)
         
         # Remove files that exist now but weren't in the snapshot
         files_to_remove = current_files - snapshot_files
@@ -149,7 +304,7 @@ class SnapshotManager:
                 file_path.unlink()
                 print(f"RESTORE: Removed {rel_path}")
         
-        # Remove empty directories
+        # Remove empty directories that shouldn't exist (not in snapshot and not preserved)
         for dir_path in sorted(self.project_path.rglob('*'), key=lambda p: len(p.parts), reverse=True):
             if dir_path.is_dir() and dir_path != self.project_path:
                 # Skip preserved directories
@@ -158,16 +313,33 @@ class SnapshotManager:
                 if dir_path.name in preserve_patterns:
                     continue
                 
+                # Skip directories that should be preserved from snapshot
+                rel_dir = dir_path.relative_to(self.project_path)
+                if rel_dir in empty_dirs_to_preserve:
+                    continue
+                
                 try:
                     if not any(dir_path.iterdir()):  # Directory is empty
                         dir_path.rmdir()
-                        print(f"RESTORE: Removed empty directory {dir_path.relative_to(self.project_path)}")
+                        print(f"RESTORE: Removed empty directory {rel_dir}")
                 except OSError:
                     pass  # Directory not empty or other error
         
         # Extract snapshot files
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(self.project_path)
+        
+        # Clean up placeholder files and ensure empty directories exist
+        for empty_dir in empty_dirs_to_preserve:
+            dir_path = self.project_path / empty_dir
+            placeholder_file = dir_path / ".keep_empty_dir"
+            
+            # Create directory if it doesn't exist
+            dir_path.mkdir(parents=True, exist_ok=True)
+            
+            # Remove placeholder file if it exists
+            if placeholder_file.exists():
+                placeholder_file.unlink()
         
         print(f"RESTORE: Complete project state restored from step {step_id}")
 
