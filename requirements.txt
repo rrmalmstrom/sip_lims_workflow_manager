@@ -1,0 +1,16 @@
+pytest
+pyyaml
+streamlit
+watchdog
+pandas
+numpy
+openpyxl
+xlwings
+matplotlib
+PyPDF2
+seaborn
+sqlalchemy
+xlrd
+xlutils
+xlwt
+pyte

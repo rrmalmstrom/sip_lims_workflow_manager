@@ -1,0 +1,7 @@
+workflow_name: "Test Rollback Workflow"
+steps:
+  - id: test_rollback
+    name: "Test Rollback Functionality"
+    script: "scripts/test_rollback.py"
+    snapshot_items:
+      - "test_rollback_file.txt"

@@ -1,0 +1,133 @@
+# LIMS Workflow Manager
+
+A simple, lightweight workflow manager for running a series of Python scripts in a laboratory environment.
+
+## Features
+
+-   Visual, interactive checklist of workflow steps.
+-   One-click execution of Python scripts.
+-   Automatic state tracking.
+-   Robust error handling with automatic rollback.
+-   Undo/Redo functionality via project state snapshots.
+-   Cross-platform support for macOS and Windows.
+
+## Prerequisites
+
+-   **Python 3.9** or higher must be installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
+
+## Installation and First-Time Setup
+
+The setup process needs to be performed only **once** per computer.
+
+1.  **Download the Application**: Download the `lims_workflow_manager` folder (as a `.zip` file) from the shared drive and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
+
+2.  **Run the Setup Script**:
+    -   **On macOS**: Open the `lims_workflow_manager` folder and double-click the `setup.command` file. Your computer may ask for permission to run the script; please allow it.
+    -   **On Windows**: Open the `lims_workflow_manager` folder and double-click the `setup.bat` file.
+
+    This script will perform two key actions:
+    a.  **Clone the Script Repository**: It will download the central repository of workflow scripts into a `scripts` folder inside the application directory.
+    b.  **Create the Environment**: It will create an isolated Python virtual environment and install all necessary dependencies. This will not affect any other Python installations on your system.
+
+## Updating the Workflow Scripts
+
+This application is designed so that the workflow scripts can be updated independently from the main application.
+
+-   The application will automatically check for new script versions every time it starts.
+-   If new scripts are available, a notification will appear in the sidebar.
+-   To get the latest scripts, simply close the application and run the `update_scripts.command` (macOS) or `update_scripts.bat` (Windows) file.
+
+## Running the Application
+
+After the one-time setup is complete, you can start the application at any time:
+
+-   **On macOS**: Double-click the `run.command` file.
+-   **On Windows**: Double-click the `run.bat` file.
+
+A terminal window will open, and after a few moments, the application's user interface will open in your default web browser.
+
+## How to Use
+
+1.  **Load a Project**: Click the "Browse for Project Folder" button in the sidebar and navigate to your project folder on the shared drive. The project folder must contain a `workflow.yml` file.
+2.  **Run Steps**: The workflow steps will be displayed in the main area. The next available step will have an active "Run" button. Click it to execute the script.
+3.  **Interactive Scripts**: If a script requires your input, a "Live Terminal Output" window will appear. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue.
+3.  **Undo/Redo**: Use the "Undo Last Step" and "Redo" buttons in the sidebar to move backward and forward through the workflow's history.
+4.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. This is useful for reprocessing failed samples.
+
+## Creating a New Workflow
+
+To define a new workflow for a project, create a `workflow.yml` file in the root of the project folder. The file should follow this format. Note how the `snapshot_items` list changes for each step to include only the critical files and directories that are created or modified in that step.
+
+```yaml
+workflow_name: "SIP Fractionation and Library Prep"
+steps:
+  - id: setup_plates
+    name: "1. Setup Isotope and FA Plates"
+    script: "scripts/setup.isotope.and.FA.plates.py"
+    snapshot_items:
+      - "Project_Database.db"
+      - "outputs/"
+
+  - id: ultracentrifuge_transfer
+    name: "2. Ultracentrifuge Transfer"
+    script: "scripts/ultracentrifuge.transfer.py"
+    snapshot_items:
+      - "Project_Database.db"
+      - "outputs/"
+      
+  - id: make_library_creation_files
+    name: "6. Make Library Creation Files"
+    script: "scripts/make.library.creation.files.96.py"
+    snapshot_items:
+      - "outputs/FA_upload.txt"
+      - "outputs/Echo_transfer.csv"
+      - "outputs/Echo_barcode.txt"
+      - "outputs/Lib.info.csv"
+```
+
+-   **`id`**: A unique identifier for the step. No spaces or special characters.
+-   **`name`**: The name that will be displayed in the GUI.
+-   **`script`**: The path to the Python script to be executed, relative to the project folder.
+-   **`snapshot_items`**: A list of the specific files and directories that should be saved before this step runs. This is critical for the Undo feature to work correctly.
+
+### Defining User Inputs
+
+For steps that require user-provided arguments, you can add an `inputs` section. The application will automatically generate the necessary widgets in the GUI.
+
+-   **`type`**: The type of input. Currently, only `file` is supported, which creates a file browser widget.
+-   **`name`**: The label that will be displayed next to the input widget in the GUI.
+-   **`arg`**: The command-line flag to precede the value (e.g., `--input-file`). If the script uses positional arguments, this can be an empty string (`""`).
+
+**Example with Inputs:**
+```yaml
+- id: setup_plates
+  name: "1. Setup Isotope and FA Plates"
+  script: "scripts/setup.isotope.and.FA.plates.py"
+  snapshot_items:
+    - "Project_Database.db"
+    - "outputs/"
+  inputs:
+    - type: file
+      name: "Aliquot Sheet"
+      arg: ""
+    - type: file
+      name: "SampleScan"
+      arg: ""
+```
+## A Note for Script Authors: Current Working Directory
+
+When the LIMS Workflow Manager runs a script, it automatically sets the **current working directory (CWD)** to the root of the **project folder** you selected.
+
+This means your scripts can be written with the assumption that they are running *inside* the project folder. You can, and should, use simple relative paths to access your input files and write your output files.
+
+For example, if your project folder has a structure like this:
+
+```
+my_science_project/
+├── inputs/
+│   └── raw_data.csv
+├── outputs/
+└── workflow.yml
+```
+
+A script can reliably access `raw_data.csv` using the path `"inputs/raw_data.csv"` and write results to `"outputs/results.csv"` without needing to know the full path to `my_science_project`. The application handles the context for you.
