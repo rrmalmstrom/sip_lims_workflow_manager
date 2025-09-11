@@ -165,15 +165,51 @@ def perform_undo(project):
         effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
         
         if effective_run > 1:
-            # Restore to the previous run's state (after previous run completed)
-            previous_run_snapshot = f"{last_step_id}_run_{effective_run - 1}_after"
-            if project.snapshot_manager.snapshot_exists(previous_run_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(previous_run_snapshot)
+            # Search backwards to find the highest available "after" snapshot
+            target_run = None
+            for run_num in range(effective_run - 1, 0, -1):
+                candidate_snapshot = f"{last_step_id}_run_{run_num}_after"
+                if project.snapshot_manager.snapshot_exists(candidate_snapshot):
+                    target_run = run_num
+                    break
+            
+            if target_run:
+                # Restore to the found "after" snapshot
+                target_snapshot = f"{last_step_id}_run_{target_run}_after"
+                project.snapshot_manager.restore_complete_snapshot(target_snapshot)
                 # Remove the current run's 'after' snapshot to track that it's been undone
                 project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
-                print(f"UNDO: Restored project to state after run {effective_run - 1} of step {last_step_id}")
+                print(f"UNDO: Restored project to state after run {target_run} of step {last_step_id}")
                 # Step should remain "completed" since we still have a previous run
                 return True
+            else:
+                # No "after" snapshots available for this step, check previous step
+                if step_index > 0:
+                    # Look for the previous step's latest "after" snapshot
+                    previous_step = project.workflow.steps[step_index - 1]
+                    previous_step_id = previous_step['id']
+                    previous_effective_run = project.snapshot_manager.get_effective_run_number(previous_step_id)
+                    
+                    if previous_effective_run > 0:
+                        # Restore to previous step's most recent "after" snapshot
+                        previous_after_snapshot = f"{previous_step_id}_run_{previous_effective_run}_after"
+                        if project.snapshot_manager.snapshot_exists(previous_after_snapshot):
+                            project.snapshot_manager.restore_complete_snapshot(previous_after_snapshot)
+                            # Remove current step's "after" snapshot and mark as pending
+                            project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+                            print(f"UNDO: Restored project to state after {previous_step_id} (run {previous_effective_run})")
+                            # Mark current step as pending since we're undoing it completely
+                            script_name = last_step.get('script', '').replace('.py', '')
+                            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
+                            if success_marker.exists():
+                                success_marker.unlink()
+                                print(f"UNDO: Removed success marker for {script_name}")
+                            project.update_state(last_step_id, "pending")
+                            print(f"UNDO: Marked step {last_step_id} as pending")
+                            return True
+                
+                # No previous step or no previous step snapshots, treat as undoing the entire step
+                effective_run = 1  # Fall through to the next condition
             
         elif effective_run == 1:
             # This is the last run - undo the entire step
@@ -266,6 +302,12 @@ def main():
         st.session_state.script_thread = None
     if 'scroll_to_bottom' not in st.session_state:
         st.session_state.scroll_to_bottom = False
+    if 'completed_script_output' not in st.session_state:
+        st.session_state.completed_script_output = ""
+    if 'completed_script_step' not in st.session_state:
+        st.session_state.completed_script_step = None
+    if 'completed_script_success' not in st.session_state:
+        st.session_state.completed_script_success = None
 
 
     # --- Sidebar ---
@@ -380,6 +422,7 @@ def main():
         st.subheader(f"Workflow: {project.workflow.name}")
 
         # --- Terminal Output and Interaction ---
+        # Show terminal for running scripts
         if st.session_state.running_step_id:
             # Make terminal very prominent with visual indicators
             running_step = project.workflow.get_step_by_id(st.session_state.running_step_id)
@@ -410,6 +453,36 @@ def main():
                     on_click=send_and_clear_input,
                     args=(project, user_input)
                 )
+        
+        # Show terminal for completed scripts
+        elif st.session_state.completed_script_output and st.session_state.completed_script_step:
+            completed_step = project.workflow.get_step_by_id(st.session_state.completed_script_step)
+            
+            # Header for completed script
+            st.markdown("# 📋 COMPLETED SCRIPT OUTPUT")
+            if st.session_state.completed_script_success:
+                st.success(f"✅ **SCRIPT COMPLETED**: {completed_step['name'] if completed_step else 'Unknown Step'}")
+            else:
+                st.error(f"❌ **SCRIPT FAILED**: {completed_step['name'] if completed_step else 'Unknown Step'}")
+            
+            # Show completed output
+            st.text_area(
+                "Script Output",
+                value=st.session_state.completed_script_output,
+                height=300,
+                key="completed_terminal_view",
+                disabled=True,
+                help="This is the output from the completed script."
+            )
+            
+            # Clear button
+            col1, col2, col3 = st.columns([1, 1, 4])
+            with col1:
+                if st.button("Clear Output", key="clear_completed_output"):
+                    st.session_state.completed_script_output = ""
+                    st.session_state.completed_script_step = None
+                    st.session_state.completed_script_success = None
+                    st.rerun()
         
         st.markdown("---")
 
@@ -533,6 +606,11 @@ def main():
                 
                 # Use the new handle_step_result method which includes rollback logic
                 st.session_state.project.handle_step_result(step_id, result)
+
+                # Preserve the terminal output for completed script display
+                st.session_state.completed_script_output = st.session_state.terminal_output
+                st.session_state.completed_script_step = step_id
+                st.session_state.completed_script_success = result.success
 
                 st.session_state.last_run_result = {"step_name": st.session_state.project.workflow.get_step_by_id(step_id)['name'], **result.__dict__}
                 st.session_state.running_step_id = None

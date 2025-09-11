@@ -105,6 +105,28 @@ We have successfully completed a major refactoring of the application's core log
     * **Step Status Validation**: Verified intelligent step status management across all undo scenarios
     * **Final Undo Testing**: Confirmed proper transition to "pending" status when all runs are undone
 
+### Session 7: Enhanced Undo with Previous Step Restoration
+1. **Critical Undo Bug Investigation**: Identified issue where undo button appeared but did nothing when clicked for the last remaining run of a step.
+    * **Root Cause Analysis**: Original logic assumed consecutive "after" snapshots existed, but previous undo operations created gaps
+    * **Evidence Analysis**: Missing "after" snapshots were from successful previous undos, not failed runs
+    * **Logic Gap Identified**: System couldn't handle restoration when no current step "after" snapshots existed
+2. **Enhanced Backwards Search Implementation**: Developed robust algorithm to handle gaps in "after" snapshots.
+    * **Backwards Search Algorithm**: Searches through all possible previous "after" snapshots, not just immediate previous
+    * **Previous Step Restoration**: When no current step "after" snapshots exist, restores to previous step's latest "after" snapshot
+    * **Proper State Management**: Correctly marks steps as "pending" and removes success markers when undoing entire steps
+3. **Comprehensive TDD Testing**: Created complete test suite for the enhanced undo functionality.
+    * **Test Suite Creation**: `tests/test_granular_undo_fix.py` with 9 comprehensive test cases
+    * **Scenario Coverage**: Gap handling, normal operation, edge cases, and previous step restoration
+    * **Test Results**: All 9 tests passed, validating the fix across all scenarios
+4. **Manual Testing Verification**: Confirmed fix works in real-world scenario with `dummy_chakraborty` project.
+    * **Issue Reproduction**: Verified undo button appeared but did nothing for ultracentrifuge step
+    * **Fix Validation**: Confirmed undo now properly restores to previous step (setup_plates) state
+    * **Complete Functionality**: Verified granular undo works for all scenarios including previous step restoration
+5. **Documentation Updates**: Updated technical documentation to reflect the enhanced undo functionality.
+    * **TECHNICAL_NOTES.md**: Added comprehensive Session 7 section with implementation details
+    * **SUMMARY.md**: Updated project summary with latest features and accomplishments
+    * **PROGRESS.md**: Documented complete development progression including latest fix
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
@@ -117,6 +139,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Fix pseudo-terminal display issues**: Resolved ultracentrifuge script terminal visibility and interaction problems.
 -   [x] **Enhance terminal visibility**: Implemented prominent visual indicators for better user experience.
 -   [x] **Implement granular undo for individual step re-runs**: Complete granular undo system with unlimited re-run support and intelligent step status management.
+-   [x] **Fix enhanced undo with previous step restoration**: Resolved critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

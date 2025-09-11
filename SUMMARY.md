@@ -12,6 +12,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 6 (Enhanced GUI Features):** Complete. Smart re-run file input behavior and comprehensive undo functionality with complete project state restoration.
 - **Phase 7 (Pseudo-Terminal Bug Fixes):** Complete. Resolved critical pseudo-terminal display issues and enhanced terminal visibility for all interactive scripts.
 - **Phase 8 (Granular Undo System):** Complete. Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support and intelligent step status management.
+- **Phase 9 (Enhanced Undo with Previous Step Restoration):** Complete. Fixed critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -36,6 +37,8 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 11. **Granular Undo System**: Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support.
 12. **Intelligent Step Status Management**: Enhanced step status to accurately reflect completion state across multiple re-runs.
 13. **Progressive Undo Logic**: Each undo operation targets exactly one run, not entire steps, with proper snapshot tracking.
+14. **Enhanced Undo with Previous Step Restoration**: Fixed critical gap where undo would fail silently when no current step "after" snapshots existed, now properly restores to previous step's state.
+15. **Backwards Search Algorithm**: Implemented robust backwards search to handle gaps in "after" snapshots created by previous undo operations.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -80,3 +83,15 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
   - **Progressive Restoration**: Files from only the most recent run are removed per undo
 - **Snapshot Strategy**: Dual snapshot system (before/after each run) for precise state restoration
 - **Universal Compatibility**: Works for all steps in any workflow configuration with backward compatibility
+
+## 9. Latest Features (Session 7)
+### Enhanced Undo with Previous Step Restoration
+- **Problem Solved**: Undo button would appear but do nothing when trying to undo the last remaining run of a step after previous undos created gaps in "after" snapshots
+- **Root Cause Fixed**: Original logic assumed consecutive "after" snapshots existed, but previous undo operations removed them
+- **Technical Implementation**: Enhanced backwards search algorithm and previous step restoration logic
+- **Key Features**:
+  - **Backwards Search Algorithm**: Searches through all possible previous "after" snapshots, handling gaps gracefully
+  - **Previous Step Restoration**: When no current step "after" snapshots exist, restores to previous step's latest "after" snapshot
+  - **Proper State Management**: Correctly marks steps as "pending" and removes success markers when undoing entire steps
+  - **Comprehensive Testing**: 9 TDD tests covering all scenarios including gaps, normal operation, and edge cases
+- **Universal Compatibility**: Works for all step combinations and maintains full backward compatibility

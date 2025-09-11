@@ -555,3 +555,149 @@ Combined with previous session features, the LIMS Workflow Manager now provides:
 - Robust error handling with automatic rollback and success marker verification
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the flexibility needed for complex laboratory workflows.
+
+## Feature 6: Enhanced Granular Undo with Previous Step Restoration (Session 7)
+
+### Problem Statement
+The granular undo system had a critical gap: when undoing the last remaining run of a step, it couldn't handle cases where previous runs had been undone (creating gaps in "after" snapshots). This caused the undo button to appear but do nothing when clicked, particularly when trying to undo the first run of a step after multiple re-runs and undos.
+
+### Root Cause Analysis
+
+#### The Snapshot Gap Issue
+When users performed multiple re-runs and undos, the snapshot pattern became:
+- `step_run_1_complete.zip` ✅ (before run 1)
+- `step_run_1_after_complete.zip` ❌ (removed by previous undo)
+- `step_run_2_complete.zip` ✅ (before run 2)
+- `step_run_2_after_complete.zip` ✅ (current effective run)
+
+#### The Logic Failure
+The original undo logic assumed consecutive "after" snapshots:
+```python
+# BROKEN: Assumed run_1_after exists
+previous_run_snapshot = f"{step_id}_run_{effective_run - 1}_after"
+if project.snapshot_manager.snapshot_exists(previous_run_snapshot):
+    # This would fail because run_1_after was removed by previous undo
+```
+
+### Solution Implementation
+
+#### Enhanced Backwards Search Logic
+Modified the undo logic in `app.py` to handle gaps gracefully:
+
+```python
+# NEW: Search backwards through all possible "after" snapshots
+target_run = None
+for run_num in range(effective_run - 1, 0, -1):
+    candidate_snapshot = f"{last_step_id}_run_{run_num}_after"
+    if project.snapshot_manager.snapshot_exists(candidate_snapshot):
+        target_run = run_num
+        break
+
+if target_run:
+    # Restore to found snapshot
+else:
+    # NEW: Look at previous step's "after" snapshot
+    if step_index > 0:
+        previous_step = project.workflow.steps[step_index - 1]
+        previous_step_id = previous_step['id']
+        previous_effective_run = project.snapshot_manager.get_effective_run_number(previous_step_id)
+        
+        if previous_effective_run > 0:
+            previous_after_snapshot = f"{previous_step_id}_run_{previous_effective_run}_after"
+            if project.snapshot_manager.snapshot_exists(previous_after_snapshot):
+                # Restore to previous step's state
+                project.snapshot_manager.restore_complete_snapshot(previous_after_snapshot)
+                # Mark current step as pending
+                project.update_state(last_step_id, "pending")
+```
+
+#### Key Enhancements
+1. **Backwards Search**: Searches through all possible previous "after" snapshots, not just the immediate previous one
+2. **Previous Step Restoration**: When no current step "after" snapshots exist, restores to the previous step's latest "after" snapshot
+3. **Proper State Management**: Correctly marks steps as "pending" and removes success markers when undoing entire steps
+4. **Graceful Fallback**: Maintains compatibility with legacy snapshot naming
+
+### Test-Driven Development Approach
+
+#### Comprehensive Test Suite
+Created `tests/test_granular_undo_fix.py` with 9 test cases covering all scenarios:
+
+1. **Gap handling**: Verifies backwards search works with missing "after" snapshots
+2. **Normal operation**: Ensures existing functionality still works
+3. **Edge cases**: Tests single runs, no snapshots, and error conditions
+4. **Previous step restoration**: Validates restoration to previous step's state
+
+#### Test Results
+✅ **All 9 tests PASSED** - Comprehensive validation of the fix
+
+### Manual Testing Verification
+
+#### Test Scenario
+- **Project**: `dummy_chakraborty` with multiple ultracentrifuge runs
+- **Snapshot Pattern**: Only run 2 had "after" snapshot (runs 1,3,4 removed by previous undos)
+- **Issue**: Undo button appeared but did nothing when clicked
+
+#### Fix Verification
+Terminal output confirmed successful operation:
+```
+UNDO: Restored project to state after setup_plates (run 1)
+UNDO: Removed success marker for ultracentrifuge.transfer
+UNDO: Marked step ultracentrifuge_transfer as pending
+```
+
+### Technical Implementation Details
+
+#### Scenario Handling
+The fix correctly handles these scenarios:
+
+**Scenario 1: Consecutive "after" snapshots exist**
+- Behavior: Normal granular undo (run N → run N-1)
+- Example: `run_3_after` → `run_2_after`
+
+**Scenario 2: Gaps in "after" snapshots**
+- Behavior: Backwards search finds next available "after" snapshot
+- Example: `run_4_after` → `run_2_after` (skipping missing `run_3_after`)
+
+**Scenario 3: No current step "after" snapshots**
+- Behavior: Restore to previous step's latest "after" snapshot
+- Example: `ultracentrifuge_run_2` → `setup_plates_run_1_after`
+
+**Scenario 4: First step or no previous snapshots**
+- Behavior: Restore to current step's "before" snapshot (clean state)
+- Example: `setup_plates_run_1` → clean project state
+
+### Performance and Reliability
+
+#### Efficiency
+- **Backwards search**: O(n) where n = number of runs, typically small
+- **Snapshot operations**: Unchanged, same performance as before
+- **Memory usage**: No additional memory overhead
+
+#### Error Handling
+- **Missing snapshots**: Graceful fallback to alternative restoration methods
+- **File system errors**: Proper exception handling with user feedback
+- **State corruption**: Transaction-like behavior prevents partial state changes
+
+### Backward Compatibility
+
+#### Legacy Support
+- **Existing projects**: Continue to work without modification
+- **Old snapshot naming**: Fallback support for pre-granular snapshots
+- **Single-run workflows**: No behavioral changes for simple workflows
+
+#### Migration
+- **No migration required**: Enhancement is transparent to existing users
+- **Gradual adoption**: New granular features activate automatically for new runs
+
+## Conclusion (Updated for Session 7)
+
+The Session 7 enhancements complete the granular undo system by addressing the critical gap in previous step restoration. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Complete Granular Undo**: Handle any combination of runs and undos across all steps
+2. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts
+3. **Comprehensive State Management**: Empty directory preservation and complete project restoration
+4. **Smart Re-run Behavior**: Fresh input prompts for each execution with automatic input clearing
+5. **Robust Error Handling**: Automatic rollback, success marker verification, and graceful failure recovery
+6. **Universal Compatibility**: Works for all steps in any workflow configuration with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the flexibility and reliability needed for complex laboratory workflows.
