@@ -508,12 +508,19 @@ def main():
                 else:
                     st.info(f"⚪ {step_name}")
 
-                # Input widgets - now shown for completed steps too (for re-runs)
+                # Input widgets - shown for pending steps and completed steps that allow re-runs
+                show_inputs = False
                 if 'inputs' in step and not is_running_this_step:
+                    if status == 'pending':
+                        show_inputs = True
+                    elif status == 'completed' and step.get('allow_rerun', False):
+                        show_inputs = True
+                
+                if show_inputs:
                     st.session_state.user_inputs.setdefault(step_id, {})
                     
-                    # For completed steps, show a note about re-run inputs
-                    if status == 'completed':
+                    # For completed steps that allow re-runs, show a note about re-run inputs
+                    if status == 'completed' and step.get('allow_rerun', False):
                         st.info("💡 **Re-run Setup**: Please select input files for this re-run. Previous inputs are cleared to ensure fresh data.")
                         # Clear previous inputs for re-run to force user to select new files
                         if f"rerun_inputs_cleared_{step_id}" not in st.session_state:
@@ -541,7 +548,9 @@ def main():
             with col2:
                 # Run/Re-run buttons...
                 run_button_disabled = st.session_state.running_step_id is not None
-                if status == "completed":
+                
+                # Show Re-run button for completed steps that allow re-runs
+                if status == "completed" and step.get('allow_rerun', False):
                     # Check if all required inputs for re-run are filled
                     rerun_button_disabled = run_button_disabled
                     if 'inputs' in step:
@@ -560,7 +569,9 @@ def main():
                         step_user_inputs = st.session_state.user_inputs.get(step_id, {})
                         start_script_thread(project, step_id, step_user_inputs)
                         st.rerun()  # Force immediate rerun to show terminal
-                else:
+                
+                # Show Run button for pending steps (or all steps if they're the next step)
+                if status != "completed":
                     is_next_step = (step_id == first_pending_step['id']) if first_pending_step else False
                     if not is_next_step:
                         run_button_disabled = True

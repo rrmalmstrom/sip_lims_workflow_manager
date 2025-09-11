@@ -140,6 +140,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Enhance terminal visibility**: Implemented prominent visual indicators for better user experience.
 -   [x] **Implement granular undo for individual step re-runs**: Complete granular undo system with unlimited re-run support and intelligent step status management.
 -   [x] **Fix enhanced undo with previous step restoration**: Resolved critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
+-   [x] **Implement selective re-run capability**: Added `allow_rerun` property to workflow definitions to restrict re-run capability to only specified steps.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

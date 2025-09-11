@@ -95,3 +95,18 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
   - **Proper State Management**: Correctly marks steps as "pending" and removes success markers when undoing entire steps
   - **Comprehensive Testing**: 9 TDD tests covering all scenarios including gaps, normal operation, and edge cases
 - **Universal Compatibility**: Works for all step combinations and maintains full backward compatibility
+
+## 10. Latest Features (Session 8)
+### Selective Re-run Capability
+- **Problem Solved**: Users needed to restrict re-run capability to only specific workflow steps, preventing unnecessary re-execution of steps that should only run once
+- **Root Cause Addressed**: Previous implementation allowed all completed steps to be re-run, which could lead to unintended workflow execution
+- **Technical Implementation**: Enhanced workflow definition with optional `allow_rerun` property and updated GUI logic
+- **Key Features**:
+  - **Selective Control**: Only steps with `allow_rerun: true` show re-run buttons when completed
+  - **Script-Based Logic**: Re-run capability tied to specific scripts rather than step numbers for maintainability
+  - **Input Widget Management**: Smart display of input widgets only for pending steps and re-run-enabled completed steps
+  - **Backward Compatibility**: Existing workflows continue to work without modification
+- **Workflow Configuration**: Added `allow_rerun: true` to four specific scripts requiring iterative execution
+- **Test Coverage**: Comprehensive TDD approach with 5 test cases validating all functionality aspects
+- **Documentation**: Updated README.md and technical documentation with complete implementation details
+- **Universal Compatibility**: Works for all workflow configurations with graceful property handling

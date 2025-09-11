@@ -1,7 +1,7 @@
 # LIMS Workflow Manager - Detailed Design Document
 
-**Version:** 1.1
-**Date:** 2025-09-10
+**Version:** 1.2
+**Date:** 2025-09-11
 
 ## 1. Introduction & Vision
 
@@ -55,11 +55,14 @@ This YAML file is the blueprint for a workflow. Each step is a dictionary with t
 - `name`: A human-readable string for the GUI.
 - `script`: The relative path to the Python script to execute.
 - `snapshot_items`: A list of files and directories to be included in this step's snapshot.
+- `allow_rerun`: (Optional) Set to `true` to enable re-run capability for completed steps. Defaults to `false`.
+- `inputs`: (Optional) A list of user input definitions for file selection or other parameters.
 
 ### 3.2. State Management & The "Interactive Checklist"
 The system is a flexible, interactive checklist, managed by the `StateManager`.
 - **`workflow_state.json`**: Tracks the status of each step `id` (e.g., "completed", "pending").
-- **GUI Model**: Renders all steps as cards with "Run" or "Re-run" buttons, allowing the user to execute any step at any time to handle partial rework.
+- **GUI Model**: Renders all steps as cards with "Run" or "Re-run" buttons, allowing selective execution based on step configuration.
+- **Selective Re-run**: Only steps with `allow_rerun: true` display re-run buttons when completed, providing precise control over workflow execution.
 
 ### 3.3. Snapshot & Undo/Redo Logic
 - **Snapshot Trigger**: A snapshot is created **only** when a step is successfully completed for the **first time**. This is handled by the `SnapshotManager`.
@@ -111,13 +114,43 @@ success_file.touch()
 print(f"SUCCESS: {script_name} completed successfully")
 ```
 
+### 3.8. Selective Re-run Capability
+The system provides granular control over which workflow steps can be re-executed after completion:
+
+- **Default Behavior**: Steps without the `allow_rerun` property cannot be re-run once completed
+- **Enabled Re-runs**: Steps with `allow_rerun: true` show re-run buttons and input widgets when completed
+- **Script-Based Logic**: Re-run capability is tied to specific scripts rather than step positions for maintainability
+- **Input Management**: Re-run-enabled steps automatically clear previous input selections to ensure fresh data
+
+**Example Workflow Configuration:**
+```yaml
+workflow_name: "Laboratory Workflow"
+steps:
+  - id: setup_step
+    name: "1. Initial Setup"
+    script: "setup.py"
+    snapshot_items: ["database.db"]
+    # No allow_rerun - cannot be re-run once completed
+    
+  - id: analysis_step
+    name: "2. Data Analysis"
+    script: "analyze.py"
+    snapshot_items: ["results/"]
+    allow_rerun: true  # Can be re-run multiple times
+    inputs:
+      - type: file
+        name: "Input Data File"
+        arg: "--input"
+```
+
 ## 4. GUI Design
 - **Layout**: A two-column Streamlit application.
   - **Sidebar**: Project selection, Undo/Redo buttons, and update notifications.
   - **Main Content**: Displays workflow steps as cards.
 - **Interactivity**:
   - **Folder Picker**: A "Browse..." button will use a `tkinter`-based helper script to open a native OS folder dialog.
-  - **Run Buttons**: Each step card has a "Run" or "Re-run" button that triggers the `Project.run_step()` method.
+  - **Run Buttons**: Each step card has conditional "Run" or "Re-run" buttons based on step status and `allow_rerun` configuration.
+  - **Selective Display**: Re-run buttons only appear for completed steps with `allow_rerun: true` property.
   - **Interactive Terminal**: An `st.expander` will serve as a live terminal. It will display real-time script output and provide a text box for users to send input to the running script. This is managed by a `ScriptRunner` class that uses a pseudo-terminal (`pty`) to create a robust, cross-platform, two-way communication channel with the subprocess.
 
 ## 5. Development Plan

@@ -22,6 +22,7 @@ steps:
     name: "2. Create Ultracentrifuge Tubes"
     script: "ultracentrifuge.transfer.py"
     snapshot_items: ["Project_Database.db", "outputs/"]
+    allow_rerun: true
     inputs:
       - type: file
         name: "Ultracentrifuge CSV File"
@@ -35,6 +36,7 @@ steps:
     name: "3. Plot DNA/Density (QC)"
     script: "plot_DNAconc_vs_Density.py"
     snapshot_items: ["outputs/plots/", "outputs/summary.csv"]
+    allow_rerun: true
 
   - id: calc_sequin_addition
     name: "4. Calculate Sequin Addition"
@@ -112,8 +114,10 @@ steps:
     name: "18. Analyze Pool QC"
     script: "pool.FA12.analysis.py"
     snapshot_items: ["outputs/pool_summary.csv"]
+    allow_rerun: true
 
   - id: rework_pooling
     name: "19. Rework Pools & Finalize"
     script: "rework.pooling.steps.py"
     snapshot_items: ["outputs/"]
+    allow_rerun: true

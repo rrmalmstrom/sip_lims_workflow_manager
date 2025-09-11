@@ -100,7 +100,13 @@ For steps that require user-provided arguments, you can add an `inputs` section.
 -   **`name`**: The label that will be displayed next to the input widget in the GUI.
 -   **`arg`**: The command-line flag to precede the value (e.g., `--input-file`). If the script uses positional arguments, this can be an empty string (`""`).
 
-**Example with Inputs:**
+### Enabling Re-run Capability
+
+By default, completed steps cannot be re-run. To enable re-run capability for specific steps, add the `allow_rerun: true` property to the step definition.
+
+-   **`allow_rerun`**: Set to `true` to enable the re-run button for completed steps. When `false` or omitted, completed steps will not show a re-run button.
+
+**Example with Inputs and Re-run Capability:**
 ```yaml
 - id: setup_plates
   name: "1. Setup Isotope and FA Plates"
@@ -114,6 +120,18 @@ For steps that require user-provided arguments, you can add an `inputs` section.
       arg: ""
     - type: file
       name: "SampleScan"
+      arg: ""
+
+- id: ultracentrifuge_transfer
+  name: "2. Create Ultracentrifuge Tubes"
+  script: "scripts/ultracentrifuge.transfer.py"
+  snapshot_items:
+    - "Project_Database.db"
+    - "outputs/"
+  allow_rerun: true
+  inputs:
+    - type: file
+      name: "Ultracentrifuge CSV File"
       arg: ""
 ```
 ## A Note for Script Authors: Current Working Directory
