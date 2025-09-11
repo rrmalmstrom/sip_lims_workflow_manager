@@ -1,0 +1,119 @@
+workflow_name: "SIP Fractionation and Library Prep"
+steps:
+  - id: setup_plates
+    name: "1. Setup Plates & DB"
+    script: "setup.isotope.and.FA.plates.py"
+    snapshot_items: ["Project_Database.db", "outputs/"]
+    inputs:
+      - type: file
+        name: "Aliquot Sheet"
+        arg: ""
+      - type: file
+        name: "SampleScan"
+        arg: ""
+      - type: file
+        name: "Metabolomics Sheet"
+        arg: ""
+      - type: file
+        name: "DW Summary"
+        arg: ""
+
+  - id: ultracentrifuge_transfer
+    name: "2. Create Ultracentrifuge Tubes"
+    script: "ultracentrifuge.transfer.py"
+    snapshot_items: ["Project_Database.db", "outputs/"]
+    allow_rerun: true
+    inputs:
+      - type: file
+        name: "Sample List"
+        arg: ""
+
+  - id: plot_dna_conc
+    name: "3. Plot DNA/Density (QC)"
+    script: "plot_DNAconc_vs_Density.py"
+    snapshot_items: ["outputs/plots/", "outputs/summary.csv"]
+    allow_rerun: true
+
+  - id: calc_sequin_addition
+    name: "4. Calculate Sequin Addition"
+    script: "calcSequinAddition.py"
+    snapshot_items: ["outputs/hamilton_sequin_transfers.csv"]
+
+  - id: merge_sip_fractions
+    name: "5. Merge Fraction Files"
+    script: "merge.SIP.fraction.files.loop.py"
+    snapshot_items: ["outputs/merged_fractions.csv"]
+
+  - id: make_library_creation_files
+    name: "6. Create Library Files"
+    script: "make.library.creation.files.96.py"
+    snapshot_items: ["outputs/FA_upload.txt", "outputs/Echo_transfer.csv", "outputs/Echo_barcode.txt", "outputs/Lib.info.csv"]
+
+  - id: first_fa_analysis
+    name: "7. Analyze Library QC (1st)"
+    script: "first.FA.output.analysis.py"
+    snapshot_items: ["outputs/Lib.info.csv"]
+
+  - id: rework_first_attempt
+    name: "8. Second Attempt Library Creation"
+    script: "rework.first.attempt.py"
+    snapshot_items: ["outputs/"]
+
+  - id: second_fa_analysis
+    name: "9. Analyze Library QC (2nd)"
+    script: "second.FA.output.analysis.py"
+    snapshot_items: ["outputs/Lib.info.csv"]
+
+  - id: rework_second_attempt
+    name: "10. Third Attempt Library Creation"
+    script: "emergency.third.attempt.rework.py"
+    snapshot_items: ["outputs/"]
+    allow_skip: true
+
+  - id: third_fa_analysis
+    name: "11. Analyze Library QC (3rd)"
+    script: "emergency.third.FA.output.analysis.py"
+    snapshot_items: ["outputs/Lib.info.csv"]
+    allow_skip: true
+
+  - id: conclude_fa_analysis
+    name: "12. Conclude FA analysis"
+    script: "conclude.all.fa.analysis.py"
+    snapshot_items: ["outputs/Lib.info.csv"]
+
+  - id: make_clarity_summary
+    name: "13. Make Clarity Summary"
+    script: "make.clarity.summary.py"
+    snapshot_items: ["outputs/clarity_upload.csv"]
+
+  - id: fill_clarity_lib_creation
+    name: "14. Fill Clarity Lib Creation Sheet"
+    script: "fill.clarity.lib.creation.sheet.py"
+    snapshot_items: ["clarity_files/"]
+
+  - id: generate_pool_tool
+    name: "15. Generate Pool Assignment Tool"
+    script: "generate_pool_assignment_tool.py"
+    snapshot_items: ["outputs/pool_assignment_tool.xlsx"]
+
+  - id: complete_pool_prep
+    name: "16. Complete Clarity Pool Prep Sheet"
+    script: "complete.clarity.pool.prep.sheet.py"
+    snapshot_items: ["clarity_files/"]
+
+  - id: finish_pooling
+    name: "17. Pool Libraries"
+    script: "finish.pooling.libs.py"
+    snapshot_items: ["outputs/pooling/"]
+
+  - id: pool_fa12_analysis
+    name: "18. Analyze Pool QC"
+    script: "pool.FA12.analysis.py"
+    snapshot_items: ["outputs/pool_summary.csv"]
+    allow_rerun: true
+
+  - id: rework_pooling
+    name: "19. Rework Pools & Finalize"
+    script: "rework.pooling.steps.py"
+    snapshot_items: ["outputs/"]
+    allow_rerun: true

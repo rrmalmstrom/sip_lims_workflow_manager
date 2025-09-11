@@ -7,6 +7,7 @@ import shutil
 import threading
 import time
 import queue
+import yaml
 from src.core import Project
 from src.logic import RunResult
 
@@ -16,6 +17,45 @@ st.set_page_config(page_title="LIMS Workflow Manager", page_icon="🧪", layout=
 import streamlit.components.v1 as components
 
 # --- Helper Functions ---
+def validate_workflow_yaml(file_path):
+    """
+    Validates a workflow.yml file for basic syntax and structure.
+    Returns (is_valid, error_message)
+    """
+    try:
+        with open(file_path, 'r') as f:
+            workflow_data = yaml.safe_load(f)
+        
+        # Basic structure validation
+        if not isinstance(workflow_data, dict):
+            return False, "Workflow file must contain a YAML dictionary"
+        
+        if 'workflow_name' not in workflow_data:
+            return False, "Missing required 'workflow_name' field"
+        
+        if 'steps' not in workflow_data:
+            return False, "Missing required 'steps' field"
+        
+        if not isinstance(workflow_data['steps'], list):
+            return False, "'steps' must be a list"
+        
+        # Validate each step has required fields
+        for i, step in enumerate(workflow_data['steps']):
+            if not isinstance(step, dict):
+                return False, f"Step {i+1} must be a dictionary"
+            
+            required_fields = ['id', 'name', 'script']
+            for field in required_fields:
+                if field not in step:
+                    return False, f"Step {i+1} missing required field '{field}'"
+        
+        return True, "Workflow file is valid"
+        
+    except yaml.YAMLError as e:
+        return False, f"YAML syntax error: {e}"
+    except Exception as e:
+        return False, f"Error reading workflow file: {e}"
+
 def auto_scroll_terminal():
     """
     Injects a JavaScript snippet to persistently poll the terminal textarea
@@ -387,29 +427,63 @@ def main():
                 st.warning("A `workflow.yml` file was not found in the selected directory.")
                 if st.button("Create a New workflow.yml"):
                     try:
-                        # Read the content from the template workflow.yml in the app's root directory
+                        # Read the content from the template workflow.yml in the templates directory
                         app_dir = Path(__file__).parent
-                        template_workflow_path = app_dir / "workflow.yml"
+                        template_workflow_path = app_dir / "templates" / "workflow.yml"
                         if template_workflow_path.is_file():
                             default_workflow_content = template_workflow_path.read_text()
                             with open(workflow_file, "w") as f:
                                 f.write(default_workflow_content)
-                            st.success("Created a new workflow.yml from the template. The page will now reload.")
+                            st.success("Created a new workflow.yml from the protected template. The page will now reload.")
                         else:
-                            st.error("Could not find the workflow.yml template file in the application directory.")
+                            st.error("Could not find the workflow.yml template file in the templates directory.")
                         time.sleep(2)
                         st.rerun()
                     except Exception as e:
                         st.error(f"Could not create workflow.yml: {e}")
         else:
-            try:
-                st.session_state.project = Project(project_path)
-                st.success(f"Loaded: {st.session_state.project.path.name}")
-                # Trigger rerun so sidebar re-renders with undo button if there are completed steps
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error loading project: {e}")
-                st.session_state.project = None
+            # Validate workflow file before loading
+            is_valid, error_message = validate_workflow_yaml(workflow_file)
+            if not is_valid:
+                st.error(f"❌ **Workflow Validation Failed**: {error_message}")
+                st.info("💡 **Recovery Options:**")
+                col1, col2 = st.columns(2)
+                with col1:
+                    if st.button("🔧 Try to Restore from Snapshot"):
+                        try:
+                            project_for_restore = Project(project_path, load_workflow=False)
+                            restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow.yml")
+                            if restored:
+                                st.success("✅ Restored workflow.yml from snapshot!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("No snapshot available to restore from.")
+                        except Exception as e:
+                            st.error(f"Restore failed: {e}")
+                with col2:
+                    if st.button("📋 Replace with Template"):
+                        try:
+                            app_dir = Path(__file__).parent
+                            template_path = app_dir / "templates" / "workflow.yml"
+                            if template_path.exists():
+                                shutil.copy2(template_path, workflow_file)
+                                st.success("✅ Replaced with clean template!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Template file not found.")
+                        except Exception as e:
+                            st.error(f"Template replacement failed: {e}")
+            else:
+                try:
+                    st.session_state.project = Project(project_path)
+                    st.success(f"✅ Loaded: {st.session_state.project.path.name}")
+                    # Trigger rerun so sidebar re-renders with undo button if there are completed steps
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error loading project: {e}")
+                    st.session_state.project = None
 
     # --- Main Content Area ---
     st.header("Workflow Status")
