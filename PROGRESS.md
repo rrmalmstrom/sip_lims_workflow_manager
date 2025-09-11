@@ -127,6 +127,29 @@ We have successfully completed a major refactoring of the application's core log
     * **SUMMARY.md**: Updated project summary with latest features and accomplishments
     * **PROGRESS.md**: Documented complete development progression including latest fix
 
+### Session 9: Workflow Template Protection System
+1. **Comprehensive Template Protection Implementation**: Developed complete system for protecting critical workflow.yml templates.
+    * **Protected Template Directory**: Created `templates/` directory with master workflow.yml and documentation
+    * **Git-Based Version Control**: Leveraged existing Git repository for template version control and change tracking
+    * **YAML Validation System**: Implemented comprehensive validation function checking syntax and structure
+    * **Enhanced Error Handling**: Added proactive validation with multiple recovery options
+2. **Critical Bug Resolution**: Identified and fixed major YAML syntax issues preventing proper workflow loading.
+    * **Duplicate Inputs Fix**: Resolved duplicate `inputs:` sections causing YAML parsing failures
+    * **Input Requirements Correction**: Fixed ultracentrifuge step to require only "Sample List" input
+    * **Template Cleanup**: Removed confusing root workflow.yml file and centralized template management
+3. **Enhanced Application Logic**: Updated core application to use protected template system.
+    * **Template Path Updates**: Modified app.py to use `templates/workflow.yml` instead of root directory
+    * **Validation Integration**: Added pre-loading validation to prevent crashes from corrupted workflows
+    * **Recovery Mechanisms**: Implemented dual recovery options (snapshot restoration and template replacement)
+4. **User Experience Improvements**: Enhanced error handling and recovery guidance for better usability.
+    * **Clear Error Messages**: Detailed validation feedback explaining exactly what's wrong
+    * **Recovery Options**: One-click buttons for snapshot restoration and template replacement
+    * **Visual Indicators**: Color-coded messages and prominent error/success feedback
+5. **Documentation and Testing**: Comprehensive validation and documentation of the protection system.
+    * **Template Documentation**: Added templates/README.md with usage guidelines and warnings
+    * **Validation Testing**: Verified YAML validation works correctly for both template and project files
+    * **Git Integration**: Committed all changes with comprehensive commit message for change tracking
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
@@ -141,6 +164,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Implement granular undo for individual step re-runs**: Complete granular undo system with unlimited re-run support and intelligent step status management.
 -   [x] **Fix enhanced undo with previous step restoration**: Resolved critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
 -   [x] **Implement selective re-run capability**: Added `allow_rerun` property to workflow definitions to restrict re-run capability to only specified steps.
+-   [x] **Implement workflow template protection system**: Created protected templates directory with Git-based version control, YAML validation, and comprehensive error handling.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

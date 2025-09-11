@@ -835,3 +835,130 @@ The Session 8 enhancements provide selective re-run capability that gives users 
 7. **Universal Compatibility**: Works for all steps in any workflow configuration with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the precise control and flexibility needed for complex laboratory workflows.
+
+## Feature 8: Workflow Template Protection System (Session 9)
+
+### Problem Statement
+The workflow.yml template was vulnerable to corruption, accidental modification, and lacked proper version control. Users needed a robust system to protect this critical component while maintaining simplicity and avoiding unnecessary complexity.
+
+### Solution Implementation
+
+#### Protected Template Directory Structure
+Created a dedicated templates directory with proper organization:
+```
+templates/
+├── workflow.yml          # Master protected template
+└── README.md            # Template documentation and usage guidelines
+```
+
+#### Enhanced Application Logic (`app.py`)
+**Template Path Updates** (lines 427-439):
+- Updated template loading from `app_dir / "workflow.yml"` to `app_dir / "templates" / "workflow.yml"`
+- Enhanced success messages to indicate use of "protected template"
+- Improved error handling for missing template files
+
+**YAML Validation Function** (lines 19-56):
+```python
+def validate_workflow_yaml(file_path):
+    """Validates workflow.yml for basic syntax and structure"""
+    # Comprehensive validation including:
+    # - YAML syntax checking
+    # - Required field validation (workflow_name, steps)
+    # - Step structure validation (id, name, script)
+    # - Data type validation
+```
+
+**Enhanced Project Loading** (lines 441-477):
+- Added pre-loading validation of workflow files
+- Implemented dual recovery options: snapshot restoration and template replacement
+- Enhanced error messages with clear recovery guidance
+- Maintained backward compatibility with existing projects
+
+#### Critical Bug Fixes
+**YAML Syntax Error Resolution**:
+- **Root Cause**: Duplicate `inputs:` sections in workflow definitions causing YAML parsing failures
+- **Solution**: Consolidated inputs into single properly formatted section
+- **Files Fixed**: `templates/workflow.yml`, `dummy_chakraborty/workflow.yml`, and removed problematic root `workflow.yml`
+
+**Input Requirements Correction**:
+- **Issue**: Ultracentrifuge step incorrectly specified two inputs instead of one
+- **Fix**: Corrected to single "Sample List" input as required by the script
+- **Impact**: Eliminates user confusion and script execution errors
+
+#### Recovery Mechanisms
+**Dual Recovery Strategy**:
+1. **Snapshot Restoration**: Restore workflow.yml from project snapshots using existing snapshot system
+2. **Template Replacement**: Replace corrupted file with clean protected template
+3. **User Guidance**: Clear error messages guide users to appropriate recovery option
+
+**Error Handling Enhancement**:
+- Validation occurs before project loading to prevent crashes
+- Multiple recovery options presented in user-friendly interface
+- Graceful fallback to template when snapshots unavailable
+
+### Technical Implementation Details
+
+#### Git-Based Version Control
+- **Template Protection**: Master template stored in Git repository for version control
+- **Change Tracking**: All template modifications tracked with commit history
+- **Distribution**: Template updates distributed with application updates
+- **Backup**: Git provides distributed backup and rollback capabilities
+
+#### Validation Strategy
+```python
+# Comprehensive validation checks:
+- YAML syntax validation using yaml.safe_load()
+- Dictionary structure verification
+- Required field presence (workflow_name, steps)
+- Step structure validation (id, name, script fields)
+- Data type validation for all components
+```
+
+#### File Organization Benefits
+- **Clear Separation**: Template vs. project-specific workflows
+- **User Protection**: Users cannot accidentally modify master template
+- **Maintenance**: Centralized template management
+- **Distribution**: Template updates via normal Git workflow
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Validation**: Fast YAML parsing with early exit on errors
+- **Template Loading**: Simple file copy operation
+- **Memory Usage**: No additional memory overhead for protection
+- **Startup Impact**: Negligible impact on application startup time
+
+#### Error Prevention
+- **Proactive Validation**: Catches issues before they cause crashes
+- **Clear Messaging**: Users understand exactly what went wrong
+- **Recovery Options**: Multiple paths to resolution
+- **Backward Compatibility**: Existing projects unaffected
+
+### User Experience Improvements
+
+#### Enhanced Error Messages
+- **Validation Failures**: Clear explanation of what's wrong with workflow file
+- **Recovery Guidance**: Step-by-step instructions for fixing issues
+- **Visual Indicators**: Color-coded messages (error/warning/success)
+- **Action Buttons**: One-click recovery options
+
+#### Template Management
+- **Protected Location**: Template in obvious, protected directory
+- **Documentation**: Clear README explaining template usage
+- **Version Control**: Git tracking for all template changes
+- **Update Process**: Simple Git-based template updates
+
+## Conclusion (Updated for Session 9)
+
+The Session 9 enhancements provide comprehensive protection for the critical workflow.yml template while maintaining the system's simplicity and reliability. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Protected Template System**: Git-tracked, version-controlled workflow templates with clear organization
+2. **Comprehensive Validation**: YAML syntax and structure validation with multiple recovery options
+3. **Enhanced Error Handling**: Proactive validation with user-friendly error messages and recovery guidance
+4. **Complete Granular Undo**: Handle any combination of runs and undos across all steps with previous step restoration
+5. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts with prominent visual indicators
+6. **Comprehensive State Management**: Empty directory preservation and complete project restoration with robust snapshot system
+7. **Smart Re-run Behavior**: Fresh input prompts for each execution with automatic input clearing and selective re-run capability
+8. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility and graceful error handling
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the robust protection and reliability needed for critical laboratory workflow management.

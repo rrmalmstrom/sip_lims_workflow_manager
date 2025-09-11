@@ -58,6 +58,13 @@ This YAML file is the blueprint for a workflow. Each step is a dictionary with t
 - `allow_rerun`: (Optional) Set to `true` to enable re-run capability for completed steps. Defaults to `false`.
 - `inputs`: (Optional) A list of user input definitions for file selection or other parameters.
 
+### 3.1.1. Template Management
+The system uses a protected template system for workflow definitions:
+- **Master Template**: Stored in `templates/workflow.yml` with Git version control
+- **Template Protection**: Users cannot accidentally modify the master template
+- **Validation**: All workflow files are validated for syntax and structure before loading
+- **Recovery**: Multiple recovery options available for corrupted workflow files
+
 ### 3.2. State Management & The "Interactive Checklist"
 The system is a flexible, interactive checklist, managed by the `StateManager`.
 - **`workflow_state.json`**: Tracks the status of each step `id` (e.g., "completed", "pending").
@@ -77,6 +84,14 @@ A script error will never leave the project in a corrupted state. The system use
 - **Automatic Rollback**: If either verification fails, the `Project` class instructs the `SnapshotManager` to automatically restore the pre-run snapshot
 
 This approach solves the critical issue where Python scripts could exit with code 0 (success) even when encountering errors, ensuring reliable rollback functionality.
+
+### 3.4.1. Workflow File Validation
+The system includes comprehensive validation for workflow.yml files:
+- **YAML Syntax Validation**: Ensures proper YAML structure and syntax
+- **Required Field Validation**: Verifies presence of workflow_name, steps, and step fields (id, name, script)
+- **Structure Validation**: Confirms proper data types and step organization
+- **Proactive Error Prevention**: Validation occurs before project loading to prevent crashes
+- **Recovery Options**: Multiple paths to fix corrupted workflow files
 
 ### 3.5. Distribution & Updates
 - **Automated Release Script (`release.py`):** A dedicated release script will automate the creation of new versions. It will:
@@ -121,6 +136,15 @@ The system provides granular control over which workflow steps can be re-execute
 - **Enabled Re-runs**: Steps with `allow_rerun: true` show re-run buttons and input widgets when completed
 - **Script-Based Logic**: Re-run capability is tied to specific scripts rather than step positions for maintainability
 - **Input Management**: Re-run-enabled steps automatically clear previous input selections to ensure fresh data
+
+### 3.8.1. Template Protection Strategy
+The workflow template protection system provides comprehensive safeguards:
+- **Protected Location**: Templates stored in dedicated `templates/` directory
+- **Git Version Control**: All template changes tracked with commit history
+- **Validation System**: Comprehensive YAML validation prevents loading corrupted files
+- **Recovery Mechanisms**: Dual recovery options (snapshot restoration and template replacement)
+- **User Guidance**: Clear error messages with step-by-step recovery instructions
+- **Backward Compatibility**: Existing projects continue to work without modification
 
 **Example Workflow Configuration:**
 ```yaml

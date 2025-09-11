@@ -13,6 +13,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 7 (Pseudo-Terminal Bug Fixes):** Complete. Resolved critical pseudo-terminal display issues and enhanced terminal visibility for all interactive scripts.
 - **Phase 8 (Granular Undo System):** Complete. Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support and intelligent step status management.
 - **Phase 9 (Enhanced Undo with Previous Step Restoration):** Complete. Fixed critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
+- **Phase 10 (Workflow Template Protection System):** Complete. Implemented comprehensive protection for workflow.yml templates with Git-based version control, YAML validation, and multiple recovery mechanisms.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -39,6 +40,9 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 13. **Progressive Undo Logic**: Each undo operation targets exactly one run, not entire steps, with proper snapshot tracking.
 14. **Enhanced Undo with Previous Step Restoration**: Fixed critical gap where undo would fail silently when no current step "after" snapshots existed, now properly restores to previous step's state.
 15. **Backwards Search Algorithm**: Implemented robust backwards search to handle gaps in "after" snapshots created by previous undo operations.
+16. **Workflow Template Protection System**: Implemented comprehensive protection for critical workflow.yml templates with dedicated templates directory, Git version control, and YAML validation.
+17. **Critical YAML Bug Fix**: Resolved duplicate inputs sections causing parsing failures and corrected ultracentrifuge step input requirements.
+18. **Enhanced Error Handling**: Added proactive workflow validation with multiple recovery options including snapshot restoration and template replacement.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -110,3 +114,19 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Test Coverage**: Comprehensive TDD approach with 5 test cases validating all functionality aspects
 - **Documentation**: Updated README.md and technical documentation with complete implementation details
 - **Universal Compatibility**: Works for all workflow configurations with graceful property handling
+
+## 11. Latest Features (Session 9)
+### Workflow Template Protection System
+- **Problem Solved**: Critical workflow.yml template was vulnerable to corruption, accidental modification, and lacked proper version control
+- **Root Cause Addressed**: Template was stored in application root directory without protection, causing confusion and potential data loss
+- **Technical Implementation**: Created dedicated templates/ directory with Git-based version control and comprehensive validation
+- **Key Features**:
+  - **Protected Template Directory**: Master workflow.yml stored in templates/ with clear documentation
+  - **YAML Validation**: Comprehensive syntax and structure validation before project loading
+  - **Multiple Recovery Options**: Snapshot restoration and template replacement for corrupted files
+  - **Enhanced Error Handling**: Clear error messages with step-by-step recovery guidance
+- **Critical Bug Fixes**: Resolved duplicate inputs sections causing YAML parsing failures
+- **Input Correction**: Fixed ultracentrifuge step to require only "Sample List" input as per script requirements
+- **Git Integration**: Template changes tracked with commit history for full version control
+- **User Experience**: Proactive validation prevents crashes with user-friendly recovery options
+- **Universal Compatibility**: Works with all existing projects while providing enhanced protection for new ones

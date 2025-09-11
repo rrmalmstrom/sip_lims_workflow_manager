@@ -58,7 +58,13 @@ A terminal window will open, and after a few moments, the application's user int
 
 ## Creating a New Workflow
 
-To define a new workflow for a project, create a `workflow.yml` file in the root of the project folder. The file should follow this format. Note how the `snapshot_items` list changes for each step to include only the critical files and directories that are created or modified in that step.
+To define a new workflow for a project, create a `workflow.yml` file in the root of the project folder. The application will automatically create this file from a protected template when you start a new project. The file should follow this format. Note how the `snapshot_items` list changes for each step to include only the critical files and directories that are created or modified in that step.
+
+### Template Protection
+The workflow template is protected in the `templates/` directory and includes:
+- **YAML Validation**: Automatic validation prevents loading corrupted workflow files
+- **Recovery Options**: Multiple ways to restore corrupted workflow files
+- **Version Control**: Template changes are tracked in Git for reliability
 
 ```yaml
 workflow_name: "SIP Fractionation and Library Prep"
@@ -180,3 +186,25 @@ print(f"SUCCESS: {script_name} completed successfully")
 ```
 
 This ensures your scripts integrate properly with the rollback system and provide reliable completion detection.
+
+## Workflow File Protection
+
+The LIMS Workflow Manager includes comprehensive protection for workflow.yml files:
+
+### Template System
+- **Protected Templates**: Master templates stored in `templates/` directory
+- **Automatic Creation**: New projects automatically get clean templates
+- **Version Control**: All template changes tracked in Git
+
+### Validation and Recovery
+- **YAML Validation**: Comprehensive syntax and structure checking
+- **Error Prevention**: Validation occurs before project loading
+- **Recovery Options**:
+  - Restore from project snapshots
+  - Replace with clean template
+- **Clear Guidance**: Detailed error messages with recovery instructions
+
+### Best Practices
+- Never modify files in the `templates/` directory unless updating the master template
+- Use the application's recovery options if workflow files become corrupted
+- Template updates will be distributed with application updates
