@@ -1228,3 +1228,128 @@ The Session 10 enhancements provide comprehensive "Skip to Step" functionality t
 9. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the flexibility and reliability needed for complex laboratory workflows where steps may be completed outside the workflow management system.
+
+## Feature 10: Rollback System Unification (Session 11)
+
+### Problem Statement
+The workflow manager had inconsistent rollback behavior between two scenarios:
+- **Undo Button Rollback**: Used complete snapshots with comprehensive project restoration
+- **Failed Step Rollback**: Used legacy snapshots with selective restoration
+
+This inconsistency meant failed steps weren't properly cleaning up all script artifacts, causing repeated rollback attempts and rollback loops. Additionally, investigation revealed that some CSV files persisted after rollback due to them being present in older snapshots from previous failed runs that weren't properly cleaned up.
+
+### Solution Implementation
+
+#### Unified Rollback System
+**Modified `handle_step_result()` in `src/core.py`** (lines 188-227):
+- Unified both rollback scenarios to use complete snapshot restoration
+- Changed failed step rollback from selective restoration to complete snapshot restoration
+- Ensured consistency with undo button behavior
+- Maintained fallback compatibility with legacy snapshots
+
+#### Key Changes
+```python
+# OLD: Inconsistent rollback systems
+if is_first_run:
+    self.snapshot_manager.restore(step_id, snapshot_items)  # Selective restore
+
+# NEW: Unified complete snapshot restoration
+run_number = self.snapshot_manager.get_current_run_number(step_id)
+if run_number > 0:
+    before_snapshot = f"{step_id}_run_{run_number}"
+    if self.snapshot_manager.snapshot_exists(before_snapshot):
+        self.snapshot_manager.restore_complete_snapshot(before_snapshot)
+```
+
+#### Enhanced Error Handling
+- **Graceful Fallback**: Multiple fallback options for missing snapshots
+- **Legacy Compatibility**: Maintains support for existing snapshot naming
+- **Comprehensive Logging**: Detailed debug messages for troubleshooting
+
+### Test-Driven Development Approach
+
+#### Comprehensive Test Suite
+Created `tests/test_failed_step_rollback_fix.py` with 6 test cases:
+
+1. **`test_failed_step_uses_complete_snapshot_restoration`**: Validates unified rollback system
+2. **`test_failed_step_fallback_to_legacy_complete_snapshot`**: Tests fallback mechanisms
+3. **`test_failed_step_fallback_to_selective_restore`**: Validates last resort fallback
+4. **`test_successful_step_creates_after_snapshot`**: Confirms success path unchanged
+5. **`test_failed_step_with_no_snapshots`**: Tests edge case handling
+6. **`test_rollback_system_integration`**: Validates integration with existing workflow
+
+#### Test Results
+✅ **All 6 tests PASSED** - Comprehensive validation of the unified rollback system
+✅ **All 32 total tests PASSED** - No regression in existing functionality
+
+### Technical Implementation Details
+
+#### Rollback Logic Flow
+1. **Script Fails**: Dual verification (exit code + success marker) detects failure
+2. **Snapshot Selection**: Uses granular "before" snapshot (`step_id_run_N`)
+3. **Complete Restoration**: Restores entire project state to "before" condition
+4. **Fallback Strategy**: Multiple fallback options for missing snapshots
+5. **State Management**: Keeps step as "pending" for retry capability
+
+#### Snapshot Strategy
+- **Before Snapshots**: `{step_id}_run_{N}_complete.zip` - taken before each run
+- **After Snapshots**: `{step_id}_run_{N}_after_complete.zip` - taken after success
+- **Legacy Snapshots**: `{step_id}_complete.zip` - maintained for compatibility
+
+### Investigation of Incomplete Rollback
+
+#### Root Cause Analysis
+During manual testing, discovered that some CSV files persisted after rollback. Investigation revealed:
+
+1. **Snapshot System Working Correctly**: Undo button output showed proper file removal
+2. **Files Present in Snapshots**: CSV files were already captured in older snapshots
+3. **Previous Failed Runs**: Files were left behind from previous failed runs before the fix
+4. **Snapshot Timing**: Files got captured when subsequent successful steps completed
+
+#### Key Finding
+The terminal output from undo operations showed:
+```
+RESTORE: Removed 4_make_library_analyze_fa/B_first_attempt_fa_result/.DS_Store
+```
+But `UOOQZV-*F.csv` files were NOT in the removal list, proving they were already present in the snapshot being restored to.
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Unified Logic**: Single code path reduces complexity and maintenance burden
+- **Efficient Restoration**: Complete snapshots provide comprehensive restoration
+- **Memory Usage**: No additional memory overhead for unification
+
+#### Error Prevention
+- **Consistent Behavior**: Both rollback scenarios now behave identically
+- **Comprehensive Cleanup**: Complete restoration ensures all artifacts are removed
+- **Reliable Detection**: Dual verification prevents false positives
+
+### Backward Compatibility
+
+#### Legacy Support
+- **Existing Projects**: Continue to work without modification
+- **Snapshot Compatibility**: Maintains support for all existing snapshot formats
+- **Graceful Degradation**: Multiple fallback options prevent failures
+
+#### Migration Strategy
+- **Transparent Enhancement**: Unification is transparent to existing users
+- **No Data Migration**: No changes required to existing project data
+- **Immediate Benefits**: New unified behavior applies to all future runs
+
+## Conclusion (Updated for Session 11)
+
+The Session 11 enhancements complete the rollback system unification, ensuring consistent and reliable behavior across all failure scenarios. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Unified Rollback System**: Consistent complete snapshot restoration for both undo button and failed step scenarios
+2. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+3. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+4. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+5. **Complete Granular Undo**: Handle any combination of runs, undos, and skips across all steps
+6. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts with prominent visual indicators
+7. **Comprehensive State Management**: Three-state system (pending/completed/skipped) with complete project restoration
+8. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+9. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+10. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the unified, reliable rollback behavior needed for complex laboratory workflows.

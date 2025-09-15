@@ -195,14 +195,38 @@ class Project:
                         import datetime
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         f.write(f"[{timestamp}] {rollback_msg}\n")
-                        f.write(f"[{timestamp}] Snapshot items to restore: {snapshot_items}\n")
+                        f.write(f"[{timestamp}] Using complete snapshot restoration to 'before' state\n")
                 except:
                     pass
                 
-                self.snapshot_manager.restore(step_id, snapshot_items)
+                # Use complete snapshot restoration for consistency with undo button
+                # Restore to the "before" snapshot taken immediately before this step started
+                run_number = self.snapshot_manager.get_current_run_number(step_id)
+                if run_number > 0:
+                    # Use the granular system - restore to "before" snapshot (as if step never ran)
+                    before_snapshot = f"{step_id}_run_{run_number}"
+                    if self.snapshot_manager.snapshot_exists(before_snapshot):
+                        self.snapshot_manager.restore_complete_snapshot(before_snapshot)
+                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) for step '{step_id}'"
+                    else:
+                        # Fallback to legacy complete snapshot if granular doesn't exist
+                        if self.snapshot_manager.snapshot_exists(step_id):
+                            self.snapshot_manager.restore_complete_snapshot(step_id)
+                            rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy complete snapshot for step '{step_id}'"
+                        else:
+                            # Last resort: use legacy selective restore
+                            self.snapshot_manager.restore(step_id, snapshot_items)
+                            rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy selective restore for step '{step_id}'"
+                else:
+                    # No granular snapshots exist, try legacy complete snapshot
+                    if self.snapshot_manager.snapshot_exists(step_id):
+                        self.snapshot_manager.restore_complete_snapshot(step_id)
+                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy complete snapshot for step '{step_id}'"
+                    else:
+                        # Last resort: use legacy selective restore
+                        self.snapshot_manager.restore(step_id, snapshot_items)
+                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy selective restore for step '{step_id}'"
                 
-                # Log completion of rollback
-                rollback_complete_msg = f"ROLLBACK COMPLETE: Snapshot restored for step '{step_id}'"
                 print(rollback_complete_msg)
                 try:
                     with open(debug_file, "a") as f:

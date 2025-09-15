@@ -80,8 +80,8 @@ class TestAllowRerunFunctionality(unittest.TestCase):
     
     def test_specific_scripts_have_allow_rerun(self):
         """Test that the specific scripts mentioned by user have allow_rerun: true."""
-        # Read the actual workflow.yml file
-        workflow_path = Path(__file__).parent.parent / "workflow.yml"
+        # Read the actual workflow.yml file from templates directory
+        workflow_path = Path(__file__).parent.parent / "templates" / "workflow.yml"
         workflow = Workflow(workflow_path)
         
         # Scripts that should have allow_rerun: true
@@ -102,8 +102,8 @@ class TestAllowRerunFunctionality(unittest.TestCase):
     
     def test_other_scripts_do_not_have_allow_rerun(self):
         """Test that scripts not in the specified list do not have allow_rerun: true."""
-        # Read the actual workflow.yml file
-        workflow_path = Path(__file__).parent.parent / "workflow.yml"
+        # Read the actual workflow.yml file from templates directory
+        workflow_path = Path(__file__).parent.parent / "templates" / "workflow.yml"
         workflow = Workflow(workflow_path)
         
         # Scripts that should have allow_rerun: true

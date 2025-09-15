@@ -10,6 +10,9 @@ class TestUserInput(unittest.TestCase):
 
     def setUp(self):
         self.test_project_path = Path("test_project_for_inputs")
+        # Remove directory if it exists, then create it
+        if self.test_project_path.exists():
+            shutil.rmtree(self.test_project_path)
         self.test_project_path.mkdir()
         
         # The script runner looks for scripts in the main `scripts` directory
@@ -42,10 +45,12 @@ class TestUserInput(unittest.TestCase):
             yaml.dump(self.workflow_data, f)
 
     def tearDown(self):
-        shutil.rmtree(self.test_project_path)
-        # Clean up the dummy script
+        # Clean up the dummy script first
         if self.script_path.exists():
             self.script_path.unlink()
+        # Clean up test project directory with more robust cleanup
+        if self.test_project_path.exists():
+            shutil.rmtree(self.test_project_path, ignore_errors=True)
 
     @patch('subprocess.Popen')
     def test_run_step_with_user_inputs(self, mock_popen):

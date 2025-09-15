@@ -175,6 +175,24 @@ We have successfully completed a major refactoring of the application's core log
     * **Consistency Fixes**: Resolved workflow_state.json initialization inconsistencies
     * **User Experience**: Confirmed all scenarios provide clear guidance and work as expected
 
+### Session 11: Rollback System Unification
+1. **Critical Rollback System Analysis**: Identified inconsistency between undo button and failed step rollback mechanisms.
+    * **Root Cause**: Undo button used complete snapshots while failed steps used selective restoration
+    * **Impact**: Failed steps weren't properly cleaning up all script artifacts, causing rollback loops
+    * **Investigation**: Discovered CSV files persisting due to presence in older snapshots from previous failed runs
+2. **Unified Rollback Implementation**: Modified `handle_step_result()` in `src/core.py` to use consistent restoration.
+    * **Complete Snapshot Restoration**: Both scenarios now use `restore_complete_snapshot()` for consistency
+    * **Enhanced Fallback Strategy**: Multiple fallback options for missing snapshots with legacy compatibility
+    * **Comprehensive Logging**: Detailed debug messages for troubleshooting rollback operations
+3. **Test-Driven Development**: Created comprehensive test suite for rollback system unification.
+    * **Test Suite Creation**: `tests/test_failed_step_rollback_fix.py` with 6 comprehensive test cases
+    * **Complete Coverage**: Unified rollback, fallback mechanisms, edge cases, and integration testing
+    * **Test Results**: All 6 new tests passed, all 32 total tests passed with no regression
+4. **Manual Testing Investigation**: Analyzed incomplete rollback issue with persistent CSV files.
+    * **Root Cause Identified**: Files were present in older snapshots from previous failed runs before fix
+    * **Snapshot System Validation**: Confirmed snapshot/restore system works correctly - restores exactly what was captured
+    * **Problem Resolution**: Unified rollback system prevents future occurrences of this issue
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
@@ -191,6 +209,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Implement selective re-run capability**: Added `allow_rerun` property to workflow definitions to restrict re-run capability to only specified steps.
 -   [x] **Implement workflow template protection system**: Created protected templates directory with Git-based version control, YAML validation, and comprehensive error handling.
 -   [x] **Implement skip to step functionality**: Complete "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
+-   [x] **Unify rollback system**: Resolved inconsistency between undo button and failed step rollback mechanisms for consistent behavior across all failure scenarios.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.
