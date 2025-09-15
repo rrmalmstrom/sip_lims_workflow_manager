@@ -14,6 +14,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 8 (Granular Undo System):** Complete. Implemented comprehensive granular undo for individual step re-runs with unlimited re-run support and intelligent step status management.
 - **Phase 9 (Enhanced Undo with Previous Step Restoration):** Complete. Fixed critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
 - **Phase 10 (Workflow Template Protection System):** Complete. Implemented comprehensive protection for workflow.yml templates with Git-based version control, YAML validation, and multiple recovery mechanisms.
+- **Phase 11 (Skip to Step Functionality):** Complete. Implemented comprehensive "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -43,6 +44,9 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 16. **Workflow Template Protection System**: Implemented comprehensive protection for critical workflow.yml templates with dedicated templates directory, Git version control, and YAML validation.
 17. **Critical YAML Bug Fix**: Resolved duplicate inputs sections causing parsing failures and corrected ultracentrifuge step input requirements.
 18. **Enhanced Error Handling**: Added proactive workflow validation with multiple recovery options including snapshot restoration and template replacement.
+19. **Skip to Step Functionality**: Implemented comprehensive workflow entry point selection allowing users to start from any step when previous work was completed outside the tool.
+20. **7-Scenario File Handling**: Robust detection and handling of all possible project file combinations with guided setup interface.
+21. **Enhanced Project Setup**: Radio button interface for choosing between "New Project" and "Existing Work" with dynamic step selection dropdown.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -130,3 +134,20 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Git Integration**: Template changes tracked with commit history for full version control
 - **User Experience**: Proactive validation prevents crashes with user-friendly recovery options
 - **Universal Compatibility**: Works with all existing projects while providing enhanced protection for new ones
+
+## 12. Latest Features (Session 10)
+### Skip to Step Functionality
+- **Problem Solved**: Users needed ability to start workflows from midway points when some steps were completed outside the workflow tool
+- **Root Cause Addressed**: System only supported linear execution from beginning, forcing users to re-run completed steps or manually manipulate state files
+- **Technical Implementation**: Enhanced state management with "skipped" state support and comprehensive GUI integration
+- **Key Features**:
+  - **Flexible Workflow Entry**: Start from any step with proper state management and safety snapshots
+  - **Three-State System**: Enhanced state management supporting "pending", "completed", and "skipped" states
+  - **7-Scenario File Handling**: Comprehensive detection and handling of all possible project file combinations
+  - **Guided Project Setup**: Radio button interface for "New Project" vs "Existing Work" with dynamic step selection
+  - **Safety Snapshots**: Complete project snapshots taken before skip operations for rollback capability
+- **Enhanced File Scenario Detection**: Robust logic handling all combinations of .yml/.db/.json file presence
+- **Consistency Validation**: Stricter validation ensuring workflow state matches actual project files
+- **Test Coverage**: Comprehensive TDD approach with 10 test cases covering all skip functionality scenarios
+- **Visual Treatment**: Clear indicators for skipped steps with distinct styling and informational messages
+- **Universal Compatibility**: Works with existing granular undo system and maintains full backward compatibility

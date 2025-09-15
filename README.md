@@ -10,6 +10,8 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   Robust error handling with automatic rollback and success marker verification.
 -   **Enhanced Undo functionality** with complete project state restoration.
 -   **Smart re-run behavior** that always prompts for new file inputs.
+-   **Skip to Step functionality** for starting workflows from any midway point.
+-   **Intelligent project setup** with automatic file scenario detection.
 -   Interactive script support with real-time terminal output.
 -   Cross-platform support for macOS and Windows.
 
@@ -51,10 +53,24 @@ A terminal window will open, and after a few moments, the application's user int
 ## How to Use
 
 1.  **Load a Project**: Click the "Browse for Project Folder" button in the sidebar and navigate to your project folder on the shared drive. The project folder must contain a `workflow.yml` file.
-2.  **Run Steps**: The workflow steps will be displayed in the main area. The next available step will have an active "Run" button. Click it to execute the script.
-3.  **Interactive Scripts**: If a script requires your input, a prominent "🖥️ LIVE TERMINAL" section will appear at the top of the page with colored alert banners. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue. The enhanced visual indicators make it impossible to miss when a script needs your input.
-4.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state.
-5.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
+
+2.  **Project Setup**: When loading a project for the first time, you'll be prompted to choose your situation:
+    -   **🆕 New Project - Start from Step 1**: Choose this for completely new projects where no work has been done.
+    -   **📋 Existing Work - Some steps completed outside workflow**: Choose this when some steps were already completed outside the workflow tool, then select which step to start from.
+
+3.  **Run Steps**: The workflow steps will be displayed in the main area. The next available step will have an active "Run" button. Click it to execute the script.
+
+4.  **Interactive Scripts**: If a script requires your input, a prominent "🖥️ LIVE TERMINAL" section will appear at the top of the page with colored alert banners. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue. The enhanced visual indicators make it impossible to miss when a script needs your input.
+
+5.  **Skip to Step Functionality**: For projects where some work was completed outside the workflow:
+    -   Select "📋 Existing Work" during project setup
+    -   Choose the step you want to start from using the dropdown menu
+    -   Click "Skip to This Step" to mark all previous steps as completed outside the workflow
+    -   Previous steps will show as "⏩ Completed outside workflow" and won't block your progress
+
+6.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state.
+
+7.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
 
 ## Creating a New Workflow
 

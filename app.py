@@ -362,6 +362,73 @@ def main():
                 st.session_state.project = None
                 st.rerun()
         
+        # Quick Start functionality - only show for projects without workflow state
+        if st.session_state.project and not st.session_state.project.has_workflow_state():
+            st.subheader("🚀 Project Setup Required")
+            st.warning("⚠️ **Action Required**: You must choose how to set up this project before running any steps.")
+            
+            # Determine default selection based on presence of .db files
+            project_path = st.session_state.project.path
+            db_files = list(project_path.glob("*.db"))
+            has_db_files = len(db_files) > 0
+            
+            # Pre-select "existing_work" if we have .db files or if explicitly set
+            default_index = 1 if (has_db_files or st.session_state.get('setup_with_existing_preselected', False)) else 0
+            
+            # User choice between new project or existing work
+            project_type = st.radio(
+                "Choose your situation:",
+                options=[
+                    "new_project",
+                    "existing_work"
+                ],
+                format_func=lambda x: {
+                    "new_project": "🆕 New Project - Start from Step 1",
+                    "existing_work": "📋 Existing Work - Some steps completed outside workflow"
+                }[x],
+                index=default_index,
+                key="project_type_selector"
+            )
+            
+            # Clear the pre-selection flag after use
+            if 'setup_with_existing_preselected' in st.session_state:
+                del st.session_state.setup_with_existing_preselected
+            
+            if project_type == "new_project":
+                if st.button("Start New Workflow", key="start_new_workflow"):
+                    # Initialize workflow state with all steps pending
+                    for step in st.session_state.project.workflow.steps:
+                        st.session_state.project.update_state(step['id'], 'pending')
+                    st.success("✅ New workflow initialized! Ready to start from Step 1.")
+                    st.rerun()
+            
+            elif project_type == "existing_work":
+                st.info("Select which step you want to start from. Previous steps will be marked as completed outside the workflow.")
+                
+                # Create dropdown options from workflow steps
+                step_options = []
+                for step in st.session_state.project.workflow.steps:
+                    step_options.append((step['id'], step['name']))
+                
+                # Dropdown for step selection
+                selected_step = st.selectbox(
+                    "Start from step:",
+                    options=step_options,
+                    format_func=lambda x: x[1],  # Display the step name
+                    key="quick_start_step_selector"
+                )
+                
+                # Skip to Step button
+                if st.button("Skip to This Step", key="skip_to_step_button"):
+                    try:
+                        result_message = st.session_state.project.skip_to_step(selected_step[0])
+                        st.success(f"✅ {result_message}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Error: {e}")
+            
+            st.markdown("---")
+        
         # Undo functionality
         if st.session_state.project:
             st.subheader("Workflow Controls")
@@ -399,49 +466,248 @@ def main():
         project_path = st.session_state.project_path
         workflow_file = project_path / "workflow.yml"
 
-        if not workflow_file.is_file():
-            # Check for a .db file to determine the scenario
-            db_files = list(project_path.glob("*.db"))
-            if db_files:
-                # Scenario: DB exists, workflow.yml is missing
-                st.warning("⚠️ Workflow file is missing, but a project database was found.")
-                st.info("This may indicate that the workflow.yml file was accidentally deleted.")
-                if st.button("Attempt to Restore workflow.yml from Last Snapshot"):
-                    try:
-                        # We need a project object to access the snapshot manager
-                        # Temporarily create one without the workflow to access its methods
-                        project_for_restore = Project(project_path, load_workflow=False)
-                        restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow.yml")
-                        if restored:
-                            st.success("Successfully restored workflow.yml! The page will now reload.")
-                            time.sleep(2) # Give user time to read the message
+        # Check for missing workflow files
+        workflow_state_file = project_path / "workflow_state.json"
+        missing_workflow_yml = not workflow_file.is_file()
+        missing_workflow_state = not workflow_state_file.is_file()
+        db_files = list(project_path.glob("*.db"))
+        
+        has_db_files = len(db_files) > 0
+        
+        # Determine which scenario we're in and handle accordingly
+        if missing_workflow_yml and missing_workflow_state and not has_db_files:
+            # Scenario 1: No .db, No .yml, No .json - New Project
+            st.info("This looks like a new project.")
+            st.warning("A `workflow.yml` file was not found in the selected directory.")
+            if st.button("🆕 Create New Project", key="create_new_project"):
+                try:
+                    # Read the content from the template workflow.yml in the templates directory
+                    app_dir = Path(__file__).parent
+                    template_workflow_path = app_dir / "templates" / "workflow.yml"
+                    if template_workflow_path.is_file():
+                        default_workflow_content = template_workflow_path.read_text()
+                        with open(workflow_file, "w") as f:
+                            f.write(default_workflow_content)
+                        st.success("✅ Created a new workflow.yml from the protected template.")
+                        
+                        # Load the project immediately
+                        try:
+                            st.session_state.project = Project(project_path)
+                            st.success("🎉 New project loaded! Ready to start from Step 1.")
                             st.rerun()
-                        else:
-                            st.error("Could not find a snapshot to restore the workflow.yml from.")
-                    except Exception as e:
-                        st.error(f"An error occurred during restoration: {e}")
-
-            else:
-                # Scenario: New project, no DB, no workflow.yml
-                st.info("This looks like a new project.")
-                st.warning("A `workflow.yml` file was not found in the selected directory.")
-                if st.button("Create a New workflow.yml"):
+                        except Exception as e:
+                            st.error(f"Error loading project: {e}")
+                            return
+                    else:
+                        st.error("Could not find the workflow.yml template file in the templates directory.")
+                except Exception as e:
+                    st.error(f"Could not create workflow.yml: {e}")
+        
+        elif not missing_workflow_yml and missing_workflow_state and not has_db_files:
+            # Scenario 2: No .db, Has .yml, No .json - Load as new project
+            try:
+                # Validate workflow file before loading
+                is_valid, error_message = validate_workflow_yaml(workflow_file)
+                if not is_valid:
+                    st.error(f"❌ **Workflow Validation Failed**: {error_message}")
+                    return
+                
+                # Load the project directly
+                st.session_state.project = Project(project_path)
+                st.success(f"✅ Loaded: {st.session_state.project.path.name}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error loading project: {e}")
+                return
+        
+        elif not missing_workflow_yml and not missing_workflow_state and not has_db_files:
+            # Scenario 3: No .db, Has .yml, Has .json - Check consistency
+            try:
+                # Load the workflow state to check for completed steps
+                with open(workflow_state_file, 'r') as f:
+                    state_data = json.load(f)
+                
+                # Check if any steps are marked as completed or skipped
+                completed_steps = [step_id for step_id, status in state_data.items() if status == 'completed']
+                skipped_steps = [step_id for step_id, status in state_data.items() if status == 'skipped']
+                
+                if completed_steps or skipped_steps:
+                    # Inconsistent state - steps marked as completed/skipped but no .db files
+                    st.error("❌ **INCONSISTENT STATE DETECTED**")
+                    if completed_steps:
+                        st.error("🚨 **ERROR**: Steps are marked as completed in workflow_state.json but no database files (.db) were found.")
+                    if skipped_steps:
+                        st.error("🚨 **ERROR**: Steps are marked as skipped in workflow_state.json but no database files (.db) were found.")
+                    st.warning("This indicates that database files may have been deleted or moved.")
+                    st.info("💡 **SOLUTION**: Please restore the missing .db files offline before proceeding.")
+                    
+                    problem_steps = completed_steps + skipped_steps
+                    st.info(f"**Problem steps found**: {', '.join(problem_steps)}")
+                    return  # Don't proceed with loading
+                else:
+                    # All steps are pending - consistent state, load normally
                     try:
-                        # Read the content from the template workflow.yml in the templates directory
-                        app_dir = Path(__file__).parent
-                        template_workflow_path = app_dir / "templates" / "workflow.yml"
-                        if template_workflow_path.is_file():
-                            default_workflow_content = template_workflow_path.read_text()
-                            with open(workflow_file, "w") as f:
-                                f.write(default_workflow_content)
-                            st.success("Created a new workflow.yml from the protected template. The page will now reload.")
-                        else:
-                            st.error("Could not find the workflow.yml template file in the templates directory.")
-                        time.sleep(2)
+                        # Validate workflow file before loading
+                        is_valid, error_message = validate_workflow_yaml(workflow_file)
+                        if not is_valid:
+                            st.error(f"❌ **Workflow Validation Failed**: {error_message}")
+                            return
+                        
+                        # Load the project directly
+                        st.session_state.project = Project(project_path)
+                        st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                         st.rerun()
                     except Exception as e:
+                        st.error(f"Error loading project: {e}")
+                        return
+                    
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                st.error(f"❌ Error reading workflow_state.json: {e}")
+                return
+        
+        elif (missing_workflow_yml or missing_workflow_state) and has_db_files:
+            # Scenarios 4, 5, 6: Has .db files but missing workflow files
+            if missing_workflow_yml and not missing_workflow_state:
+                # Scenario 6: Has .db, No .yml, Has .json - Unusual situation
+                st.error("⚠️ **UNUSUAL SITUATION DETECTED**")
+                st.warning("🚨 **WARNING**: Your project has database files and workflow state, but the workflow.yml file is missing!")
+                st.warning("This is an unusual situation that suggests the workflow.yml file may have been accidentally deleted.")
+                st.info("💡 **STRONGLY RECOMMENDED**: Try to restore the workflow.yml file from snapshots first.")
+            else:
+                # Scenarios 4, 5: Normal missing files with .db present
+                st.warning("⚠️ **Project appears to be underway but is missing workflow state files**")
+            
+            missing_files = []
+            if missing_workflow_yml:
+                missing_files.append("workflow.yml")
+            if missing_workflow_state:
+                missing_files.append("workflow_state.json")
+            
+            st.info(f"Missing files: {', '.join(missing_files)}")
+            st.info("💡 **Choose how to proceed:**")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔧 Try Restore from Snapshots", key="try_restore"):
+                    try:
+                        project_for_restore = Project(project_path, load_workflow=False)
+                        restored_any = False
+                        
+                        if missing_workflow_yml:
+                            restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow.yml")
+                            if restored:
+                                st.success("✅ Restored workflow.yml from snapshot")
+                                restored_any = True
+                            else:
+                                st.error("❌ Could not restore workflow.yml from snapshots")
+                        
+                        if missing_workflow_state:
+                            restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow_state.json")
+                            if restored:
+                                st.success("✅ Restored workflow_state.json from snapshot")
+                                restored_any = True
+                            else:
+                                st.error("❌ Could not restore workflow_state.json from snapshots")
+                        
+                        if restored_any:
+                            st.success("🎉 Restoration completed! The page will now reload.")
+                            time.sleep(2)
+                            st.rerun()
+                        else:
+                            # Set flag to show project setup after failed restoration
+                            st.session_state.restoration_failed = True
+                            st.session_state.has_db_files_for_setup = True  # Remember we have .db files
+                            st.rerun()
+                            
+                    except Exception as e:
+                        st.error(f"❌ An error occurred during restoration: {e}")
+                        st.info("Proceeding to project setup...")
+                        st.session_state.show_project_setup_after_failed_restore = True
+                        st.session_state.has_db_files_for_setup = True  # Remember we have .db files
+                        time.sleep(2)
+                        st.rerun()
+                st.caption("Attempt to restore missing files from project snapshots")
+            
+            with col2:
+                if st.button("📋 Set Up Project", key="setup_project"):
+                    try:
+                        # Only create workflow.yml if it's missing
+                        if missing_workflow_yml:
+                            app_dir = Path(__file__).parent
+                            template_workflow_path = app_dir / "templates" / "workflow.yml"
+                            if template_workflow_path.is_file():
+                                default_workflow_content = template_workflow_path.read_text()
+                                with open(workflow_file, "w") as f:
+                                    f.write(default_workflow_content)
+                                st.success("✅ Created workflow.yml from template")
+                            else:
+                                st.error("Could not find the workflow.yml template file.")
+                                return
+                        else:
+                            st.info("✅ workflow.yml already exists")
+                        
+                        # Now that workflow.yml exists, load the project directly
+                        try:
+                            # Validate workflow file before loading
+                            is_valid, error_message = validate_workflow_yaml(workflow_file)
+                            if not is_valid:
+                                st.error(f"❌ **Workflow Validation Failed**: {error_message}")
+                                return
+                            
+                            # Load the project and set flag for existing work pre-selection
+                            st.session_state.project = Project(project_path)
+                            st.session_state.setup_with_existing_preselected = True
+                            st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error loading project: {e}")
+                            return
+                        
+                    except Exception as e:
+                        st.error(f"Could not set up project: {e}")
+                st.caption("Create missing files and set up project workflow")
+            
+            # Handle failed restoration - show setup option after restoration fails
+            if st.session_state.get('restoration_failed', False):
+                st.session_state.restoration_failed = False
+                st.error("❌ **Restoration failed** - No snapshots available.")
+                st.info("💡 **Proceeding to project setup...**")
+                
+                if st.button("📋 Continue with Project Setup", key="continue_setup_after_failed_restore"):
+                    try:
+                        # Create workflow.yml from template if missing
+                        if missing_workflow_yml:
+                            app_dir = Path(__file__).parent
+                            template_workflow_path = app_dir / "templates" / "workflow.yml"
+                            if template_workflow_path.is_file():
+                                default_workflow_content = template_workflow_path.read_text()
+                                with open(workflow_file, "w") as f:
+                                    f.write(default_workflow_content)
+                                st.success("✅ Created workflow.yml from template")
+                                
+                                # Now load the project directly
+                                try:
+                                    # Validate workflow file before loading
+                                    is_valid, error_message = validate_workflow_yaml(workflow_file)
+                                    if not is_valid:
+                                        st.error(f"❌ **Workflow Validation Failed**: {error_message}")
+                                        return
+                                    
+                                    # Load the project and set flag for existing work pre-selection
+                                    st.session_state.project = Project(project_path)
+                                    st.session_state.setup_with_existing_preselected = True
+                                    st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error loading project: {e}")
+                                    return
+                            else:
+                                st.error("Could not find the workflow.yml template file.")
+                    except Exception as e:
                         st.error(f"Could not create workflow.yml: {e}")
+
         else:
+            # Scenario 7: Has .db, Has .yml, Has .json - Normal project, load directly
             # Validate workflow file before loading
             is_valid, error_message = validate_workflow_yaml(workflow_file)
             if not is_valid:
@@ -578,7 +844,7 @@ def main():
                 elif status == "completed":
                     st.success(f"✅ {step_name}")
                 elif status == "skipped":
-                    st.warning(f"⏩ {step_name} (Skipped)")
+                    st.info(f"⏩ {step_name} - Completed outside workflow")
                 else:
                     st.info(f"⚪ {step_name}")
 
@@ -633,6 +899,10 @@ def main():
                         if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
                             rerun_button_disabled = True
                     
+                    # Additional check: disable if project setup is not complete
+                    if not project.has_workflow_state():
+                        rerun_button_disabled = True
+                    
                     if st.button("Re-run", key=f"rerun_{step_id}", disabled=rerun_button_disabled):
                         # Clear the rerun flag so inputs get cleared again next time
                         if f"rerun_inputs_cleared_{step_id}" in st.session_state:
@@ -656,6 +926,10 @@ def main():
                         required_inputs = step['inputs']
                         if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
                             run_button_disabled = True
+                    
+                    # Additional check: disable if project setup is not complete
+                    if not project.has_workflow_state():
+                        run_button_disabled = True
 
                     if st.button("Run", key=f"run_{step_id}", disabled=run_button_disabled):
                         st.session_state.running_step_id = step_id

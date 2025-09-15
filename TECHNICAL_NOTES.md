@@ -962,3 +962,269 @@ The Session 9 enhancements provide comprehensive protection for the critical wor
 8. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility and graceful error handling
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the robust protection and reliability needed for critical laboratory workflow management.
+
+## Feature 9: Skip to Step Functionality (Session 10)
+
+### Problem Statement
+Users needed the ability to start workflows from a midway point when some steps were completed outside the workflow tool. The existing system only supported linear execution from the beginning, forcing users to either re-run completed steps or manually manipulate workflow state files.
+
+### Solution Implementation
+
+#### Enhanced State Management System
+**New "skipped" State Support** (`src/logic.py`):
+- StateManager already supported arbitrary state values, requiring no modifications
+- Added comprehensive validation for "skipped" state in workflow logic
+- Maintained backward compatibility with existing "pending" and "completed" states
+
+#### Core Skip Functionality (`src/core.py`)
+
+##### New skip_to_step() Method (lines 200-240)
+```python
+def skip_to_step(self, target_step_id: str) -> bool:
+    """Skip to a specific step by marking all previous steps as 'skipped'"""
+    # Validation: Check if target step exists
+    target_step = self.workflow.get_step_by_id(target_step_id)
+    if not target_step:
+        return False
+    
+    # Find target step index
+    target_index = next(i for i, step in enumerate(self.workflow.steps)
+                       if step['id'] == target_step_id)
+    
+    # Mark all previous steps as "skipped"
+    for i in range(target_index):
+        step = self.workflow.steps[i]
+        self.update_state(step['id'], "skipped")
+    
+    # Take safety snapshot before skipping
+    self.snapshot_manager.take_complete_snapshot(f"skip_to_{target_step_id}")
+    
+    return True
+```
+
+##### Enhanced Workflow State Initialization (lines 45-65)
+```python
+def _initialize_workflow_state(self):
+    """Initialize workflow_state.json with ALL steps for consistency"""
+    # Create state for ALL steps, not just the first one
+    for step in self.workflow.steps:
+        if step['id'] not in self.state_manager.get_all_states():
+            self.state_manager.set_state(step['id'], "pending")
+```
+
+##### New Helper Methods
+- **`has_workflow_state()`**: Checks for non-empty workflow_state.json file
+- **`get_next_available_step()`**: Finds next pending step for workflow navigation
+
+#### Comprehensive GUI Integration (`app.py`)
+
+##### Project Setup Interface (lines 58-180)
+**7-Scenario File Detection Logic**:
+```python
+def detect_project_scenario():
+    """Detect which files exist and determine appropriate action"""
+    has_yml = (project_dir / "workflow.yml").exists()
+    has_db = (project_dir / "project_database.db").exists()
+    has_json = (project_dir / "workflow_state.json").exists()
+    
+    # 7 comprehensive scenarios covering all file combinations
+    if not has_yml and not has_db and not has_json:
+        return "scenario_1"  # No files - create new
+    elif has_yml and not has_db and not has_json:
+        return "scenario_2"  # Only workflow.yml - load directly
+    # ... (complete scenario handling)
+```
+
+**Radio Button Interface**:
+- **"New Project"**: Start fresh workflow from beginning
+- **"Existing Work"**: Skip to step where previous work left off
+- **Dynamic dropdown**: Shows available steps for skip-to selection
+- **Validation**: Ensures project setup is complete before enabling Run buttons
+
+##### Enhanced Missing File Handling (lines 181-250)
+**Restoration Options with Graceful Fallback**:
+```python
+def handle_missing_files():
+    """Provide restoration options for missing critical files"""
+    # Try snapshot restoration first
+    if snapshot_available:
+        if st.button("Restore from Snapshot"):
+            restore_from_snapshot()
+    
+    # Fallback to template replacement
+    if st.button("Replace with Template"):
+        copy_template_file()
+    
+    # Graceful handling when restoration fails
+    if restoration_failed:
+        st.warning("Restoration failed, but you can continue...")
+```
+
+##### Run Button Logic Enhancement (lines 300-350)
+**Project Setup Validation**:
+```python
+# Disable Run button until project setup is complete
+run_button_disabled = True
+
+if st.session_state.get('project_setup_complete', False):
+    # Normal run button logic
+    if step_id == next_step_id and status == "pending":
+        run_button_disabled = False
+```
+
+#### Test-Driven Development Implementation
+
+##### Comprehensive Test Suite (`tests/test_skip_to_step.py`)
+**10 Test Cases Covering All Scenarios**:
+1. **`test_skip_to_step_basic`**: Basic skip functionality validation
+2. **`test_skip_to_step_marks_previous_as_skipped`**: State management verification
+3. **`test_skip_to_step_invalid_step`**: Error handling for invalid steps
+4. **`test_skip_to_step_creates_snapshot`**: Safety snapshot creation
+5. **`test_skip_to_step_first_step`**: Edge case handling
+6. **`test_skip_to_step_last_step`**: Complete workflow skip
+7. **`test_skip_to_step_middle_step`**: Typical use case
+8. **`test_get_next_available_step`**: Navigation helper testing
+9. **`test_has_workflow_state`**: State file detection
+10. **`test_workflow_state_initialization`**: Complete state initialization
+
+**Test Results**: ✅ **All 10 tests PASSED** - Comprehensive validation
+
+#### File Scenario Handling System
+
+##### Complete 7-Scenario Coverage
+**Scenario 1** (No files): Create New Project → loads directly
+**Scenario 2** (Has .yml, no others): Loads directly as new project
+**Scenario 3** (Has .yml + .json, no .db): Validates consistency → loads if valid
+**Scenario 4** (Has .db, no .yml): Show restoration/setup → pre-select "Existing Work"
+**Scenario 5** (Has .db + .yml, no .json): Show restoration/setup → pre-select "Existing Work"
+**Scenario 6** (Has .db + .json, no .yml): Show warnings + restoration/setup
+**Scenario 7** (All files): Load normally
+
+##### Consistency Validation (Scenario 3)
+**Stricter Validation for File State Consistency**:
+```python
+def validate_workflow_consistency():
+    """Validate that workflow_state.json matches actual project state"""
+    # Check for completed/skipped steps without corresponding success markers
+    for step_id, state in workflow_states.items():
+        if state in ['completed', 'skipped']:
+            success_marker = f".workflow_status/{step_id}.success"
+            if not success_marker.exists():
+                return False, f"Step {step_id} marked as {state} but no success marker found"
+    return True, "Workflow state is consistent"
+```
+
+### Technical Implementation Details
+
+#### State Management Architecture
+**Three-State System**:
+- **"pending"**: Step not yet executed (default)
+- **"completed"**: Step successfully executed with output files
+- **"skipped"**: Step bypassed via skip-to-step functionality
+
+**State Transitions**:
+```
+pending → completed (normal execution)
+pending → skipped (skip-to-step)
+completed → pending (undo operation)
+skipped → pending (undo operation)
+```
+
+#### Safety and Reliability Features
+
+##### Snapshot System Integration
+- **Safety snapshots**: Created before any skip operation for rollback capability
+- **Naming convention**: `skip_to_{target_step_id}_complete.zip`
+- **Full project state**: Complete directory snapshot for comprehensive restoration
+- **Undo compatibility**: Works seamlessly with existing granular undo system
+
+##### Validation and Error Handling
+- **Step existence validation**: Prevents skipping to non-existent steps
+- **Workflow consistency checks**: Ensures state files match actual project state
+- **Graceful error recovery**: Multiple fallback options for missing files
+- **User feedback**: Clear messages about what actions are being taken
+
+#### Performance Considerations
+
+##### Efficient File Operations
+- **Lazy loading**: Project files only loaded when needed
+- **Streaming operations**: Large file operations use streaming for memory efficiency
+- **Minimal overhead**: Skip operations only modify state files, not project data
+
+##### Memory Management
+- **State caching**: Workflow states cached in memory during session
+- **Snapshot efficiency**: ZIP compression for storage optimization
+- **Resource cleanup**: Proper cleanup of temporary files and resources
+
+### User Experience Enhancements
+
+#### Visual Treatment for Skipped Steps
+**Clear Visual Indicators**:
+```python
+# Skipped steps show distinct styling
+if status == "skipped":
+    st.markdown(f"⏭️ **{step['name']}** - *Skipped*")
+    st.info("This step was skipped. Previous work assumed to be complete.")
+```
+
+#### Project Setup Workflow
+**Guided Setup Process**:
+1. **File Detection**: Automatic detection of existing project files
+2. **Scenario Presentation**: Clear explanation of detected scenario
+3. **Option Selection**: Radio buttons for "New Project" vs "Existing Work"
+4. **Step Selection**: Dropdown for choosing skip-to target step
+5. **Validation**: Confirmation that setup is complete before proceeding
+
+#### Enhanced Error Messages
+**User-Friendly Guidance**:
+- **Missing files**: Clear explanation with restoration options
+- **Invalid scenarios**: Helpful suggestions for resolution
+- **Consistency issues**: Specific details about what needs to be fixed
+- **Recovery options**: Multiple paths to get back to working state
+
+### Backward Compatibility
+
+#### Legacy Project Support
+- **Existing workflows**: Continue to work without modification
+- **State file migration**: Automatic initialization of missing state entries
+- **Snapshot compatibility**: Works with existing snapshot system
+- **No breaking changes**: All existing functionality preserved
+
+#### Migration Strategy
+- **Transparent upgrade**: New features activate automatically
+- **Graceful fallback**: Missing features degrade gracefully
+- **Data preservation**: No risk to existing project data
+- **User choice**: Users can continue with linear workflows if preferred
+
+### Integration with Existing Features
+
+#### Granular Undo Compatibility
+- **Skip operations**: Can be undone like any other workflow operation
+- **State restoration**: Undo properly restores "pending" state for skipped steps
+- **Snapshot integration**: Skip snapshots work with existing undo system
+
+#### Re-run Capability
+- **Skipped steps**: Can be executed normally after being skipped
+- **Input handling**: Fresh input prompts for steps that were skipped
+- **State transitions**: Proper state management for skip → run transitions
+
+#### Interactive Script Support
+- **Terminal visibility**: Enhanced terminal display works for all steps
+- **Input prompts**: Interactive scripts work normally after skip operations
+- **Error handling**: Robust error handling for all execution modes
+
+## Conclusion (Updated for Session 10)
+
+The Session 10 enhancements provide comprehensive "Skip to Step" functionality that transforms the LIMS Workflow Manager from a strictly linear tool into a flexible system that accommodates real-world laboratory workflows. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+2. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+3. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+4. **Complete Granular Undo**: Handle any combination of runs, undos, and skips across all steps
+5. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts with prominent visual indicators
+6. **Comprehensive State Management**: Three-state system (pending/completed/skipped) with complete project restoration
+7. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+8. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+9. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the flexibility and reliability needed for complex laboratory workflows where steps may be completed outside the workflow management system.

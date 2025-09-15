@@ -55,6 +55,53 @@ class Project:
         """Updates the status of a specific step."""
         self.state_manager.update_step_state(step_id, status)
 
+    def has_workflow_state(self) -> bool:
+        """Check if a workflow state file exists."""
+        state_file = self.path / "workflow_state.json"
+        return state_file.exists() and state_file.stat().st_size > 0
+
+    def skip_to_step(self, target_step_id: str) -> str:
+        """
+        Skip all steps before target step, marking them as 'skipped'.
+        Creates a safety snapshot for undo capability.
+        Returns a message describing the action taken.
+        """
+        # Validate target step exists
+        target_step = self.workflow.get_step_by_id(target_step_id)
+        if not target_step:
+            raise ValueError(f"Step {target_step_id} not found")
+        
+        # Create safety snapshot of current project state
+        self.snapshot_manager.take_complete_snapshot("skip_to_initial")
+        
+        # Initialize ALL steps in the workflow state for consistency
+        target_step_found = False
+        steps_skipped = 0
+        
+        for step in self.workflow.steps:
+            step_id = step['id']
+            
+            if step_id == target_step_id:
+                target_step_found = True
+                # Mark target step as pending
+                self.update_state(step_id, 'pending')
+            elif not target_step_found:
+                # Mark all steps before target as skipped
+                self.update_state(step_id, 'skipped')
+                steps_skipped += 1
+            else:
+                # Mark all steps after target as pending
+                self.update_state(step_id, 'pending')
+        
+        return f"Skipped to {target_step['name']}"
+
+    def get_next_available_step(self):
+        """Get the next step that can be run (first pending step)."""
+        for step in self.workflow.steps:
+            if self.get_state(step['id']) == 'pending':
+                return step
+        return None
+
     def run_step(self, step_id: str, user_inputs: Dict[str, Any] = None):
         """
         Starts a workflow step asynchronously for interactive execution.
