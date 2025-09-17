@@ -183,7 +183,55 @@ def perform_undo(project):
     """
     Performs undo operation by reverting to the previous completed step state.
     Uses the complete snapshot system for comprehensive rollback.
+    Enhanced to handle conditional workflow states properly.
     """
+    # Check if there are any conditional steps that were affected by a decision
+    # These should be undone to their conditional decision point first
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        # Check if this is a conditional step that was affected by a decision and has a conditional decision snapshot
+        if (('conditional' in step) and
+            (current_state in ['pending', 'skipped_conditional']) and
+            project.snapshot_manager.snapshot_exists(f"{step_id}_conditional_decision")):
+            
+            # This step was affected by a conditional decision - undo to decision point
+            try:
+                project.snapshot_manager.restore_complete_snapshot(f"{step_id}_conditional_decision")
+                print(f"UNDO: Restored to conditional decision point for step {step_id}")
+                return True
+            except FileNotFoundError:
+                pass  # Fall through to regular undo logic
+    
+    # Also check if we're on a target step that was activated by skipping a conditional
+    # In this case, we should also undo to the conditional decision point
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        # If this step is pending and could be a target of a conditional skip
+        if current_state == 'pending':
+            # Check if any conditional step has this as a target_step and was recently skipped
+            for conditional_step in project.workflow.steps:
+                if 'conditional' in conditional_step:
+                    conditional_config = conditional_step.get('conditional', {})
+                    target_step = conditional_config.get('target_step')
+                    conditional_step_id = conditional_step['id']
+                    conditional_state = project.get_state(conditional_step_id)
+                    
+                    # If this step is the target of a skipped conditional and decision snapshot exists
+                    if (target_step == step_id and
+                        conditional_state == 'skipped_conditional' and
+                        project.snapshot_manager.snapshot_exists(f"{conditional_step_id}_conditional_decision")):
+                        
+                        try:
+                            project.snapshot_manager.restore_complete_snapshot(f"{conditional_step_id}_conditional_decision")
+                            print(f"UNDO: Restored to conditional decision point for step {conditional_step_id} (was target step)")
+                            return True
+                        except FileNotFoundError:
+                            pass  # Fall through to regular undo logic
+    
     # Find all completed steps
     completed_steps = []
     for step in project.workflow.steps:
@@ -348,6 +396,8 @@ def main():
         st.session_state.completed_script_step = None
     if 'completed_script_success' not in st.session_state:
         st.session_state.completed_script_success = None
+    if 'conditional_steps_awaiting' not in st.session_state:
+        st.session_state.conditional_steps_awaiting = []
 
 
     # --- Sidebar ---
@@ -744,6 +794,12 @@ def main():
             else:
                 try:
                     st.session_state.project = Project(project_path)
+                    
+                    # Check for conditional steps that need user decision after loading project
+                    conditional_steps = st.session_state.project.check_for_conditional_triggers()
+                    if conditional_steps:
+                        st.session_state.conditional_steps_awaiting = conditional_steps
+                    
                     st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                     # Trigger rerun so sidebar re-renders with undo button if there are completed steps
                     st.rerun()
@@ -845,6 +901,10 @@ def main():
                     st.success(f"✅ {step_name}")
                 elif status == "skipped":
                     st.info(f"⏩ {step_name} - Completed outside workflow")
+                elif status == "skipped_conditional":
+                    st.info(f"⏭️ {step_name} - Skipped (conditional)")
+                elif status == "awaiting_decision":
+                    st.warning(f"❓ {step_name} - Awaiting decision")
                 else:
                     st.info(f"⚪ {step_name}")
 
@@ -886,57 +946,81 @@ def main():
                                         st.rerun()
 
             with col2:
-                # Run/Re-run buttons...
-                run_button_disabled = st.session_state.running_step_id is not None
+                # Check if this is a conditional step that should show Yes/No buttons
+                is_conditional = 'conditional' in step
+                should_show_conditional_prompt = False
                 
-                # Show Re-run button for completed steps that allow re-runs
-                if status == "completed" and step.get('allow_rerun', False):
-                    # Check if all required inputs for re-run are filled
-                    rerun_button_disabled = run_button_disabled
-                    if 'inputs' in step:
-                        step_inputs = st.session_state.user_inputs.get(step_id, {})
-                        required_inputs = step['inputs']
-                        if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
-                            rerun_button_disabled = True
+                if is_conditional and project.should_show_conditional_prompt(step_id):
+                    should_show_conditional_prompt = True
+                
+                if should_show_conditional_prompt:
+                    # Show conditional prompt and Yes/No buttons
+                    conditional_config = step['conditional']
+                    prompt = conditional_config.get('prompt', 'Do you want to run this step?')
                     
-                    # Additional check: disable if project setup is not complete
-                    if not project.has_workflow_state():
-                        rerun_button_disabled = True
+                    st.info(f"💭 {prompt}")
                     
-                    if st.button("Re-run", key=f"rerun_{step_id}", disabled=rerun_button_disabled):
-                        # Clear the rerun flag so inputs get cleared again next time
-                        if f"rerun_inputs_cleared_{step_id}" in st.session_state:
-                            del st.session_state[f"rerun_inputs_cleared_{step_id}"]
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("✅ Yes", key=f"conditional_yes_{step_id}"):
+                            project.handle_conditional_decision(step_id, True)
+                            st.rerun()
+                    with col_no:
+                        if st.button("❌ No", key=f"conditional_no_{step_id}"):
+                            project.handle_conditional_decision(step_id, False)
+                            st.rerun()
+                else:
+                    # Regular Run/Re-run buttons logic
+                    run_button_disabled = st.session_state.running_step_id is not None
+                    
+                    # Show Re-run button for completed steps that allow re-runs
+                    if status == "completed" and step.get('allow_rerun', False):
+                        # Check if all required inputs for re-run are filled
+                        rerun_button_disabled = run_button_disabled
+                        if 'inputs' in step:
+                            step_inputs = st.session_state.user_inputs.get(step_id, {})
+                            required_inputs = step['inputs']
+                            if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
+                                rerun_button_disabled = True
                         
-                        st.session_state.running_step_id = step_id
-                        st.session_state.terminal_output = ""
-                        step_user_inputs = st.session_state.user_inputs.get(step_id, {})
-                        start_script_thread(project, step_id, step_user_inputs)
-                        st.rerun()  # Force immediate rerun to show terminal
-                
-                # Show Run button for pending steps (or all steps if they're the next step)
-                if status != "completed":
-                    is_next_step = (step_id == first_pending_step['id']) if first_pending_step else False
-                    if not is_next_step:
-                        run_button_disabled = True
+                        # Additional check: disable if project setup is not complete
+                        if not project.has_workflow_state():
+                            rerun_button_disabled = True
+                        
+                        if st.button("Re-run", key=f"rerun_{step_id}", disabled=rerun_button_disabled):
+                            # Clear the rerun flag so inputs get cleared again next time
+                            if f"rerun_inputs_cleared_{step_id}" in st.session_state:
+                                del st.session_state[f"rerun_inputs_cleared_{step_id}"]
+                            
+                            st.session_state.running_step_id = step_id
+                            st.session_state.terminal_output = ""
+                            step_user_inputs = st.session_state.user_inputs.get(step_id, {})
+                            start_script_thread(project, step_id, step_user_inputs)
+                            st.rerun()  # Force immediate rerun to show terminal
                     
-                    # Check if all required inputs for this step are filled
-                    if 'inputs' in step:
-                        step_inputs = st.session_state.user_inputs.get(step_id, {})
-                        required_inputs = step['inputs']
-                        if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
+                    # Show Run button for pending steps (or all steps if they're the next step)
+                    if status not in ["completed", "skipped_conditional", "awaiting_decision"]:
+                        is_next_step = (step_id == first_pending_step['id']) if first_pending_step else False
+                        if not is_next_step:
                             run_button_disabled = True
-                    
-                    # Additional check: disable if project setup is not complete
-                    if not project.has_workflow_state():
-                        run_button_disabled = True
+                        
+                        # Check if all required inputs for this step are filled
+                        if 'inputs' in step:
+                            step_inputs = st.session_state.user_inputs.get(step_id, {})
+                            required_inputs = step['inputs']
+                            if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
+                                run_button_disabled = True
+                        
+                        # Additional check: disable if project setup is not complete
+                        if not project.has_workflow_state():
+                            run_button_disabled = True
 
-                    if st.button("Run", key=f"run_{step_id}", disabled=run_button_disabled):
-                        st.session_state.running_step_id = step_id
-                        st.session_state.terminal_output = ""
-                        step_user_inputs = st.session_state.user_inputs.get(step_id, {})
-                        start_script_thread(project, step_id, step_user_inputs)
-                        st.rerun()  # Force immediate rerun to show terminal
+                        if st.button("Run", key=f"run_{step_id}", disabled=run_button_disabled):
+                            st.session_state.running_step_id = step_id
+                            st.session_state.terminal_output = ""
+                            step_user_inputs = st.session_state.user_inputs.get(step_id, {})
+                            start_script_thread(project, step_id, step_user_inputs)
+                            st.rerun()  # Force immediate rerun to show terminal
             
             # ... (rest of the step display logic) ...
             st.markdown("---")
@@ -965,6 +1049,13 @@ def main():
                 
                 # Use the new handle_step_result method which includes rollback logic
                 st.session_state.project.handle_step_result(step_id, result)
+
+                # Check for conditional triggers after step completion
+                if result.success:
+                    conditional_steps = st.session_state.project.check_for_conditional_triggers()
+                    if conditional_steps:
+                        # Store conditional steps that need user decision
+                        st.session_state.conditional_steps_awaiting = conditional_steps
 
                 # Preserve the terminal output for completed script display
                 st.session_state.completed_script_output = st.session_state.terminal_output

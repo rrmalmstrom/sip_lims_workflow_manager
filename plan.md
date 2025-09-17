@@ -57,6 +57,7 @@ This YAML file is the blueprint for a workflow. Each step is a dictionary with t
 - `snapshot_items`: A list of files and directories to be included in this step's snapshot.
 - `allow_rerun`: (Optional) Set to `true` to enable re-run capability for completed steps. Defaults to `false`.
 - `inputs`: (Optional) A list of user input definitions for file selection or other parameters.
+- `conditional`: (Optional) Configuration for conditional workflow steps that require user decisions.
 
 ### 3.1.1. Template Management
 The system uses a protected template system for workflow definitions:
@@ -70,11 +71,13 @@ The system is a flexible, interactive checklist, managed by the `StateManager`.
 - **`workflow_state.json`**: Tracks the status of each step `id` (e.g., "completed", "pending").
 - **GUI Model**: Renders all steps as cards with "Run" or "Re-run" buttons, allowing selective execution based on step configuration.
 - **Selective Re-run**: Only steps with `allow_rerun: true` display re-run buttons when completed, providing precise control over workflow execution.
+- **Conditional Decisions**: Steps with `conditional` configuration can present Yes/No prompts to users, allowing workflow branching based on user decisions.
 
 ### 3.3. Snapshot & Undo/Redo Logic
 - **Snapshot Trigger**: A snapshot is created **only** when a step is successfully completed for the **first time**. This is handled by the `SnapshotManager`.
 - **Undo Action**: Reverts the entire project to the state before the last completed step was run.
 - **Timestamp Preservation**: File modification timestamps are preserved during rollback operations to maintain chronological data integrity. This applies to both manual undo operations and automatic rollback when scripts fail.
+- **Conditional Decision Snapshots**: Special snapshots are created before conditional decisions to enable undoing back to decision points rather than previous steps.
 
 ### 3.4. Error Handling & Success Marker System
 A script error will never leave the project in a corrupted state. The system uses a dual-verification approach for reliable failure detection:
@@ -168,6 +171,33 @@ steps:
         arg: "--input"
 ```
 
+### 3.1.2. Conditional Workflow Configuration
+The system supports conditional workflow steps that allow users to make Yes/No decisions during workflow execution:
+
+```yaml
+- id: rework_second_attempt
+  name: "10. Third Attempt Library Creation"
+  script: "emergency.third.attempt.rework.py"
+  snapshot_items: ["outputs/"]
+  conditional:
+    trigger_script: "second.FA.output.analysis.py"
+    prompt: "Do you want to run a third attempt at library creation?"
+    target_step: "conclude_fa_analysis"
+
+- id: third_fa_analysis
+  name: "11. Analyze Library QC (3rd)"
+  script: "emergency.third.FA.output.analysis.py"
+  snapshot_items: ["outputs/Lib.info.csv"]
+  conditional:
+    depends_on: "rework_second_attempt"
+```
+
+**Conditional Configuration Properties:**
+- `trigger_script`: The script that, when completed, triggers the conditional prompt
+- `prompt`: The question displayed to the user for the Yes/No decision
+- `target_step`: The step to jump to if the user chooses "No" (skips the conditional step)
+- `depends_on`: Indicates this step depends on another conditional step being activated
+
 ## 4. GUI Design
 - **Layout**: A two-column Streamlit application.
   - **Sidebar**: Project selection, Undo/Redo buttons, and update notifications.
@@ -181,4 +211,5 @@ steps:
 ## 5. Development Plan
 1.  **Core Engine**: Build and test the core logic classes (`Workflow`, `Project`, `StateManager`, `SnapshotManager`, `ScriptRunner`).
 2.  **GUI Implementation**: Develop the Streamlit front-end.
-3.  **Packaging**: Create the `release.py` script and test the PyInstaller builds.
+3.  **Conditional Workflow System**: Implement conditional workflow functionality with automatic triggering and enhanced undo behavior.
+4.  **Packaging**: Create the `release.py` script and test the PyInstaller builds.

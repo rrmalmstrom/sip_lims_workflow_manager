@@ -193,6 +193,27 @@ We have successfully completed a major refactoring of the application's core log
     * **Snapshot System Validation**: Confirmed snapshot/restore system works correctly - restores exactly what was captured
     * **Problem Resolution**: Unified rollback system prevents future occurrences of this issue
 
+### Session 13: Conditional Workflow System
+1. **Comprehensive Conditional Workflow Implementation**: Developed complete system for Yes/No decision points in workflows.
+    * **Enhanced Workflow Configuration**: Added conditional step definitions with trigger scripts, prompts, target steps, and dependencies
+    * **Automatic Triggering Logic**: Conditional prompts appear automatically when trigger scripts complete
+    * **Enhanced State Management**: New states (`awaiting_decision`, `skipped_conditional`) for conditional workflow tracking
+    * **GUI Integration**: Yes/No buttons with clear prompts and immediate visual feedback
+2. **Enhanced Undo System for Conditional Workflows**: Modified undo logic to handle conditional decision points properly.
+    * **Conditional Decision Snapshots**: Special snapshots created before decisions to enable undoing back to decision points
+    * **Smart Undo Logic**: Enhanced undo function to detect and restore conditional decision points before regular step undo
+    * **Target Step Handling**: Proper undo behavior when on target steps activated by conditional "No" decisions
+    * **Workflow.yml Preservation**: Enhanced snapshot system to preserve workflow configuration during undo operations
+3. **Test-Driven Development**: Created comprehensive test suite for conditional workflow functionality.
+    * **Test Suite Creation**: `tests/test_conditional_workflow.py` with 17 comprehensive test cases
+    * **Complete Coverage**: Configuration parsing, state management, trigger logic, decision handling, GUI integration, and undo behavior
+    * **Test Results**: All 17 tests passed, validating complete conditional workflow functionality
+4. **Manual Testing and Bug Resolution**: Systematic testing and resolution of all identified issues.
+    * **Automatic Triggering**: Fixed trigger logic to properly detect when conditional prompts should appear
+    * **Workflow.yml Preservation**: Resolved issue where undo operations were deleting workflow configuration files
+    * **Enhanced Undo Behavior**: Confirmed proper undo behavior for both "Yes" and "No" conditional decision scenarios
+    * **Complete Integration**: Verified seamless integration with existing workflow management features
+
 ## Next Steps (To-Do List)
 
 -   [x] **Fix critical rollback functionality**: Implemented success marker system for reliable failure detection.
@@ -210,6 +231,7 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Implement workflow template protection system**: Created protected templates directory with Git-based version control, YAML validation, and comprehensive error handling.
 -   [x] **Implement skip to step functionality**: Complete "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
 -   [x] **Unify rollback system**: Resolved inconsistency between undo button and failed step rollback mechanisms for consistent behavior across all failure scenarios.
+-   [x] **Implement conditional workflow system**: Complete conditional workflow functionality with automatic triggering, Yes/No decision prompts, enhanced undo behavior for decision points, and comprehensive state management.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

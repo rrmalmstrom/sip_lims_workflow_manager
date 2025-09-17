@@ -68,13 +68,17 @@ steps:
     name: "10. Third Attempt Library Creation"
     script: "emergency.third.attempt.rework.py"
     snapshot_items: ["outputs/"]
-    allow_skip: true
+    conditional:
+      trigger_script: "second.FA.output.analysis.py"
+      prompt: "Do you want to run a third attempt at library creation?"
+      target_step: "conclude_fa_analysis"
 
   - id: third_fa_analysis
     name: "11. Analyze Library QC (3rd)"
     script: "emergency.third.FA.output.analysis.py"
     snapshot_items: ["outputs/Lib.info.csv"]
-    allow_skip: true
+    conditional:
+      depends_on: "rework_second_attempt"
 
   - id: conclude_fa_analysis
     name: "12. Conclude FA analysis"

@@ -11,6 +11,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   **Enhanced Undo functionality** with complete project state restoration and timestamp preservation.
 -   **Smart re-run behavior** that always prompts for new file inputs.
 -   **Skip to Step functionality** for starting workflows from any midway point.
+-   **Conditional workflow support** with Yes/No decision prompts for optional steps.
 -   **Intelligent project setup** with automatic file scenario detection.
 -   Interactive script support with real-time terminal output.
 -   Cross-platform support for macOS and Windows.
@@ -70,7 +71,13 @@ A terminal window will open, and after a few moments, the application's user int
 
 6.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state, preserving original file modification timestamps to maintain chronological data integrity.
 
-7.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
+7.  **Conditional Workflow Decisions**: Some workflow steps may present conditional prompts asking whether you want to run optional steps (like emergency third attempts). When these appear:
+    -   A clear prompt will be displayed (e.g., "Do you want to run a third attempt at library creation?")
+    -   Click "✅ Yes" to run the optional step, or "❌ No" to skip to the next appropriate step
+    -   The system automatically manages dependent steps based on your decision
+    -   You can undo conditional decisions using the undo button to return to the decision point
+
+8.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
 
 ## Creating a New Workflow
 
@@ -156,6 +163,41 @@ By default, completed steps cannot be re-run. To enable re-run capability for sp
       name: "Ultracentrifuge CSV File"
       arg: ""
 ```
+
+### Conditional Workflow Steps
+
+For steps that require user decisions during workflow execution, you can add conditional configuration. This allows users to make Yes/No choices about whether to run optional steps.
+
+```yaml
+- id: rework_second_attempt
+  name: "10. Third Attempt Library Creation"
+  script: "emergency.third.attempt.rework.py"
+  snapshot_items: ["outputs/"]
+  conditional:
+    trigger_script: "second.FA.output.analysis.py"
+    prompt: "Do you want to run a third attempt at library creation?"
+    target_step: "conclude_fa_analysis"
+
+- id: third_fa_analysis
+  name: "11. Analyze Library QC (3rd)"
+  script: "emergency.third.FA.output.analysis.py"
+  snapshot_items: ["outputs/Lib.info.csv"]
+  conditional:
+    depends_on: "rework_second_attempt"
+```
+
+**Conditional Configuration Properties:**
+-   **`trigger_script`**: The script that, when completed, triggers the conditional prompt for this step.
+-   **`prompt`**: The question displayed to the user for the Yes/No decision.
+-   **`target_step`**: The step to jump to if the user chooses "No" (skips the conditional step).
+-   **`depends_on`**: Indicates this step depends on another conditional step being activated with "Yes".
+
+**How Conditional Workflows Work:**
+1. When the trigger script completes, the conditional step automatically shows a decision prompt
+2. Users see the prompt with clear Yes/No buttons
+3. Choosing "Yes" activates the conditional step and any dependent steps
+4. Choosing "No" skips the conditional step(s) and jumps to the target step
+5. Conditional decisions can be undone to return to the decision point
 ## A Note for Script Authors: Current Working Directory
 
 When the LIMS Workflow Manager runs a script, it automatically sets the **current working directory (CWD)** to the root of the **project folder** you selected.

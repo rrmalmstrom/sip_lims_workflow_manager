@@ -17,6 +17,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 11 (Skip to Step Functionality):** Complete. Implemented comprehensive "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
 - **Phase 12 (Rollback System Unification):** Complete. Unified rollback behavior between manual undo and automatic failed step rollback for consistent project restoration.
 - **Phase 13 (Timestamp Preservation):** Complete. Implemented timestamp preservation during rollback operations to maintain accurate file modification times.
+- **Phase 14 (Conditional Workflow System):** Complete. Implemented comprehensive conditional workflow functionality allowing users to make Yes/No decisions at specific workflow points with automatic triggering, enhanced undo behavior, and complete state management.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -51,6 +52,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 21. **Enhanced Project Setup**: Radio button interface for choosing between "New Project" and "Existing Work" with dynamic step selection dropdown.
 22. **Rollback System Unification**: Unified rollback behavior between manual undo and automatic failed step rollback using complete snapshot restoration for consistency.
 23. **Timestamp Preservation**: Implemented file modification time preservation during all rollback operations to maintain accurate file creation timestamps.
+24. **Conditional Workflow System**: Implemented comprehensive conditional workflow functionality with automatic triggering, Yes/No decision prompts, enhanced undo behavior for decision points, and complete integration with existing workflow management.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -185,3 +187,20 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Performance**: Minimal overhead with individual file extraction and microsecond timestamp operations
 - **Limitations**: File timestamps preserved (primary use case), directory timestamps require future enhancement
 - **Universal Compatibility**: Works with all existing snapshots and maintains full backward compatibility
+
+## 15. Latest Features (Session 13)
+### Conditional Workflow System
+- **Problem Solved**: Users needed ability to make conditional decisions during workflow execution, specifically whether to run optional steps like emergency third attempts
+- **Root Cause Addressed**: Linear workflow system couldn't handle decision points where users choose between different execution paths
+- **Technical Implementation**: Comprehensive conditional workflow system with automatic triggering, state management, and enhanced undo behavior
+- **Key Features**:
+  - **Automatic Triggering**: Conditional prompts appear automatically when trigger scripts complete
+  - **Yes/No Decision Interface**: Clear prompts with intuitive Yes/No buttons for user decisions
+  - **Enhanced State Management**: New states (`awaiting_decision`, `skipped_conditional`) for conditional workflow tracking
+  - **Smart Undo Behavior**: Enhanced undo logic that respects conditional decision points and allows undoing decisions separately from step execution
+  - **Dependency Handling**: Automatic management of dependent conditional steps based on user decisions
+  - **Configuration Preservation**: Workflow.yml files preserved during undo operations to maintain conditional configurations
+- **Workflow Configuration**: Enhanced workflow.yml with conditional step definitions including trigger scripts, prompts, target steps, and dependencies
+- **Test Coverage**: Comprehensive TDD approach with 17 test cases validating all conditional workflow functionality
+- **User Experience**: Seamless integration with existing workflow interface, clear visual indicators for conditional states, and intuitive decision-making process
+- **Universal Compatibility**: Works with all existing workflows while providing new conditional capabilities for enhanced workflow flexibility

@@ -1529,3 +1529,378 @@ The Session 12 enhancements provide comprehensive timestamp preservation during 
 11. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the timestamp accuracy and workflow integrity needed for complex laboratory workflows where file creation times are critical for data analysis and audit trails.
+
+## Feature 12: Conditional Workflow System (Session 13)
+
+### Problem Statement
+Users needed the ability to make conditional decisions during workflow execution, specifically whether to run optional steps like emergency third attempts at library creation. The existing linear workflow system couldn't handle decision points where users choose between different execution paths based on results or preferences.
+
+### Solution Implementation
+
+#### Comprehensive Conditional Workflow Architecture
+
+##### Enhanced Workflow Configuration Support
+**New Conditional Step Properties** (`templates/workflow.yml`):
+```yaml
+- id: rework_second_attempt
+  name: "10. Third Attempt Library Creation"
+  script: "emergency.third.attempt.rework.py"
+  snapshot_items: ["outputs/"]
+  conditional:
+    trigger_script: "second.FA.output.analysis.py"
+    prompt: "Do you want to run a third attempt at library creation?"
+    target_step: "conclude_fa_analysis"
+
+- id: third_fa_analysis
+  name: "11. Analyze Library QC (3rd)"
+  script: "emergency.third.FA.output.analysis.py"
+  snapshot_items: ["outputs/Lib.info.csv"]
+  conditional:
+    depends_on: "rework_second_attempt"
+```
+
+**Configuration Properties:**
+- **`trigger_script`**: Script that triggers the conditional prompt when completed
+- **`prompt`**: User-facing question for the Yes/No decision
+- **`target_step`**: Step to jump to when user chooses "No" (skips conditional steps)
+- **`depends_on`**: Indicates dependency on another conditional step being activated
+
+##### Enhanced State Management System
+**New Workflow States** (`src/core.py`):
+- **`awaiting_decision`**: Step is waiting for user's Yes/No decision
+- **`skipped_conditional`**: Step was skipped via conditional "No" decision
+- **Existing states**: `pending`, `completed`, `skipped` (maintained for compatibility)
+
+**State Transition Logic:**
+```
+pending → awaiting_decision (when trigger script completes)
+awaiting_decision → pending (user chooses "Yes")
+awaiting_decision → skipped_conditional (user chooses "No")
+skipped_conditional → pending (undo operation)
+```
+
+#### Core Logic Implementation (`src/core.py`)
+
+##### Conditional Step Detection and Management
+**New Methods for Conditional Workflow Support**:
+
+```python
+def get_conditional_steps(self):
+    """Get all steps that have conditional configuration."""
+    conditional_steps = []
+    for step in self.workflow.steps:
+        if 'conditional' in step:
+            conditional_steps.append(step)
+    return conditional_steps
+
+def should_show_conditional_prompt(self, step_id: str) -> bool:
+    """Determine if a conditional prompt should be shown for a step."""
+    step = self.workflow.get_step_by_id(step_id)
+    if not step or 'conditional' not in step:
+        return False
+    
+    current_state = self.get_state(step_id)
+    return current_state == 'awaiting_decision'
+```
+
+##### Automatic Triggering Logic
+**Enhanced `check_for_conditional_triggers()` Method**:
+```python
+def check_for_conditional_triggers(self):
+    """Check if any conditional steps should be triggered based on completed steps."""
+    steps_awaiting_decision = []
+    
+    for step in self.get_conditional_steps():
+        step_id = step['id']
+        conditional_config = step.get('conditional', {})
+        
+        # Check if this step has a trigger script
+        trigger_script = conditional_config.get('trigger_script')
+        if trigger_script:
+            # Find the step that runs this trigger script
+            trigger_step = None
+            for workflow_step in self.workflow.steps:
+                if workflow_step.get('script') == trigger_script:
+                    trigger_step = workflow_step
+                    break
+            
+            # If trigger step is completed and this step is pending, mark as awaiting decision
+            if (trigger_step and
+                self.get_state(trigger_step['id']) == 'completed' and
+                self.get_state(step_id) == 'pending'):
+                self.update_state(step_id, 'awaiting_decision')
+                steps_awaiting_decision.append(step_id)
+    
+    return steps_awaiting_decision
+```
+
+##### Conditional Decision Handling
+**Enhanced `handle_conditional_decision()` Method**:
+```python
+def handle_conditional_decision(self, step_id: str, user_choice: bool):
+    """Handle user's decision for a conditional step."""
+    step = self.workflow.get_step_by_id(step_id)
+    if not step or 'conditional' not in step:
+        raise ValueError(f"Step '{step_id}' is not a conditional step")
+    
+    # Take a snapshot before making the conditional decision
+    # This allows undoing back to the decision point
+    self.snapshot_manager.take_complete_snapshot(f"{step_id}_conditional_decision")
+    
+    conditional_config = step['conditional']
+    
+    if user_choice:
+        # User chose "Yes" - activate the conditional step
+        self.update_state(step_id, 'pending')
+        # Also activate any dependent conditional steps
+        self._activate_dependent_steps(step_id)
+    else:
+        # User chose "No" - skip conditional steps and jump to target
+        target_step_id = conditional_config.get('target_step')
+        if not target_step_id:
+            raise ValueError(f"Conditional step '{step_id}' missing target_step configuration")
+        
+        # Mark this step and dependents as skipped
+        self.update_state(step_id, 'skipped_conditional')
+        self._skip_dependent_steps(step_id)
+        
+        # Activate the target step
+        self.update_state(target_step_id, 'pending')
+```
+
+#### GUI Integration (`app.py`)
+
+##### Conditional Prompt Display Logic
+**Enhanced Step Display with Yes/No Buttons** (lines 901-923):
+```python
+# Check if this is a conditional step that should show Yes/No buttons
+is_conditional = 'conditional' in step
+should_show_conditional_prompt = False
+
+if is_conditional and project.should_show_conditional_prompt(step_id):
+    should_show_conditional_prompt = True
+
+if should_show_conditional_prompt:
+    # Show conditional prompt and Yes/No buttons
+    conditional_config = step['conditional']
+    prompt = conditional_config.get('prompt', 'Do you want to run this step?')
+    
+    st.info(f"💭 {prompt}")
+    
+    col_yes, col_no = st.columns(2)
+    with col_yes:
+        if st.button("✅ Yes", key=f"conditional_yes_{step_id}"):
+            project.handle_conditional_decision(step_id, True)
+            st.rerun()
+    with col_no:
+        if st.button("❌ No", key=f"conditional_no_{step_id}"):
+            project.handle_conditional_decision(step_id, False)
+            st.rerun()
+```
+
+##### Visual State Indicators
+**Enhanced Step Status Display**:
+```python
+elif status == "skipped_conditional":
+    st.info(f"⏭️ {step_name} - Skipped (conditional)")
+elif status == "awaiting_decision":
+    st.warning(f"❓ {step_name} - Awaiting decision")
+```
+
+#### Enhanced Undo System for Conditional Workflows
+
+##### Conditional Decision Point Restoration
+**Enhanced `perform_undo()` Function** (`app.py`):
+```python
+def perform_undo(project):
+    """Enhanced undo with conditional decision point handling."""
+    # Check if there are any conditional steps that were affected by a decision
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        # Check if this is a conditional step that was affected by a decision
+        if (('conditional' in step) and
+            (current_state in ['pending', 'skipped_conditional']) and
+            project.snapshot_manager.snapshot_exists(f"{step_id}_conditional_decision")):
+            
+            # Restore to conditional decision point
+            project.snapshot_manager.restore_complete_snapshot(f"{step_id}_conditional_decision")
+            print(f"UNDO: Restored to conditional decision point for step {step_id}")
+            return True
+    
+    # Also check if we're on a target step that was activated by skipping a conditional
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        if current_state == 'pending':
+            # Check if any conditional step has this as a target_step
+            for conditional_step in project.workflow.steps:
+                if 'conditional' in conditional_step:
+                    conditional_config = conditional_step.get('conditional', {})
+                    target_step = conditional_config.get('target_step')
+                    conditional_step_id = conditional_step['id']
+                    conditional_state = project.get_state(conditional_step_id)
+                    
+                    if (target_step == step_id and
+                        conditional_state == 'skipped_conditional' and
+                        project.snapshot_manager.snapshot_exists(f"{conditional_step_id}_conditional_decision")):
+                        
+                        project.snapshot_manager.restore_complete_snapshot(f"{conditional_step_id}_conditional_decision")
+                        print(f"UNDO: Restored to conditional decision point for step {conditional_step_id} (was target step)")
+                        return True
+    
+    # Fall back to regular undo logic for non-conditional scenarios
+    # ... (existing undo logic)
+```
+
+#### Workflow.yml Preservation System
+
+##### Configuration File Protection
+**Enhanced Snapshot System** (`src/logic.py`):
+```python
+# Files and directories to exclude from snapshot
+exclude_patterns = {
+    '.snapshots',
+    '.workflow_status',
+    'workflow.yml',  # Excluded from snapshots to prevent reversion
+    '__pycache__',
+    '.DS_Store',
+    'debug_script_execution.log',
+    'last_script_result.txt',
+    'workflow_debug.log'
+}
+
+# Files and directories to preserve (never delete)
+preserve_patterns = {
+    '.snapshots',
+    '.workflow_status',
+    'workflow.yml',  # Preserved during restore to maintain configuration
+    '__pycache__'
+}
+```
+
+This ensures that:
+- **Workflow.yml is excluded from snapshots**: Prevents old configurations from overwriting new conditional setups
+- **Workflow.yml is preserved during restore**: Prevents deletion during undo operations
+- **Conditional configurations remain intact**: Through all undo and restore operations
+
+### Test-Driven Development Implementation
+
+#### Comprehensive Test Suite
+**Created `tests/test_conditional_workflow.py` with 17 test cases**:
+
+1. **Configuration Parsing Tests**:
+   - `test_conditional_step_configuration_parsing`
+   - `test_conditional_step_dependencies`
+
+2. **State Management Tests**:
+   - `test_conditional_step_states`
+   - `test_conditional_decision_state_transitions`
+   - `test_conditional_step_skipping_with_dependencies`
+
+3. **Trigger Logic Tests**:
+   - `test_conditional_trigger_detection`
+   - `test_conditional_trigger_with_multiple_steps`
+   - `test_conditional_trigger_only_when_pending`
+
+4. **Decision Handling Tests**:
+   - `test_conditional_decision_yes_activates_step`
+   - `test_conditional_decision_no_skips_to_target`
+   - `test_conditional_decision_creates_snapshot`
+
+5. **GUI Integration Tests**:
+   - `test_conditional_prompt_display_logic`
+   - `test_conditional_buttons_not_shown_for_regular_steps`
+
+6. **Undo System Tests**:
+   - `test_conditional_undo_behavior`
+   - `test_conditional_undo_restores_decision_point`
+
+7. **Edge Case Tests**:
+   - `test_conditional_step_without_trigger`
+   - `test_conditional_step_missing_target`
+
+#### Test Results
+✅ **All 17 tests PASSED** - Comprehensive validation of conditional workflow functionality
+✅ **Integration with existing tests** - No regression in existing functionality
+✅ **Complete coverage** - All conditional workflow scenarios validated
+
+### Technical Implementation Details
+
+#### Automatic Triggering Mechanism
+**Trigger Detection Process**:
+1. **Script Completion**: When any script completes successfully
+2. **Trigger Check**: `check_for_conditional_triggers()` called automatically
+3. **Configuration Scan**: All conditional steps checked for matching trigger scripts
+4. **State Update**: Matching steps transitioned from `pending` to `awaiting_decision`
+5. **GUI Update**: Yes/No buttons appear automatically on next page refresh
+
+#### Decision Processing Workflow
+**User Decision Handling**:
+1. **Snapshot Creation**: `{step_id}_conditional_decision` snapshot taken before decision
+2. **Choice Processing**: User's Yes/No choice processed by `handle_conditional_decision()`
+3. **State Updates**: Conditional step and dependencies updated based on choice
+4. **Target Activation**: If "No", target step activated for workflow continuation
+
+#### Dependency Management
+**Conditional Step Dependencies**:
+- **Activation**: When parent conditional step is activated ("Yes"), dependent steps become `pending`
+- **Skipping**: When parent conditional step is skipped ("No"), dependent steps become `skipped_conditional`
+- **Recursive Processing**: Dependencies of dependencies are handled recursively
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Configuration Parsing**: Simple dictionary lookups with no performance impact
+- **State Checking**: Efficient state queries using existing state management system
+- **Snapshot Operations**: Leverages existing snapshot system with minimal additional overhead
+
+#### Error Handling
+- **Missing Configuration**: Graceful handling of missing conditional properties
+- **Invalid Targets**: Validation of target step existence before processing decisions
+- **Snapshot Failures**: Fallback to regular undo logic if conditional snapshots unavailable
+
+### User Experience Enhancements
+
+#### Clear Visual Feedback
+- **Conditional States**: Distinct visual indicators for `awaiting_decision` and `skipped_conditional` states
+- **Decision Prompts**: Clear, user-friendly prompts with intuitive Yes/No buttons
+- **State Transitions**: Immediate visual feedback when decisions are made
+
+#### Intuitive Workflow
+- **Automatic Triggering**: No manual intervention required - prompts appear when appropriate
+- **Decision Flexibility**: Users can change their minds using undo functionality
+- **Clear Progression**: Obvious workflow paths whether choosing Yes or No
+
+### Backward Compatibility
+
+#### Legacy Support
+- **Existing Workflows**: All existing workflows continue to work without modification
+- **State Compatibility**: New states coexist with existing `pending`/`completed`/`skipped` states
+- **Configuration Optional**: Conditional configuration is completely optional
+
+#### Migration Strategy
+- **No Migration Required**: New functionality activates only when conditional configuration is present
+- **Gradual Adoption**: Users can add conditional steps to existing workflows incrementally
+- **Data Preservation**: No risk to existing project data or workflow states
+
+## Conclusion (Updated for Session 13)
+
+The Session 13 enhancements provide comprehensive conditional workflow functionality that transforms the LIMS Workflow Manager from a purely linear system into a flexible, decision-capable workflow engine. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+2. **Timestamp Preservation**: File modification times preserved during all rollback operations
+3. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+4. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+5. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+6. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+7. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+8. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts
+9. **Comprehensive State Management**: Five-state system (pending/completed/skipped/awaiting_decision/skipped_conditional)
+10. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+11. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+12. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the conditional decision-making capability needed for complex laboratory workflows where user judgment and flexibility are essential for optimal results.

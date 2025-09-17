@@ -212,6 +212,7 @@ class SnapshotManager:
         exclude_patterns = {
             '.snapshots',
             '.workflow_status',
+            'workflow.yml',
             '__pycache__',
             '.DS_Store',
             'debug_script_execution.log',
