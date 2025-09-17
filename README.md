@@ -8,7 +8,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   One-click execution of Python scripts.
 -   Automatic state tracking with enhanced reliability.
 -   Robust error handling with automatic rollback and success marker verification.
--   **Enhanced Undo functionality** with complete project state restoration.
+-   **Enhanced Undo functionality** with complete project state restoration and timestamp preservation.
 -   **Smart re-run behavior** that always prompts for new file inputs.
 -   **Skip to Step functionality** for starting workflows from any midway point.
 -   **Intelligent project setup** with automatic file scenario detection.
@@ -68,7 +68,7 @@ A terminal window will open, and after a few moments, the application's user int
     -   Click "Skip to This Step" to mark all previous steps as completed outside the workflow
     -   Previous steps will show as "⏩ Completed outside workflow" and won't block your progress
 
-6.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state.
+6.  **Undo Functionality**: Use the "↶ Undo Last Step" button in the sidebar to revert the project to the previous completed state. The system will ask for confirmation before performing the undo operation. This completely restores all files and directories to their previous state, preserving original file modification timestamps to maintain chronological data integrity.
 
 7.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
 

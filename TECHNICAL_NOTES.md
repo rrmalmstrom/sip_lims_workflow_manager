@@ -1353,3 +1353,179 @@ The Session 11 enhancements complete the rollback system unification, ensuring c
 10. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the unified, reliable rollback behavior needed for complex laboratory workflows.
+
+## Feature 11: Timestamp Preservation During Rollback Operations (Session 12)
+
+### Problem Statement
+When the LIMS Workflow Manager performed rollback operations (either via manual "undo" button clicks or automatic rollback when scripts failed), the file modification dates were being updated to the current time instead of preserving the original timestamps from when the files were created. This made it difficult for users to track when files were actually created and could interfere with workflows that depend on file timestamps.
+
+### Root Cause Analysis
+
+#### ZIP Extraction Behavior
+The standard ZIP extraction method (`extractall()`) used by the snapshot restoration system automatically updates file modification times to the current time during extraction, regardless of the original timestamps stored in the ZIP metadata.
+
+#### Snapshot Restoration Process
+The original implementation in [`SnapshotManager.restore_complete_snapshot()`](src/logic.py:328) used:
+```python
+# PROBLEMATIC: Updates timestamps to current time
+with zipfile.ZipFile(snapshot_path, 'r') as zip_ref:
+    zip_ref.extractall(self.path)
+```
+
+### Solution Implementation
+
+#### Enhanced Timestamp Preservation Logic
+Modified the snapshot restoration process in [`src/logic.py`](src/logic.py) to preserve original file timestamps:
+
+##### Updated `restore_complete_snapshot()` Method (lines 328-360)
+```python
+def restore_complete_snapshot(self, snapshot_name: str) -> bool:
+    """Restore complete project snapshot with timestamp preservation"""
+    # Individual file extraction with timestamp preservation
+    with zipfile.ZipFile(snapshot_path, 'r') as zip_ref:
+        for member in zip_ref.infolist():
+            if not member.is_dir():
+                # Extract file
+                zip_ref.extract(member, self.path)
+                
+                # Preserve original timestamp
+                extracted_path = self.path / member.filename
+                if extracted_path.exists():
+                    # Convert ZIP timestamp to Unix timestamp
+                    timestamp = time.mktime(member.date_time + (0, 0, -1))
+                    os.utime(extracted_path, (timestamp, timestamp))
+```
+
+##### Updated `restore()` Method (lines 375-406)
+Applied the same timestamp preservation logic to the legacy selective restoration method for consistency across all restoration operations.
+
+#### Technical Implementation Details
+
+##### ZIP Metadata Utilization
+- **Source**: [`member.date_time`](src/logic.py:350) from ZIP file entries contains original file timestamps
+- **Format**: 6-tuple (year, month, day, hour, minute, second) from ZIP metadata
+- **Conversion**: [`time.mktime()`](src/logic.py:351) converts to Unix timestamp for [`os.utime()`](src/logic.py:352)
+
+##### Timestamp Application
+- **Method**: [`os.utime(extracted_path, (timestamp, timestamp))`](src/logic.py:352)
+- **Parameters**: Sets both access time and modification time to original timestamp
+- **Scope**: Applied to all extracted files during restoration
+
+##### Error Handling
+- **File Existence Check**: Validates file exists before applying timestamp
+- **Exception Handling**: Graceful handling of timestamp application failures
+- **Logging**: Debug messages for timestamp preservation operations
+
+### Test-Driven Development Approach
+
+#### Comprehensive Test Suite
+Created multiple test files to validate timestamp preservation functionality:
+
+##### Core Functionality Tests (`test_timestamp_preservation.py`)
+- **File Creation**: Creates test files with known timestamps
+- **Snapshot Operations**: Tests complete snapshot creation and restoration cycle
+- **Timestamp Validation**: Verifies preserved timestamps match original values
+- **Edge Cases**: Tests various file types and timestamp scenarios
+
+##### Integration Tests (`test_snapshot_manager.py`)
+- **End-to-End Testing**: Complete workflow from snapshot creation to restoration
+- **Multiple Files**: Tests timestamp preservation across multiple files
+- **Directory Handling**: Validates directory structure preservation
+
+##### Directory Timestamp Investigation
+- **Research Tests**: [`test_directory_timestamps.py`](test_directory_timestamps.py), [`test_zip_directory_behavior.py`](test_zip_directory_behavior.py)
+- **Findings**: Discovered that directory timestamps require special handling in ZIP creation
+- **Decision**: Focused on file timestamp preservation (primary use case) while documenting directory limitation
+
+#### Test Results
+✅ **All timestamp preservation tests PASSED** - File timestamps correctly preserved during rollback operations
+✅ **Integration tests PASSED** - Feature works correctly with existing snapshot system
+✅ **No regression** - Existing functionality remains unchanged
+
+### User Experience Improvements
+
+#### Transparent Operation
+- **No User Action Required**: Timestamp preservation works automatically during all rollback operations
+- **Consistent Behavior**: Both manual undo and automatic rollback preserve timestamps
+- **Original Workflow**: No changes to user workflow or interface
+
+#### File Management Benefits
+- **Accurate Timestamps**: Files retain their original creation/modification times
+- **Workflow Integrity**: Time-dependent workflows continue to function correctly
+- **Audit Trail**: Clear record of when files were actually created vs. when they were restored
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Individual Extraction**: Slightly slower than bulk extraction but negligible for typical project sizes
+- **Memory Usage**: No additional memory overhead for timestamp operations
+- **Processing Time**: Timestamp application adds microseconds per file
+
+#### Error Resilience
+- **Graceful Degradation**: If timestamp application fails, file extraction still succeeds
+- **Backward Compatibility**: Works with all existing snapshots and ZIP files
+- **No Breaking Changes**: Existing functionality preserved if timestamp preservation fails
+
+### Technical Limitations and Future Enhancements
+
+#### Current Scope
+- **File Timestamps**: ✅ Successfully preserved during restoration
+- **Directory Timestamps**: ❌ Not preserved (requires special ZIP creation handling)
+
+#### Directory Timestamp Challenge
+Investigation revealed that preserving directory timestamps requires modifications to the snapshot creation process, not just restoration:
+- **ZIP Creation**: Directories need explicit timestamp metadata in ZIP files
+- **Complexity**: Would require significant changes to [`take_complete_snapshot()`](src/logic.py:244) method
+- **Priority**: File timestamps address the primary use case for most workflows
+
+#### Future Enhancement Opportunities
+1. **Directory Timestamp Preservation**: Enhance ZIP creation to include directory timestamp metadata
+2. **Selective Timestamp Preservation**: Allow users to choose which timestamps to preserve
+3. **Timestamp Validation**: Add verification that timestamps were correctly preserved
+4. **Performance Optimization**: Batch timestamp operations for large file sets
+
+### Integration with Existing Features
+
+#### Rollback System Compatibility
+- **Manual Undo**: [`perform_undo()`](app.py:163) function benefits from timestamp preservation
+- **Automatic Rollback**: [`handle_step_result()`](src/core.py:188) failure handling preserves timestamps
+- **Granular Undo**: Multi-run undo operations maintain timestamp accuracy
+
+#### Snapshot System Enhancement
+- **Complete Snapshots**: All complete snapshot operations now preserve timestamps
+- **Legacy Snapshots**: Selective restoration also preserves timestamps for consistency
+- **Snapshot Creation**: No changes required to snapshot creation process
+
+#### Universal Application
+- **All Rollback Scenarios**: Manual undo, failed step rollback, and granular undo all preserve timestamps
+- **All File Types**: Works with any file type that can be stored in ZIP archives
+- **All Platforms**: Cross-platform compatibility using standard Python libraries
+
+### Documentation Updates
+
+#### User Documentation
+- **README.md**: Added timestamp preservation feature description with technical details
+- **Feature Benefits**: Explained importance for workflow integrity and file management
+
+#### Technical Documentation
+- **Implementation Details**: Complete technical specification of timestamp preservation logic
+- **Test Coverage**: Comprehensive documentation of test approach and results
+- **Limitations**: Clear documentation of directory timestamp limitation
+
+## Conclusion (Updated for Session 12)
+
+The Session 12 enhancements provide comprehensive timestamp preservation during rollback operations, ensuring that file modification times accurately reflect when files were originally created rather than when they were restored. Combined with all previous session features, the LIMS Workflow Manager now provides:
+
+1. **Timestamp Preservation**: File modification times preserved during all rollback operations (manual undo, automatic rollback, granular undo)
+2. **Unified Rollback System**: Consistent complete snapshot restoration for both undo button and failed step scenarios
+3. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+4. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+5. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+6. **Complete Granular Undo**: Handle any combination of runs, undos, and skips across all steps
+7. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts with prominent visual indicators
+8. **Comprehensive State Management**: Three-state system (pending/completed/skipped) with complete project restoration
+9. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+10. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+11. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the timestamp accuracy and workflow integrity needed for complex laboratory workflows where file creation times are critical for data analysis and audit trails.

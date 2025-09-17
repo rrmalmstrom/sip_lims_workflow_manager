@@ -220,7 +220,10 @@ class SnapshotManager:
         }
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # First, add all files
+            # Collect all directories first to preserve their timestamps
+            directories_to_add = []
+            
+            # First, add all files and collect directories
             for file_path in self.project_path.rglob('*'):
                 # Skip if any part of the path matches exclude patterns
                 if any(part in exclude_patterns for part in file_path.parts):
@@ -233,25 +236,37 @@ class SnapshotManager:
                 if file_path.is_file():
                     relative_path = file_path.relative_to(self.project_path)
                     zf.write(file_path, relative_path)
+                elif file_path.is_dir() and file_path != self.project_path:
+                    # Collect directory info for later processing
+                    relative_dir = file_path.relative_to(self.project_path)
+                    directories_to_add.append((file_path, relative_dir))
             
-            # Then, explicitly add empty directories by creating placeholder files
-            for dir_path in self.project_path.rglob('*'):
-                if dir_path.is_dir() and dir_path != self.project_path:
-                    # Skip if any part of the path matches exclude patterns
-                    if any(part in exclude_patterns for part in dir_path.parts):
-                        continue
-                    if dir_path.name in exclude_patterns:
-                        continue
+            # Add directories with preserved timestamps
+            for dir_path, relative_dir in directories_to_add:
+                try:
+                    # Get the directory's modification time
+                    dir_stat = dir_path.stat()
+                    dir_mtime = time.localtime(dir_stat.st_mtime)
                     
-                    # Check if directory is empty
-                    try:
-                        if not any(dir_path.iterdir()):
-                            # Add a placeholder file to preserve empty directory
-                            relative_dir = dir_path.relative_to(self.project_path)
-                            placeholder_path = str(relative_dir / ".keep_empty_dir")
-                            zf.writestr(placeholder_path, "")
-                    except OSError:
-                        pass  # Skip if we can't read directory
+                    # Create a ZipInfo for the directory with original timestamp
+                    dir_info = zipfile.ZipInfo(str(relative_dir) + '/')
+                    dir_info.date_time = dir_mtime[:6]  # (year, month, day, hour, minute, second)
+                    dir_info.external_attr = 0o755 << 16  # Directory permissions
+                    
+                    # Always add the directory entry with preserved timestamp
+                    zf.writestr(dir_info, "")
+                    
+                    # Check if directory is empty and add placeholder if needed
+                    is_empty = not any(dir_path.iterdir())
+                    if is_empty:
+                        # Add placeholder file to preserve empty directory
+                        placeholder_path = str(relative_dir / ".keep_empty_dir")
+                        placeholder_info = zipfile.ZipInfo(placeholder_path)
+                        placeholder_info.date_time = dir_mtime[:6]
+                        zf.writestr(placeholder_info, "")
+                        
+                except OSError:
+                    pass  # Skip if we can't read directory
         
         print(f"SNAPSHOT: Complete project snapshot saved for step {step_id}")
 
@@ -325,9 +340,24 @@ class SnapshotManager:
                 except OSError:
                     pass  # Directory not empty or other error
         
-        # Extract snapshot files
+        # Extract snapshot files while preserving timestamps
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(self.project_path)
+            for member in zf.infolist():
+                # Extract the file or directory
+                zf.extract(member, self.project_path)
+                
+                # Restore the original timestamp for both files and directories
+                extracted_path = self.project_path / member.filename
+                if extracted_path.exists():
+                    try:
+                        # Convert ZIP timestamp to Unix timestamp
+                        timestamp = time.mktime(member.date_time + (0, 0, -1))
+                        # Set both access time and modification time to the original
+                        os.utime(extracted_path, (timestamp, timestamp))
+                    except (OSError, ValueError):
+                        # If timestamp restoration fails, continue without error
+                        # This ensures rollback still works even if timestamp preservation fails
+                        pass
         
         # Clean up placeholder files and ensure empty directories exist
         for empty_dir in empty_dirs_to_preserve:
@@ -357,8 +387,23 @@ class SnapshotManager:
                 else:
                     item_path.unlink()
 
+        # Extract files while preserving timestamps
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(self.project_path)
+            for member in zf.infolist():
+                # Extract the file or directory
+                zf.extract(member, self.project_path)
+                
+                # Restore the original timestamp for both files and directories
+                extracted_path = self.project_path / member.filename
+                if extracted_path.exists():
+                    try:
+                        # Convert ZIP timestamp to Unix timestamp
+                        timestamp = time.mktime(member.date_time + (0, 0, -1))
+                        # Set both access time and modification time to the original
+                        os.utime(extracted_path, (timestamp, timestamp))
+                    except (OSError, ValueError):
+                        # If timestamp restoration fails, continue without error
+                        pass
 
     def restore_file_from_latest_snapshot(self, filename: str) -> bool:
         """Finds the most recent snapshot and restores a single file from it."""

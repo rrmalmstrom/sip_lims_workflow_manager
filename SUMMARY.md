@@ -15,6 +15,8 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 9 (Enhanced Undo with Previous Step Restoration):** Complete. Fixed critical gap in granular undo system to handle previous step restoration when no current step "after" snapshots exist.
 - **Phase 10 (Workflow Template Protection System):** Complete. Implemented comprehensive protection for workflow.yml templates with Git-based version control, YAML validation, and multiple recovery mechanisms.
 - **Phase 11 (Skip to Step Functionality):** Complete. Implemented comprehensive "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
+- **Phase 12 (Rollback System Unification):** Complete. Unified rollback behavior between manual undo and automatic failed step rollback for consistent project restoration.
+- **Phase 13 (Timestamp Preservation):** Complete. Implemented timestamp preservation during rollback operations to maintain accurate file modification times.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -47,6 +49,8 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 19. **Skip to Step Functionality**: Implemented comprehensive workflow entry point selection allowing users to start from any step when previous work was completed outside the tool.
 20. **7-Scenario File Handling**: Robust detection and handling of all possible project file combinations with guided setup interface.
 21. **Enhanced Project Setup**: Radio button interface for choosing between "New Project" and "Existing Work" with dynamic step selection dropdown.
+22. **Rollback System Unification**: Unified rollback behavior between manual undo and automatic failed step rollback using complete snapshot restoration for consistency.
+23. **Timestamp Preservation**: Implemented file modification time preservation during all rollback operations to maintain accurate file creation timestamps.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -151,3 +155,33 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Test Coverage**: Comprehensive TDD approach with 10 test cases covering all skip functionality scenarios
 - **Visual Treatment**: Clear indicators for skipped steps with distinct styling and informational messages
 - **Universal Compatibility**: Works with existing granular undo system and maintains full backward compatibility
+
+## 13. Latest Features (Session 11)
+### Rollback System Unification
+- **Problem Solved**: Inconsistent rollback behavior between manual undo (complete snapshots) and failed step rollback (selective restoration)
+- **Root Cause Addressed**: Failed steps weren't properly cleaning up all script artifacts, causing rollback loops and incomplete restoration
+- **Technical Implementation**: Unified both rollback scenarios to use complete snapshot restoration for consistency
+- **Key Features**:
+  - **Consistent Behavior**: Both manual undo and automatic rollback now use identical restoration logic
+  - **Complete Cleanup**: All script artifacts properly removed during failed step rollback
+  - **Fallback Compatibility**: Multiple fallback options for missing snapshots with legacy support
+  - **Enhanced Logging**: Detailed debug messages for troubleshooting rollback operations
+- **Test Coverage**: Comprehensive TDD approach with 6 test cases validating unified rollback system
+- **Performance**: Minimal overhead with efficient complete snapshot restoration
+- **Universal Compatibility**: Works with all existing snapshots and maintains full backward compatibility
+
+## 14. Latest Features (Session 12)
+### Timestamp Preservation During Rollback Operations
+- **Problem Solved**: File modification dates were updated to current time during rollback instead of preserving original timestamps
+- **Root Cause Addressed**: Standard ZIP extraction automatically updates file timestamps regardless of original metadata
+- **Technical Implementation**: Enhanced snapshot restoration with individual file extraction and timestamp preservation
+- **Key Features**:
+  - **Automatic Preservation**: File modification times preserved during all rollback operations (manual undo, automatic rollback, granular undo)
+  - **ZIP Metadata Utilization**: Leverages original timestamps stored in ZIP file metadata for accurate restoration
+  - **Universal Application**: Works with all file types and rollback scenarios without user intervention
+  - **Workflow Integrity**: Time-dependent workflows continue to function correctly with accurate file timestamps
+- **Technical Details**: Uses `os.utime()` with ZIP `member.date_time` metadata for precise timestamp restoration
+- **Test Coverage**: Comprehensive TDD approach with multiple test files validating timestamp preservation functionality
+- **Performance**: Minimal overhead with individual file extraction and microsecond timestamp operations
+- **Limitations**: File timestamps preserved (primary use case), directory timestamps require future enhancement
+- **Universal Compatibility**: Works with all existing snapshots and maintains full backward compatibility

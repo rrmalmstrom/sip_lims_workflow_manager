@@ -74,6 +74,7 @@ The system is a flexible, interactive checklist, managed by the `StateManager`.
 ### 3.3. Snapshot & Undo/Redo Logic
 - **Snapshot Trigger**: A snapshot is created **only** when a step is successfully completed for the **first time**. This is handled by the `SnapshotManager`.
 - **Undo Action**: Reverts the entire project to the state before the last completed step was run.
+- **Timestamp Preservation**: File modification timestamps are preserved during rollback operations to maintain chronological data integrity. This applies to both manual undo operations and automatic rollback when scripts fail.
 
 ### 3.4. Error Handling & Success Marker System
 A script error will never leave the project in a corrupted state. The system uses a dual-verification approach for reliable failure detection:
