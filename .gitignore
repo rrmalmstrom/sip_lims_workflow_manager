@@ -93,6 +93,10 @@ project_database.db
 # Archives
 archived_files/
 
+# Test and dummy data directories
+dummy_*/
+test_project*/
+
 # Build artifacts
 build/
 dist/

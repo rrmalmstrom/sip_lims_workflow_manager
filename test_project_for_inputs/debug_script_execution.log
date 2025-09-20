@@ -1,9 +1,0 @@
-[2025-09-15 15:55:52] 
-=== SCRIPT EXECUTION COMPLETE (PTY) ===
-Exit Code: <MagicMock name='Popen().wait()' id='4851841968'>
-Success: False
-Process Poll Result: <MagicMock name='Popen().poll()' id='4851818448'>
-Return Code Type: <class 'unittest.mock.MagicMock'>
-=== END DEBUG INFO ===
-[2025-09-15 15:55:52] === PUTTING RESULT IN QUEUE: success=False, return_code=<MagicMock name='Popen().wait()' id='4851841968'> ===
-[2025-09-15 15:55:52] === SCRIPT RUNNER THREAD ENDING ===
