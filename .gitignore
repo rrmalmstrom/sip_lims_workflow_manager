@@ -97,6 +97,10 @@ archived_files/
 dummy_*/
 test_project*/
 
+# LIMS Workflow Manager - Historic snapshots folder
+# Individual projects create their own .snapshots/ folders as needed
+.snapshots/
+
 # Build artifacts
 build/
 dist/
