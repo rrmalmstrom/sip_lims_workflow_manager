@@ -545,11 +545,33 @@ def getIsotopeProjectDfs():
     project_df['Made_Library'] = 0
 
     # move aliquot and sample scan mini files from main project directory to isotope subdirectory
-    Path(BASE_OUTPUT_DIR /
-         f"{file_type_dict['sample_scan']}").rename(ISO_INPUT_DIR / f"{file_type_dict['sample_scan']}")
-
-    Path(BASE_OUTPUT_DIR /
-         f"{file_type_dict['aliquot']}").rename(ISO_INPUT_DIR / f"{file_type_dict['aliquot']}")
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    sample_scan_filename = Path(file_type_dict['sample_scan']).name
+    aliquot_filename = Path(file_type_dict['aliquot']).name
+    
+    sample_scan_source = Path(sample_scan_filename)
+    aliquot_source = Path(aliquot_filename)
+    
+    sample_scan_dest = ISO_INPUT_DIR / sample_scan_filename
+    aliquot_dest = ISO_INPUT_DIR / aliquot_filename
+    
+    try:
+        if sample_scan_source.exists():
+            sample_scan_source.rename(sample_scan_dest)
+            print(f"✓ Moved {sample_scan_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {sample_scan_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {sample_scan_filename}: {e}")
+    
+    try:
+        if aliquot_source.exists():
+            aliquot_source.rename(aliquot_dest)
+            print(f"✓ Moved {aliquot_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {aliquot_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {aliquot_filename}: {e}")
 
     return isotope_df, project_df
 
@@ -669,8 +691,20 @@ def updateProjectDatabase(p_df, parent_all_inclusive):
     # drop redundant columsn used during merge
     my_updated_project_df.drop(columns={'Sample_ID'}, inplace=True)
 
-    Path(BASE_OUTPUT_DIR /
-         f"{parent_all_inclusive}").rename(ISO_INPUT_DIR / f"{parent_all_inclusive}")
+    # move sip_metadata file to input_files directory
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    sip_metadata_filename = Path(parent_all_inclusive).name
+    sip_metadata_source = Path(sip_metadata_filename)
+    sip_metadata_dest = ISO_INPUT_DIR / sip_metadata_filename
+    
+    try:
+        if sip_metadata_source.exists():
+            sip_metadata_source.rename(sip_metadata_dest)
+            print(f"✓ Moved {sip_metadata_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {sip_metadata_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {sip_metadata_filename}: {e}")
 
     return my_updated_project_df
 ############################
@@ -758,8 +792,19 @@ def updateMetabolomics(merged_df, my_p_df, control_df):
             f'updated_Metabolomics_QC_{proj_id}_{pi_name}.xls')
 
     # move original metabolmics file to "input" subfolder
-    Path(BASE_OUTPUT_DIR /
-         f"{metab_file}").rename(ISO_INPUT_DIR / f"{metab_file}")
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    metabolomics_filename = Path(metab_file).name
+    metabolomics_source = Path(metabolomics_filename)
+    metabolomics_dest = ISO_INPUT_DIR / metabolomics_filename
+    
+    try:
+        if metabolomics_source.exists():
+            metabolomics_source.rename(metabolomics_dest)
+            print(f"✓ Moved {metabolomics_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {metabolomics_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {metabolomics_filename}: {e}")
 #########################
 #########################
 
@@ -895,6 +940,7 @@ parent_all_inclusive = file_type_dict['sip_metadata']
 
 
 # create all sub folders for project folder
+#BASE_DIR, ISO_DIR, ISO_IN_DIR
 BASE_OUTPUT_DIR, ISO_OUTPUT_DIR, ISO_INPUT_DIR = createDirectories()
 
 # get a list of wells and a dict where key is well location in 96 format and value is location in 384 format
