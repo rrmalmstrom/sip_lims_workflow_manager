@@ -1,6 +1,6 @@
-# LIMS Workflow Manager - Development Progress
+# SIP LIMS Workflow Manager - Development Progress
 
-**Last Updated:** 2025-09-12
+**Last Updated:** 2025-09-22
 
 This document tracks the development progress of the LIMS Workflow Manager application.
 
@@ -232,6 +232,8 @@ We have successfully completed a major refactoring of the application's core log
 -   [x] **Implement skip to step functionality**: Complete "Skip to Step" feature allowing users to start workflows from any midway point with proper state management and safety snapshots.
 -   [x] **Unify rollback system**: Resolved inconsistency between undo button and failed step rollback mechanisms for consistent behavior across all failure scenarios.
 -   [x] **Implement conditional workflow system**: Complete conditional workflow functionality with automatic triggering, Yes/No decision prompts, enhanced undo behavior for decision points, and comprehensive state management.
+-   [x] **Add script termination functionality**: Implemented terminate button with automatic rollback to pre-execution state for stuck or unwanted script executions.
+-   [x] **Update branding to SIP LIMS**: Changed application title and branding to reflect SIP (Stable Isotope Probing) laboratory focus.
 -   [ ] **Enhance the GUI to provide more detailed feedback and logging**: Improve the Streamlit front-end to give users better real-time information.
 -   [ ] **Write tests for the script update mechanism**: Create tests to validate the current script update process.
 -   [ ] **Implement a more robust script update mechanism**: Improve the reliability and user experience of updating workflow scripts.

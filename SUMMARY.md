@@ -1,7 +1,7 @@
-# Project Summary: LIMS Workflow Manager (v3)
+# Project Summary: SIP LIMS Workflow Manager (v3)
 
 ## 1. Project Goal
-To create a simple, lightweight, cross-platform GUI application to manage and execute a series of Python-based laboratory workflow scripts, with robust error handling and version control for the scripts.
+To create a simple, lightweight, cross-platform GUI application to manage and execute a series of Python-based SIP (Stable Isotope Probing) laboratory workflow scripts, with robust error handling and version control for the scripts.
 
 ## 2. Current Status
 - **Phase 1 (Core Engine):** Complete. All logic for parsing, state management, snapshots, and script execution is implemented and tested. Success marker system implemented for reliable rollback functionality.
@@ -53,6 +53,8 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 22. **Rollback System Unification**: Unified rollback behavior between manual undo and automatic failed step rollback using complete snapshot restoration for consistency.
 23. **Timestamp Preservation**: Implemented file modification time preservation during all rollback operations to maintain accurate file creation timestamps.
 24. **Conditional Workflow System**: Implemented comprehensive conditional workflow functionality with automatic triggering, Yes/No decision prompts, enhanced undo behavior for decision points, and complete integration with existing workflow management.
+25. **Script Termination Functionality**: Added terminate button in terminal interface allowing users to stop running scripts and automatically rollback to pre-execution state.
+26. **SIP Branding Update**: Updated application title and branding from "LIMS Workflow Manager" to "SIP LIMS Workflow Manager" to reflect Stable Isotope Probing laboratory focus.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.

@@ -1,4 +1,4 @@
-# LIMS Workflow Manager - Detailed Design Document
+# SIP LIMS Workflow Manager - Detailed Design Document
 
 **Version:** 1.2
 **Date:** 2025-09-11
@@ -12,7 +12,7 @@
 - **Flexibility**: The design must accommodate the non-linear nature of lab work.
 
 ### 1.2. Core Vision
-To create a simple, robust, and user-friendly desktop application that allows lab technicians to execute, monitor, and manage multi-step Python-based workflows. The tool will be packaged as a standalone executable for both Windows and macOS, operate on project folders located on a shared drive, and provide features for undoing mistakes and handling script errors gracefully.
+To create a simple, robust, and user-friendly desktop application that allows SIP (Stable Isotope Probing) lab technicians to execute, monitor, and manage multi-step Python-based workflows. The tool will be packaged as a standalone executable for both Windows and macOS, operate on project folders located on a shared drive, and provide features for undoing mistakes, handling script errors gracefully, and terminating scripts when needed.
 
 ## 2. System Architecture
 
@@ -207,9 +207,11 @@ The system supports conditional workflow steps that allow users to make Yes/No d
   - **Run Buttons**: Each step card has conditional "Run" or "Re-run" buttons based on step status and `allow_rerun` configuration.
   - **Selective Display**: Re-run buttons only appear for completed steps with `allow_rerun: true` property.
   - **Interactive Terminal**: An `st.expander` will serve as a live terminal. It will display real-time script output and provide a text box for users to send input to the running script. This is managed by a `ScriptRunner` class that uses a pseudo-terminal (`pty`) to create a robust, cross-platform, two-way communication channel with the subprocess.
+  - **Script Termination**: A "🛑 Terminate" button appears next to the input controls when a script is running, allowing users to stop execution and automatically rollback to the pre-execution state.
 
 ## 5. Development Plan
 1.  **Core Engine**: Build and test the core logic classes (`Workflow`, `Project`, `StateManager`, `SnapshotManager`, `ScriptRunner`).
 2.  **GUI Implementation**: Develop the Streamlit front-end.
 3.  **Conditional Workflow System**: Implement conditional workflow functionality with automatic triggering and enhanced undo behavior.
-4.  **Packaging**: Create the `release.py` script and test the PyInstaller builds.
+4.  **Script Termination System**: Implement terminate button with automatic rollback functionality for user control over script execution.
+5.  **Packaging**: Create the `release.py` script and test the PyInstaller builds.

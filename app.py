@@ -12,7 +12,7 @@ from src.core import Project
 from src.logic import RunResult
 
 # --- Page Configuration ---
-st.set_page_config(page_title="LIMS Workflow Manager", page_icon="🧪", layout="wide")
+st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
 
 import streamlit.components.v1 as components
 
@@ -165,7 +165,17 @@ def send_and_clear_input(project, user_input):
         project.script_runner.send_input(user_input)
         st.session_state.terminal_input_box = ""
         st.session_state.scroll_to_bottom = True
-        st.session_state.scroll_to_bottom = True
+
+def handle_terminal_input_change():
+    """Handle when terminal input changes - triggered by Enter key or other changes."""
+    if 'terminal_input_box' in st.session_state and 'project' in st.session_state:
+        user_input = st.session_state.terminal_input_box
+        # Send input regardless of whether it's empty (for default answers)
+        project = st.session_state.project
+        if project and project.script_runner.is_running():
+            project.script_runner.send_input(user_input)
+            st.session_state.terminal_input_box = ""
+            st.session_state.scroll_to_bottom = True
 
 def select_file_via_subprocess():
     python_executable = sys.executable
@@ -365,7 +375,7 @@ def start_script_thread(project, step_id, user_inputs):
 
 # --- Main Application ---
 def main():
-    st.title("🧪 LIMS Workflow Manager")
+    st.title("🧪 SIP LIMS Workflow Manager")
 
     # --- State Initialization ---
     if 'project' not in st.session_state:
@@ -839,16 +849,37 @@ def main():
             )
             
             # Input section for terminal
-            col1, col2 = st.columns([4, 1])
+            col1, col2, col3 = st.columns([3, 1, 1])
             with col1:
-                user_input = st.text_input("Input:", key="terminal_input_box")
+                user_input = st.text_input(
+                    "Input:",
+                    key="terminal_input_box",
+                    help="Type your input and press Enter or click 'Send Input'",
+                    placeholder="Type your input here...",
+                    on_change=handle_terminal_input_change
+                )
             with col2:
-                st.button(
+                send_button = st.button(
                     "Send Input",
                     key="send_terminal_input",
                     on_click=send_and_clear_input,
                     args=(project, user_input)
                 )
+            with col3:
+                if st.button(
+                    "🛑 Terminate",
+                    key="terminate_script",
+                    type="secondary",
+                    help="Stop the running script and rollback to before it started"
+                ):
+                    if project.terminate_script(st.session_state.running_step_id):
+                        st.session_state.running_step_id = None
+                        st.session_state.terminal_output = ""
+                        st.success("✅ Script terminated and project rolled back!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to terminate script")
+            
         
         # Show terminal for completed scripts
         elif st.session_state.completed_script_output and st.session_state.completed_script_step:

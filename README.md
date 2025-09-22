@@ -1,6 +1,6 @@
-# LIMS Workflow Manager
+# SIP LIMS Workflow Manager
 
-A simple, lightweight workflow manager for running a series of Python scripts in a laboratory environment.
+A simple, lightweight workflow manager for running a series of Python scripts in a SIP (Stable Isotope Probing) laboratory environment.
 
 ## Features
 
@@ -14,6 +14,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   **Conditional workflow support** with Yes/No decision prompts for optional steps.
 -   **Intelligent project setup** with automatic file scenario detection.
 -   Interactive script support with real-time terminal output.
+-   **Script termination capability** with automatic rollback to pre-execution state.
 -   Cross-platform support for macOS and Windows.
 
 ## Prerequisites

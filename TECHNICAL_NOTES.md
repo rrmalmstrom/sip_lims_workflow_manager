@@ -1904,3 +1904,185 @@ The Session 13 enhancements provide comprehensive conditional workflow functiona
 12. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the conditional decision-making capability needed for complex laboratory workflows where user judgment and flexibility are essential for optimal results.
+
+## Feature 13: Script Termination Functionality (Session 14)
+
+### Problem Statement
+Users needed the ability to terminate running scripts that get stuck or when they decide not to complete a script execution. The existing system only allowed scripts to run to completion or fail naturally, with no way for users to manually stop execution and rollback to a clean state.
+
+### Solution Implementation
+
+#### Enhanced ScriptRunner with Termination Support
+**Added `terminate()` Method** (`src/logic.py`):
+```python
+def terminate(self):
+    """Alias for stop() method for consistency with terminate_script functionality."""
+    self.stop()
+```
+
+The existing `stop()` method already provided comprehensive script termination:
+- Forceful process group termination using `os.killpg()`
+- Graceful fallback with timeout handling
+- Complete PTY cleanup and resource management
+- Thread synchronization and cleanup
+
+#### Project-Level Termination with Rollback
+**New `terminate_script()` Method** (`src/core.py`):
+```python
+def terminate_script(self, step_id: str) -> bool:
+    """
+    Terminates a running script and rolls back to the snapshot taken before the step started.
+    
+    Args:
+        step_id: The ID of the step whose script should be terminated
+        
+    Returns:
+        bool: True if script was terminated and rollback successful, False if no script was running
+    """
+```
+
+**Key Features:**
+- **Script Termination**: Calls `script_runner.terminate()` to stop the running process
+- **Automatic Rollback**: Restores project to "before" snapshot taken when step started
+- **Success Marker Cleanup**: Removes any success markers that might have been created
+- **State Management**: Ensures step remains in "pending" state for potential re-run
+- **Graceful Error Handling**: Handles missing snapshots and provides fallback options
+
+#### GUI Integration
+**Enhanced Terminal Interface** (`app.py`):
+- **Terminate Button Placement**: Added "🛑 Terminate" button next to "Send Input" button in terminal section
+- **Three-Column Layout**: Reorganized terminal controls to accommodate new button
+- **User Feedback**: Provides success/error messages after termination
+- **State Cleanup**: Clears running state and terminal output after termination
+
+```python
+# Input section for terminal
+col1, col2, col3 = st.columns([3, 1, 1])
+with col3:
+    if st.button(
+        "🛑 Terminate",
+        key="terminate_script",
+        type="secondary",
+        help="Stop the running script and rollback to before it started"
+    ):
+        if project.terminate_script(st.session_state.running_step_id):
+            st.session_state.running_step_id = None
+            st.session_state.terminal_output = ""
+            st.success("✅ Script terminated and project rolled back!")
+            st.rerun()
+        else:
+            st.error("❌ Failed to terminate script")
+```
+
+### Technical Implementation Details
+
+#### Rollback Strategy
+**Granular Snapshot System Integration**:
+- Uses existing granular snapshot system for precise rollback
+- Restores to "before" snapshot: `{step_id}_run_{run_number}_complete.zip`
+- Fallback to legacy snapshots if granular snapshots unavailable
+- Maintains compatibility with all existing snapshot formats
+
+#### Process Termination
+**Robust Process Management**:
+- **Process Group Termination**: Uses `os.killpg()` to terminate entire process tree
+- **Graceful Fallback**: Attempts `terminate()` then `kill()` with timeout handling
+- **PTY Cleanup**: Properly closes pseudo-terminal file descriptors
+- **Thread Management**: Ensures background reader thread is properly terminated
+
+#### State Consistency
+**Comprehensive State Management**:
+- **Step State**: Keeps step as "pending" to allow re-run
+- **Success Markers**: Removes any success markers created during partial execution
+- **Session State**: Clears GUI running state and terminal output
+- **Snapshot Integrity**: Preserves all existing snapshots for undo functionality
+
+### Test-Driven Development Implementation
+
+#### Comprehensive Test Suite
+**Created `tests/test_terminate_script.py` with 10 test cases**:
+
+1. **Method Existence Tests**:
+   - `test_script_runner_has_terminate_method`
+   - `test_project_has_terminate_script_method`
+
+2. **Functionality Tests**:
+   - `test_script_runner_terminate_stops_running_script`
+   - `test_terminate_script_calls_rollback`
+   - `test_terminate_script_updates_state_to_pending`
+   - `test_terminate_script_removes_success_marker`
+
+3. **Edge Case Tests**:
+   - `test_terminate_script_when_not_running_does_nothing`
+   - `test_terminate_script_handles_missing_snapshot_gracefully`
+
+4. **Integration Tests**:
+   - `test_gui_has_terminate_button_when_script_running` (skipped in test environment)
+   - `test_terminate_script_integration`
+
+#### Test Results
+✅ **9 tests passed, 1 skipped** - Complete validation of termination functionality
+✅ **No regression** - All existing tests continue to pass
+
+### User Experience Enhancements
+
+#### Visual Integration
+- **Prominent Placement**: Terminate button appears in highly visible terminal section
+- **Clear Labeling**: "🛑 Terminate" with descriptive tooltip
+- **Consistent Styling**: Uses Streamlit's secondary button style for appropriate visual hierarchy
+- **Immediate Feedback**: Success/error messages provide clear confirmation of action
+
+#### Workflow Integration
+- **Non-Disruptive**: Only appears when script is actually running
+- **Reversible**: Terminated scripts can be re-run immediately
+- **Safe Operation**: Automatic rollback ensures no partial data corruption
+- **Undo Compatible**: Works seamlessly with existing undo functionality
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Additive Implementation**: No changes to existing execution paths
+- **Efficient Termination**: Leverages existing robust process management
+- **Fast Rollback**: Uses optimized complete snapshot restoration
+- **Memory Efficient**: No additional memory overhead during normal operation
+
+#### Error Resilience
+- **Graceful Degradation**: Handles missing snapshots without failure
+- **Process Safety**: Ensures complete process cleanup even on errors
+- **State Consistency**: Maintains workflow integrity even if rollback partially fails
+- **User Feedback**: Clear error messages guide users when issues occur
+
+### Integration with Existing Features
+
+#### Snapshot System Compatibility
+- **Granular Undo**: Works seamlessly with existing granular undo functionality
+- **Complete Snapshots**: Leverages existing complete snapshot restoration
+- **Timestamp Preservation**: Maintains file timestamp accuracy during rollback
+- **Legacy Support**: Maintains compatibility with all existing snapshot formats
+
+#### Workflow Management
+- **State Management**: Integrates with existing three-state system (pending/completed/skipped)
+- **Conditional Workflows**: Compatible with conditional decision points
+- **Re-run Capability**: Terminated steps can be re-run using existing re-run functionality
+- **Skip Functionality**: Works with skip-to-step and existing work scenarios
+
+## Conclusion (Updated for Session 14)
+
+The Session 14 enhancements provide essential script termination capability that transforms the SIP LIMS Workflow Manager from a run-to-completion system into a fully controllable workflow execution environment. Combined with all previous session features, the SIP LIMS Workflow Manager now provides:
+
+1. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state
+2. **SIP Laboratory Branding**: Updated application title and branding to reflect Stable Isotope Probing focus
+3. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+4. **Timestamp Preservation**: File modification times preserved during all rollback operations
+5. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+6. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+7. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+8. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+9. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+10. **Reliable Interactive Execution**: Enhanced terminal visibility for all interactive scripts
+11. **Comprehensive State Management**: Five-state system with complete project restoration capabilities
+12. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+13. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+14. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the control and safety features needed for complex SIP laboratory workflows where user intervention and error recovery are essential for successful experimental outcomes.
