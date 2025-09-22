@@ -73,9 +73,7 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
-last_script_result.txt
-debug_script_execution.log
-workflow_debug.log
+.workflow_logs/
 workflow_state.json
 project_database.csv
 project_database.db

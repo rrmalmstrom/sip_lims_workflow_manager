@@ -212,12 +212,10 @@ class SnapshotManager:
         exclude_patterns = {
             '.snapshots',
             '.workflow_status',
+            '.workflow_logs',
             'workflow.yml',
             '__pycache__',
-            '.DS_Store',
-            'debug_script_execution.log',
-            'last_script_result.txt',
-            'workflow_debug.log'
+            '.DS_Store'
         }
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -284,6 +282,7 @@ class SnapshotManager:
         preserve_patterns = {
             '.snapshots',
             '.workflow_status',
+            '.workflow_logs',
             'workflow.yml',
             '__pycache__'
         }
@@ -440,7 +439,10 @@ class ScriptRunner:
         Reads output from the pseudo-terminal until the process finishes,
         then puts the final result in the result queue.
         """
-        debug_log_path = self.project_path / "debug_script_execution.log"
+        # Create hidden log directory if it doesn't exist
+        log_dir = self.project_path / ".workflow_logs"
+        log_dir.mkdir(exist_ok=True)
+        debug_log_path = log_dir / "debug_script_execution.log"
         
         def log_debug(message):
             """Log to both output queue and file for backup"""
@@ -513,7 +515,9 @@ Return Code Type: {type(return_code)}
                 self.result_queue.put(result)
                 
                 # ALSO write a summary file that we can easily check
-                summary_path = self.project_path / "last_script_result.txt"
+                log_dir = self.project_path / ".workflow_logs"
+                log_dir.mkdir(exist_ok=True)
+                summary_path = log_dir / "last_script_result.txt"
                 try:
                     with open(summary_path, "w") as f:
                         f.write(f"Last Script Execution Summary\n")
@@ -640,3 +644,7 @@ Return Code Type: {type(return_code)}
 
         self.process = None
         self.reader_thread = None
+
+    def terminate(self):
+        """Alias for stop() method for consistency with terminate_script functionality."""
+        self.stop()

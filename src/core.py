@@ -280,7 +280,10 @@ class Project:
             debug_msg = f"Script {script_name} exited with code 0 but no success marker found - treating as failure"
             print(debug_msg)
             try:
-                debug_file = self.path / "workflow_debug.log"
+                # Create hidden log directory if it doesn't exist
+                log_dir = self.path / ".workflow_logs"
+                log_dir.mkdir(exist_ok=True)
+                debug_file = log_dir / "workflow_debug.log"
                 with open(debug_file, "a") as f:
                     import datetime
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -302,7 +305,10 @@ class Project:
                 rollback_msg = f"ROLLBACK: Restoring snapshot for failed step '{step_id}'"
                 print(rollback_msg)
                 try:
-                    debug_file = self.path / "workflow_debug.log"
+                    # Create hidden log directory if it doesn't exist
+                    log_dir = self.path / ".workflow_logs"
+                    log_dir.mkdir(exist_ok=True)
+                    debug_file = log_dir / "workflow_debug.log"
                     with open(debug_file, "a") as f:
                         import datetime
                         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -347,6 +353,63 @@ class Project:
                 except:
                     pass
             # Keep the state as "pending" for failed steps
+
+    def terminate_script(self, step_id: str) -> bool:
+        """
+        Terminates a running script and rolls back to the snapshot taken before the step started.
+        
+        Args:
+            step_id: The ID of the step whose script should be terminated
+            
+        Returns:
+            bool: True if script was terminated and rollback successful, False if no script was running
+        """
+        # Check if script is actually running
+        if not self.script_runner.is_running():
+            return False
+        
+        step = self.workflow.get_step_by_id(step_id)
+        if not step:
+            raise ValueError(f"Step '{step_id}' not found in workflow.")
+        
+        # Terminate the running script
+        self.script_runner.terminate()
+        
+        # Get the current run number to find the correct "before" snapshot
+        run_number = self.snapshot_manager.get_current_run_number(step_id)
+        if run_number == 0:
+            run_number = 1  # If no runs recorded yet, assume this is run 1
+        
+        # Restore to the "before" snapshot (state before script started)
+        before_snapshot = f"{step_id}_run_{run_number}"
+        try:
+            if self.snapshot_manager.snapshot_exists(before_snapshot):
+                self.snapshot_manager.restore_complete_snapshot(before_snapshot)
+                print(f"TERMINATE: Restored project to state before step {step_id} (run {run_number})")
+            else:
+                # Fallback to legacy snapshot if granular doesn't exist
+                if self.snapshot_manager.snapshot_exists(step_id):
+                    self.snapshot_manager.restore_complete_snapshot(step_id)
+                    print(f"TERMINATE: Restored project using legacy snapshot for step {step_id}")
+                else:
+                    print(f"TERMINATE: No snapshot found for step {step_id} - script terminated but no rollback performed")
+        except Exception as e:
+            print(f"TERMINATE: Error during rollback: {e}")
+        
+        # Remove any success marker that might have been created
+        script_name = step.get("script", "")
+        if script_name:
+            script_filename = Path(script_name).stem
+            status_dir = self.path / ".workflow_status"
+            success_file = status_dir / f"{script_filename}.success"
+            if success_file.exists():
+                success_file.unlink()
+                print(f"TERMINATE: Removed success marker for {script_filename}")
+        
+        # Ensure step state remains "pending" (not completed)
+        self.update_state(step_id, "pending")
+        
+        return True
 
     def _check_success_marker(self, script_name: str) -> bool:
         """
