@@ -353,7 +353,7 @@ def makeTubeBarcodeFiles(rework_df, new_pool_dict):
     x = '%BTW% /AF="\\\\bartender\shared\\templates\JGI_Label_BCode5_Rex.btw" /D="%Trigger File Name%" /PRN="bcode5" /R=3 /P /DD\r\n%END%\r\n\r\n\r\n'
 
 
-    bc_file = open(new_attempt_dir + "/pooling_TUBES_barcode_labels.txt", "w")
+    bc_file = open(new_attempt_dir / "pooling_TUBES_barcode_labels.txt", "w")
 
     bc_file.writelines(x)
 
@@ -435,7 +435,7 @@ def makePippinBarcodeFile(rework_df):
     x = '%BTW% /AF="\\\BARTENDER\shared\\templates\ECHO_BCode8.btw" /D="%Trigger File Name%" /PRN="bcode8" /R=3 /P /DD\r\n\r\n%END%\r\n\r\n\r\n'
 
 
-    bc_file = open(new_attempt_dir + "/PIPPIN_CASSETTE_FA_PLATE_barcode_labels.txt", "w")
+    bc_file = open(new_attempt_dir / "PIPPIN_CASSETTE_FA_PLATE_barcode_labels.txt", "w")
 
     bc_file.writelines(x)
 
@@ -540,8 +540,7 @@ def makeFAinputFiles(rework_df):
 
         print_df.loc[print_df.index[11], 'name'] = 'ladder'
 
-        print_df.to_csv(new_attempt_dir +
-            f'/FA_upload_{fabc}_row{row_list[i-1]}.csv', index=True, header=False)
+        print_df.to_csv(new_attempt_dir / f'FA_upload_{fabc}_row{row_list[i-1]}.csv', index=True, header=False)
 
         start = start + 12
 
@@ -574,8 +573,7 @@ def makePippinTransferFiles(rework_df):
 
 
     # create pippin transfer file
-    rework_df.to_csv(new_attempt_dir+
-        'PIPPIN_load_unload_transfer_file.csv', index=False, header=True)
+    rework_df.to_csv(new_attempt_dir / 'PIPPIN_load_unload_transfer_file.csv', index=False, header=True)
 
 
     return
@@ -650,7 +648,7 @@ def reSizeModule(pool_df, rework_df):
     for p in new_pool_list:
         pnum = p[0]
         
-        transfer_file = first_attempt_dir + f"/Pool_{pnum}_transfer_file.csv"
+        transfer_file = first_attempt_dir / f"Pool_{pnum}_transfer_file.csv"
         
         
         if (file_exists(transfer_file)):
@@ -664,18 +662,17 @@ def reSizeModule(pool_df, rework_df):
     for p in new_pool_list:
         pnum = p[0]
         
-        transfer_df = pd.read_csv(new_attempt_dir + f'/Pool_{pnum}_transfer_file.csv',header=0)
+        transfer_df = pd.read_csv(new_attempt_dir / f'Pool_{pnum}_transfer_file.csv',header=0)
         
         transfer_df['Destination_Tube_Name'] = transfer_df['Destination_Tube_Name'].map(new_pool_dict) 
     
         transfer_df['Destination_Tube_Barcode'] = transfer_df['Destination_Tube_Barcode'].map(new_pool_dict)
     
         # delete copy of original transfer file
-        os.remove(new_attempt_dir + f'/Pool_{pnum}_transfer_file.csv')
+        os.remove(new_attempt_dir / f'Pool_{pnum}_transfer_file.csv')
         
         # make new transfer file with updated tube ids
-        transfer_df.to_csv(new_attempt_dir +
-            f'/Pool_{pnum}_transfer_file.csv', index=False, header=True)
+        transfer_df.to_csv(new_attempt_dir / f'Pool_{pnum}_transfer_file.csv', index=False, header=True)
     
     # make file for printing tube barcode labels with updated pool and  tube id's
     makeTubeBarcodeFiles(rework_df,new_pool_dict)
@@ -759,7 +756,7 @@ rework_df = rework_df.sort_values(by=['Pool_Name'], ascending=True)
 rework_df.reset_index(drop=True, inplace=True)
 
 if rework_df.shape[0] == 0:
-    all_done = (input("No pools need rework. Is that correct (y/n)?   ")  or 'n')
+    all_done = (input("\nNo pools need rework. Is that correct (y/n)?   ")  or 'n')
 
     if all_done.lower() == 'y':
         
@@ -773,6 +770,10 @@ if rework_df.shape[0] == 0:
         qpcr_df.to_csv(FINISH_DIR / 'qPCR_pooling_form.csv', index=False, header=True)
         
         makeFinalTubeLabels(final_df)
+
+
+        print("\n✅ SUCCESS: All pools meet quality criteria. Final files generated.")
+        print("🎉 WORKFLOW COMPLETE: No further iterations needed.")
 
     else:    
         print('\nOk, please fix the pool_summary.csv file.  Aborting.\n\n')
@@ -789,6 +790,8 @@ else:
     
     # new_attempt_dir = rework_dir+f"/Attempt_{next_FA_num}/"
 
+
+
     first_attempt_dir = ATTEMPT_DIR
 
     new_attempt_dir = REWORK_DIR / f"Attempt_{next_FA_num}/"    
@@ -796,6 +799,10 @@ else:
     os.makedirs(new_attempt_dir)
     
     reSizeModule(pool_df, rework_df)
+
+    print("\n⚠️ REWORK NEEDED: Some pools require additional size selection.")
+    print("📋 NEXT STEPS: Perform size selection, then re-run Step 18 to analyze updated pools.")
+    print("🔄 ITERATION: You can repeat Steps 18-19 as many times as needed.")
 
 # Create success marker file to indicate script completed successfully
 import os
