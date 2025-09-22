@@ -2,9 +2,6 @@
 
 # USAGE:   python finish.pooling.libs.py <pool.creation.file.xls>
 
-# sys.argv[1] = the .xls pool creation sheet downloaded from clarity that needs to be filled out
-
-
 import pandas as pd
 import numpy as np
 import sys
@@ -50,6 +47,37 @@ def readSQLdb(my_prjct_dir):
 
 ##########################
 ##########################
+def findPoolFile(crnt_dir):
+    
+    clarity_pool_prep_files = []
+
+    # search through current directory for Clarity Pool Prep file
+    # format is PoolingPrep_XX-XXXXXXXX.xlsx
+    for file in os.listdir(crnt_dir):
+        if file.startswith('PoolCreation_'):
+            
+            # add any files matching pattern to list
+            clarity_pool_prep_files.append(file)
+          
+    # abort script if no pool creation files are found or 
+    # if >1 pool creation file found        
+    if len(clarity_pool_prep_files) == 0:
+        print('\nCould not find Clarity pool prep file, e.g. PoolCreation_XX-XXXXX.xslx   Aborting script\n\n')
+        sys.exit()
+    elif len(clarity_pool_prep_files) > 1:
+        print(f'\nMultiple Clarity pool creation files found\n\n{clarity_pool_prep_files}\n\nAborting script\n\n')
+        sys.exit()
+
+    pool_file= clarity_pool_prep_files[0]
+
+    # return Clarity pool creation file name
+    return pool_file
+##########################
+##########################
+
+
+##########################
+##########################
 def fixExcelFile(pool_file):
     
     # rename Pool prep .xlsx file with '~$' appened to start of file name
@@ -57,9 +85,12 @@ def fixExcelFile(pool_file):
     # the name to this temporary format is necessary so excel on Mac can open
     # the .xlsx files the first time without granting access file by file
     # the name will be changed back to the original format when donde
-    temp_name = "~$"+pool_file
     
-    os.rename(pool_file,temp_name)
+    # Use full path for file operations
+    pool_file_path = Path(crnt_dir) / pool_file
+    temp_name_path = Path(crnt_dir) / ("~$" + pool_file)
+    
+    os.rename(pool_file_path, temp_name_path)
     
     
     
@@ -67,12 +98,12 @@ def fixExcelFile(pool_file):
     # this resovles an error where .xlsx formulas stop working, e.g.
     # values are not imported into pandas
     app = xw.App(visible=False)
-    book = app.books.open(temp_name)
+    book = app.books.open(str(temp_name_path))
     book.save()
     app.kill()
     
     #rename density .xlsx file by removing the '~$' from the start of the file name
-    os.rename(temp_name,pool_file)
+    os.rename(temp_name_path, pool_file_path)
     
 ##########################
 ##########################
@@ -81,12 +112,13 @@ def fixExcelFile(pool_file):
 ##########################
 ##########################
 def addPoolClarityID(lib_df, pool_file):
-    
+
+    pool_file_path = Path(crnt_dir) / pool_file
     
     ####### MUST REACTIVATE THIS SECTION AND COMMENT OUT REFERENCE TO pool_df.csv #########
 
     # import library creation .xls file downloaded from clarity queue
-    pool_df = pd.read_excel(pool_file, sheet_name="Lab", header=0, usecols=[
+    pool_df = pd.read_excel(pool_file_path, sheet_name="Lab", header=0, usecols=[
         " qPCR'd Sample Name", "Sample Container Barcode", "Source Position", "Pool Name", "Pool Container Barcode"])
 
    
@@ -190,15 +222,12 @@ def addPippinInfo(my_lib_df):
 
 ##########################
 ##########################
-
-
 def fillPoolCreationSheet(lib_df, pool_file):
-    # import pool creation .xls file downloaded from clarity
-    # clarity_df = pd.read_excel(
-    #     pool_file, header=0, sheet_name='Lab', usecols="A:AD")
+
+    pool_file_path = Path(crnt_dir) / pool_file
 
     clarity_df = pd.read_excel(
-        pool_file, header=0, sheet_name='Lab', usecols="A:AE")
+        pool_file_path, header=0, sheet_name='Lab', usecols="A:AE")
 
     # copy lib percentage values to column with missing values
     clarity_df['Library Actual Percentage with SOF'] = clarity_df['Library Percentage with SOF']
@@ -231,7 +260,7 @@ def fillPoolCreationSheet(lib_df, pool_file):
 
     # read in dataframe from Lab summary table sheet
     summary_df = pd.read_excel(
-        pool_file, header=0, sheet_name='Lab Summary Table', usecols="A:E")
+        pool_file_path, header=0, sheet_name='Lab Summary Table', usecols="A:E")
 
     # add dummy values to dataframe
     summary_df['Final Target Volume'] = 999
@@ -243,8 +272,9 @@ def fillPoolCreationSheet(lib_df, pool_file):
     summary_df['Average Fragment Size'] = 555
 
     # make a copy of the pool creattion file, and fill new values into this copy
-    copy_pool_file = 'autofilled_'+pool_file
-    shutil.copyfile(pool_file, copy_pool_file)
+    copy_pool_file = Path(crnt_dir) / ('autofilled_'+ pool_file)
+
+    shutil.copyfile(pool_file_path, copy_pool_file)
 
     # load pool creation xlsx and delete existing values in first 2000 rows
     wb = openpyxl.load_workbook(copy_pool_file)
@@ -677,40 +707,41 @@ def makeFAinputFiles(my_pippin_df, my_dest_list):
 # MAIN PROGRAM
 ##########################
 
-# get current working directory and its parent directory
-crnt_dir = os.getcwd()
-prnt_dir = os.path.dirname(crnt_dir)
-prjct_dir = os.path.dirname(prnt_dir)
-
-###########################
-# set up folder organiztion
-###########################
-ASSIGN_DIR = Path.cwd()
-
-POOLING_DIR = ASSIGN_DIR.parent
-
-PROJECT_DIR = POOLING_DIR.parent
+PROJECT_DIR = Path.cwd()
 
 ARCHIV_DIR = PROJECT_DIR / "archived_files"
 
-REWORK_DIR = POOLING_DIR / "E_pooling_and_rework"
+POOL_DIR = PROJECT_DIR / "5_pooling"
+
+FINISH_DIR = POOL_DIR / "D_finish_pooling"
+
+REWORK_DIR = POOL_DIR / "E_pooling_and_rework"
 
 ATTEMPT_DIR = REWORK_DIR / "Attempt_1"
-
 ATTEMPT_DIR.mkdir(parents=True, exist_ok=True)
 
+# get current working directory, which should be the project directory
+prjct_dir = os.getcwd()
 
-# pool creation .xls file is first argument when calling script
-pool_file = sys.argv[1]
+dir_name = "5_pooling"
+
+prnt_dir = os.path.join(prjct_dir, dir_name)
+
+sub_dir_name = "D_finish_pooling"
+
+crnt_dir = os.path.join(prnt_dir, sub_dir_name)
+
+
+# # pool creation .xls file is first argument when calling script
+# pool_file = sys.argv[1]
+
+pool_file = findPoolFile(crnt_dir)
 
 ############ THIS MUST BE RE-ACTIVATED ONCE FINISHED WITH TROUBLESHOOTING
 # fix excel formulas by opening, saving, and closing file
 # without changing anything
 fixExcelFile(pool_file)
 
-# # create df from lib_info_submitted_to_clarity.csv file
-# lib_df = pd.read_csv(PROJECT_DIR / 'lib_info_submitted_to_clarity.csv',
-#                      header=0, converters={'Sample Barcode': str, 'Fraction #': int})
 
 # create df from lib_info_submitted_to_clarity.db sqliute file
 lib_df = readSQLdb(prjct_dir)
@@ -740,12 +771,11 @@ pippin_df, dest_list = makePippinTransferFiles(pippin_df)
 makePippinBarcodeFile(pippin_df)
 
 # make input files for Fragment Analysis for reworked libs
-FA_input_df = makeFAinputFiles(
-    pippin_df, dest_list)
+makeFAinputFiles(pippin_df, dest_list)
 
 
 # make temporary review file with lib_info_submitted with updated info about pooling info
-lib_df.to_csv('review_pool.csv', index=False, header=True)
+lib_df.to_csv(FINISH_DIR / 'review_pool.csv', index=False, header=True)
 
 # # add empty columns that will eventually hold results of FA QC
 # pippin_df[['Passed_Pool','New_pool']] = ''
@@ -755,7 +785,7 @@ lib_df.to_csv('review_pool.csv', index=False, header=True)
 #                                                                                   'pool_summary.csv', index=False, header=True)
 
 # make new summary file for pool processing and rework
-pippin_df[['Pool_Name', 'Pool_Barcode', 'Pippin_Cassette', '1st_Pippin_lane','2nd_Pippin_lane','Dest_Tube_Size_Selected','FA_plate_barcode','FA_well']].to_csv(POOLING_DIR /
+pippin_df[['Pool_Name', 'Pool_Barcode', 'Pippin_Cassette', '1st_Pippin_lane','2nd_Pippin_lane','Dest_Tube_Size_Selected','FA_plate_barcode','FA_well']].to_csv(POOL_DIR /
                                                                                   'pool_summary.csv', index=False, header=True)
 
 

@@ -84,7 +84,7 @@ def makeFinalPoolTransfer(pool_df):
     # this is a bit confusing, but the Dest_Tube_Size_Selected barcoded tube
     # is not the source tube for the final pooling step.  Thus, it is renamed
     # the Pool_Barcode is the Clarity container ID, e.g. 27-XXXXX
-    # the containter ID has not been used yet, and the labeled hasn't been printed yet
+    # the containter ID has not been used yet, and the label hasn't been printed yet
     final_df = final_df.rename(
         columns={'Dest_Tube_Size_Selected': 'Source_Name', 'Pool_Barcode': 'Destination_Tube_Name'})
 
@@ -96,7 +96,7 @@ def makeFinalPoolTransfer(pool_df):
     transfer_vol = float(input("\nWhat is transfer volume for loading final LIMS tubes? default is 49:   ")  or 49)
 
     if transfer_vol <= 0:
-        print ('\n\nTransfer volumes must by > 0uL.  Aborting script\n\n')
+        print ('\nTransfer volumes must by > 0uL.  Aborting script\n')
         sys.exit()
     
   
@@ -126,27 +126,7 @@ def makeFinalTubeLabels(final_df):
     # make dict where key is pool name and value is dest tube size id
     final_dict = dict(zip(final_df.Source_Barcode,
                       final_df.Destination_Tube_Name))
-    
-    # # add info to start of barcode print file indicating the template and printer to use
-    # x = '%BTW% /AF="//bartender/shared/templates/JGI_Label_BCode5_Rex.btw" /D="%Trigger File Name%" /PRN="bcode5" /R=3 /P /DD\n%END%\n\n\n'
-
-    # bc_file = open(POOL_DIR / "Clarity_containter_labels_for_size-selected_pools.txt", "w")
-
-    # bc_file.writelines(x)
-
-    # # add barcodes of library destination plates, dna source plates, and buffer plate
-    # for p in final_dict.keys():
-    #     tube_name = p.split('_')
-    #     pool_num = tube_name[0].split('-')
-    #     bc_file.writelines(f'{final_dict[p]},{pool_num[0]},{tube_name[1]}\n')
-
-
-    # bc_file.close()
-    
-    # this was older format for bartender templates.  The newer version below changes "/" to "\"
-    # in the path to the template files  AF="*"
-    # x = '%BTW% /AF="//bartender/shared/templates/JGI_Label_BCode5_Rex.btw" /D="%Trigger File Name%" /PRN="bcode5" /R=3 /P /DD\r\n%END%\r\n\r\n\r\n'
-
+  
     # add info to start of barcode print file indicating the template and printer to use
     x = '%BTW% /AF="\\\\bartender\shared\\templates\JGI_Label_BCode5_Rex.btw" /D="%Trigger File Name%" /PRN="bcode5" /R=3 /P /DD\r\n%END%\r\n\r\n\r\n'
 
@@ -160,7 +140,6 @@ def makeFinalTubeLabels(final_df):
         tube_name = p.split('_')
         pool_num = tube_name[0].split('-')
         bc_file.writelines(f'{final_dict[p]},{pool_num[0]},{tube_name[1]}\r\n')
-
 
     bc_file.close()
     
@@ -374,7 +353,7 @@ def makeTubeBarcodeFiles(rework_df, new_pool_dict):
     x = '%BTW% /AF="\\\\bartender\shared\\templates\JGI_Label_BCode5_Rex.btw" /D="%Trigger File Name%" /PRN="bcode5" /R=3 /P /DD\r\n%END%\r\n\r\n\r\n'
 
 
-    bc_file = open(new_attempt_dir+"pooling_TUBES_barcode_labels.txt", "w")
+    bc_file = open(new_attempt_dir + "/pooling_TUBES_barcode_labels.txt", "w")
 
     bc_file.writelines(x)
 
@@ -456,7 +435,7 @@ def makePippinBarcodeFile(rework_df):
     x = '%BTW% /AF="\\\BARTENDER\shared\\templates\ECHO_BCode8.btw" /D="%Trigger File Name%" /PRN="bcode8" /R=3 /P /DD\r\n\r\n%END%\r\n\r\n\r\n'
 
 
-    bc_file = open(new_attempt_dir+"PIPPIN_CASSETTE_FA_PLATE_barcode_labels.txt", "w")
+    bc_file = open(new_attempt_dir + "/PIPPIN_CASSETTE_FA_PLATE_barcode_labels.txt", "w")
 
     bc_file.writelines(x)
 
@@ -561,8 +540,8 @@ def makeFAinputFiles(rework_df):
 
         print_df.loc[print_df.index[11], 'name'] = 'ladder'
 
-        print_df.to_csv(new_attempt_dir+
-            f'FA_upload_{fabc}_row{row_list[i-1]}.csv', index=True, header=False)
+        print_df.to_csv(new_attempt_dir +
+            f'/FA_upload_{fabc}_row{row_list[i-1]}.csv', index=True, header=False)
 
         start = start + 12
 
@@ -613,15 +592,8 @@ def reSizeModule(pool_df, rework_df):
     new_dest_list = rework_df[rework_df['New_pool']
                               == 1]['Dest_Tube_Size_Selected'].unique().tolist()
     
-    
-    # new_dest_list.sort()
-    
     # make list of destination tubes  that need updating
     redo_dest_tube_list = rework_df['Dest_Tube_Size_Selected'].unique().tolist()
-    
-    
-    # redo_dest_tube_list.sort()
-    
     
     # make dict that will be used to update destination tube id
     # the key is the old dest tube id and the value is the new tube id
@@ -629,15 +601,10 @@ def reSizeModule(pool_df, rework_df):
 
     # add new dest tube name
     rework_df['Dest_Tube_Size_Selected'] = rework_df['Dest_Tube_Size_Selected'].map(redo_dict)
-    
-    
 
     # make list of pools that need whole new pools
     new_pool_list = rework_df[rework_df['New_pool']
                               == 1]['Pool_Name'].unique().tolist()
-    
-    
-    # new_pool_list.sort()
 
     # create dict where key is old pool name (e.g. 1A_NUSPU) and
     # value is new pool name (e.g. 1B_NUSPU).  The letter in the 
@@ -650,12 +617,9 @@ def reSizeModule(pool_df, rework_df):
     # if replacement not found in new_pool_dict
     rework_df['Pool_Name'] = rework_df['Pool_Name'].map(new_pool_dict).fillna(rework_df['Pool_Name'])
     
-    
 
     # # generate new barcode for pippin cassette    
     pip_bc_base, pip_next_bc = getPippinCassetteBarcode(rework_df)
-
-
 
     redo_pool_list = rework_df['Pool_Name'].unique().tolist()
     
@@ -686,7 +650,7 @@ def reSizeModule(pool_df, rework_df):
     for p in new_pool_list:
         pnum = p[0]
         
-        transfer_file = first_attempt_dir+f"Pool_{pnum}_transfer_file.csv"
+        transfer_file = first_attempt_dir + f"/Pool_{pnum}_transfer_file.csv"
         
         
         if (file_exists(transfer_file)):
@@ -700,18 +664,18 @@ def reSizeModule(pool_df, rework_df):
     for p in new_pool_list:
         pnum = p[0]
         
-        transfer_df = pd.read_csv(new_attempt_dir+f'Pool_{pnum}_transfer_file.csv',header=0)
+        transfer_df = pd.read_csv(new_attempt_dir + f'/Pool_{pnum}_transfer_file.csv',header=0)
         
         transfer_df['Destination_Tube_Name'] = transfer_df['Destination_Tube_Name'].map(new_pool_dict) 
     
         transfer_df['Destination_Tube_Barcode'] = transfer_df['Destination_Tube_Barcode'].map(new_pool_dict)
     
         # delete copy of original transfer file
-        os.remove(new_attempt_dir+f'Pool_{pnum}_transfer_file.csv')
+        os.remove(new_attempt_dir + f'/Pool_{pnum}_transfer_file.csv')
         
         # make new transfer file with updated tube ids
-        transfer_df.to_csv(new_attempt_dir+
-            f'Pool_{pnum}_transfer_file.csv', index=False, header=True)
+        transfer_df.to_csv(new_attempt_dir +
+            f'/Pool_{pnum}_transfer_file.csv', index=False, header=True)
     
     # make file for printing tube barcode labels with updated pool and  tube id's
     makeTubeBarcodeFiles(rework_df,new_pool_dict)
@@ -734,13 +698,6 @@ def reSizeModule(pool_df, rework_df):
     # create updated library info file
     pool_df.to_csv(POOL_DIR / 'pool_summary.csv', index=False, header=True)
 
-    
-    # pool_df = pool_df.merge(resize_df, how='outer', left_on=[
-    #     'Pool_Name'], right_on=['Pool_Name'], suffixes=('', '_y'))
-
-    # # remove redundant columns after merging
-    # pool_df.drop(pool_df.filter(regex='_y$').columns, axis=1, inplace=True)
-
 ###################
 ###################
 
@@ -756,22 +713,18 @@ def reSizeModule(pool_df, rework_df):
 # get current date and time, will add to archive database file name
 date = datetime.now().strftime("%Y_%m_%d-Time%H-%M-%S")
 
+PROJECT_DIR = Path.cwd()
 
-ATTEMPT_DIR = Path.cwd()
+POOL_DIR = PROJECT_DIR / "5_pooling"
 
-REWORK_DIR = ATTEMPT_DIR.parent
+REWORK_DIR = POOL_DIR / "E_pooling_and_rework"
 
-POOL_DIR = REWORK_DIR.parent
-
-PROJECT_DIR = POOL_DIR.parent
+ATTEMPT_DIR = REWORK_DIR / "Attempt_1"
 
 ARCHIV_DIR = PROJECT_DIR / "archived_files"
 
 FINISH_DIR = POOL_DIR / "F_final_pooling_files"
-
 FINISH_DIR.mkdir(parents=True, exist_ok=True)
-
-
 
 
 
@@ -792,19 +745,13 @@ next_FA_num = int(last_FA[-1])+1
 # rows from the most recent FA plate based in FA plate increment number
 last_df = pool_df.loc[pool_df['FA_plate_barcode']==last_FA].copy()
 
-
-
-
 # confirm all pools have pass/fail value of 0 or 1
 if last_df[~last_df['Passed_Pool'].isin([0,1])].shape[0]>0:
-    print('\n\nSome pass/fail value is not 0 or 1. Aborting\n\n')
+    print('\nSome pass/fail value is not 0 or 1. Aborting\n\n')
     sys.exit()
 
 # copy rows of pool_df with failed pools
 rework_df = last_df.loc[last_df['Passed_Pool'] == 0].copy()
-
-# # reset FA results in rework_df to ''
-# rework_df[['% Total','nmole/L',	'Avg. Size']] = ''
 
 
 rework_df = rework_df.sort_values(by=['Pool_Name'], ascending=True)
@@ -814,7 +761,7 @@ rework_df.reset_index(drop=True, inplace=True)
 if rework_df.shape[0] == 0:
     all_done = (input("No pools need rework. Is that correct (y/n)?   ")  or 'n')
 
-    if all_done == 'y' or all_done =='Y':
+    if all_done.lower() == 'y':
         
         # generate final_df to be used to make Hamilton transfer file
         final_df, qpcr_df = makeFinalPoolTransfer(pool_df)
@@ -828,22 +775,25 @@ if rework_df.shape[0] == 0:
         makeFinalTubeLabels(final_df)
 
     else:    
-        print('\n\nOk, please fix the pool_summary.csv file.  Aborting.\n\n')
+        print('\nOk, please fix the pool_summary.csv file.  Aborting.\n\n')
         sys.exit()
 
 else:
 
     # make new folder to hold output of this script
-    crnt_attempt_dir = os.getcwd()
+    # crnt_attempt_dir = os.getcwd()
     
-    rework_dir = str(Path(crnt_attempt_dir).parents[0])
+    # rework_dir = str(Path(crnt_attempt_dir).parents[0])
     
-    first_attempt_dir = rework_dir+"/Attempt_1/"
+    # first_attempt_dir = rework_dir+"/Attempt_1/"
     
-    new_attempt_dir = rework_dir+f"/Attempt_{next_FA_num}/"
-    
+    # new_attempt_dir = rework_dir+f"/Attempt_{next_FA_num}/"
+
+    first_attempt_dir = ATTEMPT_DIR
+
+    new_attempt_dir = REWORK_DIR / f"Attempt_{next_FA_num}/"    
+
     os.makedirs(new_attempt_dir)
-    
     
     reSizeModule(pool_df, rework_df)
 

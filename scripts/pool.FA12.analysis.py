@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
 import pandas as pd
 import numpy as np
 import os
@@ -8,6 +9,7 @@ import sys
 import shutil
 from pathlib import Path
 from datetime import datetime
+import re
 
 
 ##########################
@@ -15,7 +17,7 @@ from datetime import datetime
 def compareFolderFileNames(folder_path, file, folder_name):
     
     # make df from FA smear analysis output .csv file
-    fa_df = pd.read_csv(folder_path +f'/{file}', usecols=['Sample ID'] )
+    fa_df = pd.read_csv(folder_path + f'/{file}', usecols=['Sample ID'] )
     
     # make list of all sample names
     sample_list = fa_df['Sample ID'].unique().tolist()
@@ -31,11 +33,58 @@ def compareFolderFileNames(folder_path, file, folder_name):
     # abort program if the plate name in output folder does not
     # match plate name parsed from sample name in smear analysis .csv file
     if folder_name not in set(plate_list):
-        print (f'\n\nThere is a mismatch between FA plate ID and sample names for plate {folder_name}.  Aborting script\n')
+        print (f'\nThere is a mismatch between FA plate ID and sample names for plate {folder_name}.  Aborting script\n')
         sys.exit()
     
     
     return
+
+##########################
+##########################
+def findLatestAttempt():
+    """
+    Find the latest attempt directory in the E_pooling_and_rework directory.
+    
+    Scans the E_DIR (E_pooling_and_rework) for subdirectories with pattern 'Attempt_X'
+    where X is a number, and returns the directory name with the highest attempt number.
+    
+    Returns:
+        str: Name of the latest attempt directory (e.g., "Attempt_3")
+        
+    Raises:
+        SystemExit: If no attempt directories are found or if directory parsing fails
+    """
+    
+    # Scan the E_DIR (E_pooling_and_rework) for attempt directories
+    rework_dir = REWORK_DIR
+    
+    if not rework_dir.exists():
+        print(f'\n\nRework directory {rework_dir} does not exist. Aborting script\n')
+        sys.exit()
+    
+    attempt_dirs = []
+    attempt_pattern = re.compile(r'^Attempt_(\d+)$')
+    
+    # Scan for attempt directories
+    for item in rework_dir.iterdir():
+        if item.is_dir():
+            match = attempt_pattern.match(item.name)
+            if match:
+                attempt_num = int(match.group(1))
+                attempt_dirs.append((attempt_num, item.name))
+    
+    # Check if any attempt directories were found
+    if not attempt_dirs:
+        print(f'\nNo attempt directories found in {rework_dir}. Expected format: Attempt_X where X is a number. Aborting script\n')
+        sys.exit()
+    
+    # Sort by attempt number and return the latest (highest number)
+    attempt_dirs.sort(key=lambda x: x[0])
+    latest_attempt = attempt_dirs[-1][1]
+    
+    print(f'\nFound {len(attempt_dirs)} attempt directories. Using latest: {latest_attempt}')
+    
+    return latest_attempt
 
 ##########################
 ##########################
@@ -73,7 +122,7 @@ def getFAfiles(crnt_dir):
                             
                             # copy and rename smear analysis to main directory if good match
                             shutil.copy(folder_path +f'/{file}',crnt_dir)
-                            os.rename(file,f'{folder_name}.csv')
+                            os.rename(os.path.join(crnt_dir, file), os.path.join(crnt_dir, f'{folder_name}.csv'))
                             
                             # add folder name (aka FA plate name) to list
                             fa_files.append(f'{folder_name}.csv')
@@ -95,21 +144,25 @@ def getFAfiles(crnt_dir):
 ##########################
 # MAIN PROGRAM
 ##########################
-# get current working directory and its parent directory
-crnt_dir = os.getcwd()
-prnt_dir = os.path.dirname(crnt_dir)
-prjct_dir = os.path.dirname(prnt_dir)
+# # get current working directory and its parent directory
+# crnt_dir = os.getcwd()
+# prnt_dir = os.path.dirname(crnt_dir)
+# prjct_dir = os.path.dirname(prnt_dir)
 
-
-ATTEMPT_DIR = Path.cwd()
-
-E_DIR = ATTEMPT_DIR.parent
-
-POOL_DIR = E_DIR.parent
-
-PROJECT_DIR = POOL_DIR.parent
+PROJECT_DIR = Path.cwd()
 
 ARCHIV_DIR = PROJECT_DIR / "archived_files"
+
+POOL_DIR = PROJECT_DIR / "5_pooling"
+
+REWORK_DIR = POOL_DIR / "E_pooling_and_rework"
+
+# find the latest attempt directory in the E_pooling_and_rework directory
+latest_attempt = findLatestAttempt()
+
+ATTEMPT_DIR = REWORK_DIR / latest_attempt
+
+crnt_dir = ATTEMPT_DIR
 
 
 fa_files = getFAfiles(crnt_dir)
@@ -120,14 +173,11 @@ if len(fa_files) >1:
 
 else:
     file = fa_files[0]
-    
-# file = "VCJF9-FA1.csv"  
-    
 
-# folder_path = os.getcwd()
 
-# read FA12 smear analysis file into df
-fa_df = pd.read_csv(crnt_dir +f'/{file}')
+# # read FA12 smear analysis file into df
+# fa_df = pd.read_csv(crnt_dir + f'/{file}')
+fa_df = pd.read_csv(ATTEMPT_DIR / file)
 
 
 # remove rows with "empty" or "ladder" in sample ID. search is case insensitive
@@ -165,7 +215,7 @@ if fa_df.shape[0] != small_df.shape[0]:
 
 
 #use np.where to compare $ Total from 400-800 vs 100-400, and fail libs with too much DNA in 100-400
-fa_df['pass_fail'] = np.where(((fa_df['% Total'] >= 80) & (fa_df['small % Total'] <= 10)),1,0)
+fa_df['pass_fail'] = np.where(((fa_df['% Total'] >= 70) & (fa_df['small % Total'] <= 15)),1,0)
 
 # us np.where to apply a minimum concentration cutoff in addition the % lib in 400_800 size fracrtion
 fa_df['pass_fail'] = np.where(((fa_df['nmole/L'] >=1.250) & (fa_df['pass_fail'] ==1)),1,0)
@@ -183,7 +233,7 @@ fa_df[['FA_plate_barcode','Dest_Tube_Size_Selected','Well']] = fa_df.Sample_ID.s
 
 # pool_df = pd.read_csv(prjct_dir + "/pool_summary.csv", header=0, usecols=['Pool_Name','Pool_Barcode','Pippin_Cassette','1st_Pippin_lane','2nd_Pippin_lane','Dest_Tube_Size_Selected','FA_plate_barcode','FA_well'])
 
-pool_df = pd.read_csv(prjct_dir + "/pool_summary.csv", header=0)
+pool_df = pd.read_csv(POOL_DIR / "pool_summary.csv", header=0)
 
 
 # determine next increment number of FA plate barcode
