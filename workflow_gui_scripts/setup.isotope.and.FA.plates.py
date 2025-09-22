@@ -288,7 +288,7 @@ def mergeAliquotSSmini():
     ssmini_df = ssmini_df[['BARCODE', 'POS', 'RACK']]
 
     # remove rows without empty text in 'BARCODE' field
-    ssmini_df['BARCODE'].replace('', np.nan, inplace=True)
+    ssmini_df['BARCODE'] = ssmini_df['BARCODE'].replace('', np.nan)
     ssmini_df.dropna(subset=['BARCODE'], inplace=True)
 
     # remove whitespace from samplescan df
@@ -317,8 +317,8 @@ def mergeAliquotSSmini():
     # print(merged_df)
     # abort if a mismatch in barcodes is detected
     if (merged_df["BARCODE"].isnull().values.any()):
-        print("\n\n")
-        print(merged_df)
+        # print("\n\n")
+        # print(merged_df)
         print('\n\nAt least 1 barcode was not found. Aborting. \n\n')
         sys.exit()
 
@@ -352,17 +352,17 @@ def getUserInputMinMaxParameters():
 
     # check that isotope transfer mass doesn't exceed 10% of total available DNA mass
     if (my_trans_mass >= (0.1*clarity_df['Available Mass (ng)'].min())):
-        print(
-            clarity_df[clarity_df['Available Mass (ng)'] <= (my_trans_mass*10)])
-        print("\n\nIsotope transfer DNA mass is >=10% of total available DNA for at least one sample\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
+        # print(
+        #     clarity_df[clarity_df['Available Mass (ng)'] <= (my_trans_mass*10)])
+        print("\nIsotope transfer DNA mass is >=10% of total available DNA for at least one sample. \nDo you wish to continue (Y/N)? :")
 
         val = input()
 
         if (val == 'Y' or val == 'y'):
-            print("Ok, we'll keep going\n\n")
+            print("\nOk, we'll keep going")
 
         elif (val == 'N' or val == 'n'):
-            print('Ok, aborting script.  Try reducing transfer mass value\n\n')
+            print('\nOk, aborting script.  Try reducing transfer mass value\n\n')
             sys.exit()
         else:
             print("Sorry, you must choose 'Y' or 'N' next time. \n\nAborting\n\n")
@@ -371,14 +371,14 @@ def getUserInputMinMaxParameters():
     # user provide minimum volume for each sample.  Buffer will be added to sample
     # to bring volume up to minimum value
     my_min_sample_vol = float(
-        input("Enter the minimum volume for sample matrix tubes (default 60ul): ") or 60)
+        input("\nEnter the minimum volume for sample matrix tubes (default 60ul): ") or 60)
 
     if (my_min_sample_vol < 0):
         print('\n\nError.  Minimum volume must be >0 uL.  Aborting.\n\n')
         sys.exit()
 
     my_max_dna_conc = float(
-        input("Enter the max target DNA conc for sample matrix tubes (default 25ng/ul): ") or 25)
+        input("\nEnter the max target DNA conc for sample matrix tubes (default 25ng/ul): ") or 25)
 
     if (my_max_dna_conc < 0):
         print('\n\nError.  Maximum conc must be >0 ng/uL.  Aborting.\n\n')
@@ -521,7 +521,7 @@ def setupFAplate(merged_df, well_list, control_df):
 #########################
 def getIsotopeProjectDfs():
     isotope_df = merged_df[['ITS_sample_id', 'Matrix_barcode', 'Rack_Barcode', 'Tube_location', 'Original_conc_(ng/ul)', 'Original_vol_(ul)', 'Top_up_vol_(ul)', 'Updated_conc_(ng/ul)', 'Updated_vol_(ul)', 'Available_mass_(ng)', 'Isotope_plate_barcode',
-                            'Isotope_well', 'Isotope_mass_(ng)', 'Isotope_vol_(ul)',  'Buffer_isotope_vol_(ul)', 'Dilute_plate_barcode', 'Dilute_DNA_vol_(ul)', 'Dilute_buffer_vol_(ul)', 'FA_plate_barcode']]
+                            'Isotope_well', 'Isotope_mass_(ng)', 'Isotope_vol_(ul)',  'Buffer_isotope_vol_(ul)', 'Dilute_plate_barcode', 'Dilute_DNA_vol_(ul)', 'Dilute_buffer_vol_(ul)', 'FA_plate_barcode']].copy()
 
     
     isotope_df['FA_plate_well'] = isotope_df['Isotope_well']
@@ -534,7 +534,7 @@ def getIsotopeProjectDfs():
     
     
     project_df = merged_df[['ITS_sample_id', 'Matrix_barcode', 'Rack_Barcode', 'Tube_location', 'Remain_mass_(ng)',
-                            'Remain_vol_(ul)', 'Updated_conc_(ng/ul)', 'Isotope_plate_barcode', 'Isotope_well']]
+                            'Remain_vol_(ul)', 'Updated_conc_(ng/ul)', 'Isotope_plate_barcode', 'Isotope_well']].copy()
 
     project_df = project_df.rename(columns={"Remain_vol_(ul)": "Available_vol_(ul)",
                                             "Remain_mass_(ng)": "Available_mass_(ng)"})
@@ -545,11 +545,33 @@ def getIsotopeProjectDfs():
     project_df['Made_Library'] = 0
 
     # move aliquot and sample scan mini files from main project directory to isotope subdirectory
-    Path(BASE_OUTPUT_DIR /
-         f"{file_type_dict['sample_scan']}").rename(ISO_INPUT_DIR / f"{file_type_dict['sample_scan']}")
-
-    Path(BASE_OUTPUT_DIR /
-         f"{file_type_dict['aliquot']}").rename(ISO_INPUT_DIR / f"{file_type_dict['aliquot']}")
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    sample_scan_filename = Path(file_type_dict['sample_scan']).name
+    aliquot_filename = Path(file_type_dict['aliquot']).name
+    
+    sample_scan_source = Path(sample_scan_filename)
+    aliquot_source = Path(aliquot_filename)
+    
+    sample_scan_dest = ISO_INPUT_DIR / sample_scan_filename
+    aliquot_dest = ISO_INPUT_DIR / aliquot_filename
+    
+    try:
+        if sample_scan_source.exists():
+            sample_scan_source.rename(sample_scan_dest)
+            print(f"✓ Moved {sample_scan_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {sample_scan_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {sample_scan_filename}: {e}")
+    
+    try:
+        if aliquot_source.exists():
+            aliquot_source.rename(aliquot_dest)
+            print(f"✓ Moved {aliquot_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {aliquot_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {aliquot_filename}: {e}")
 
     return isotope_df, project_df
 
@@ -644,7 +666,7 @@ def updateProjectDatabase(p_df, parent_all_inclusive):
             print("Ok, we'll keep going\n\n")
 
             # remove existing names and replicate groups
-            p_df.drop(columns={'Sample_Name', 'Replicate_Group'}, inplace=True)
+            p_df = p_df.drop(columns=['Sample_Name', 'Replicate_Group'])
 
         elif (val == 'N' or val == 'n'):
             print('Ok, aborting script\n\n')
@@ -666,11 +688,23 @@ def updateProjectDatabase(p_df, parent_all_inclusive):
         print('\n\nThere was a mismatch in sample id or tube barcode when merging all_inclusive.xlsx info with project_datavase.csv.  Aborting process:')
         sys.exit()
 
-    # drop redundant columsn used during merge
-    my_updated_project_df.drop(columns={'Sample_ID'}, inplace=True)
+    # drop redundant columns used during merge
+    my_updated_project_df = my_updated_project_df.drop(columns=['Sample_ID'])
 
-    Path(BASE_OUTPUT_DIR /
-         f"{parent_all_inclusive}").rename(ISO_INPUT_DIR / f"{parent_all_inclusive}")
+    # move sip_metadata file to input_files directory
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    sip_metadata_filename = Path(parent_all_inclusive).name
+    sip_metadata_source = Path(sip_metadata_filename)
+    sip_metadata_dest = ISO_INPUT_DIR / sip_metadata_filename
+    
+    try:
+        if sip_metadata_source.exists():
+            sip_metadata_source.rename(sip_metadata_dest)
+            print(f"✓ Moved {sip_metadata_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {sip_metadata_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {sip_metadata_filename}: {e}")
 
     return my_updated_project_df
 ############################
@@ -696,7 +730,7 @@ def updateMetabolomics(merged_df, my_p_df, control_df):
 
     # error if not all PMOS and ITS matched up
     if (updated_df["PMOS Sample ID"].isnull().values.any()):
-        print("\n", updated_df, "\n\n")
+        # print("\n", updated_df, "\n\n")
         print("""There was a mismatch between metabolomics PMOS IDs and aliquot ITS IDs\n\nSee table above.  Aborting script""")
         sys.exit()
 
@@ -758,8 +792,19 @@ def updateMetabolomics(merged_df, my_p_df, control_df):
             f'updated_Metabolomics_QC_{proj_id}_{pi_name}.xls')
 
     # move original metabolmics file to "input" subfolder
-    Path(BASE_OUTPUT_DIR /
-         f"{metab_file}").rename(ISO_INPUT_DIR / f"{metab_file}")
+    # Extract just the filename from the path (handles both GUI full paths and command line filenames)
+    metabolomics_filename = Path(metab_file).name
+    metabolomics_source = Path(metabolomics_filename)
+    metabolomics_dest = ISO_INPUT_DIR / metabolomics_filename
+    
+    try:
+        if metabolomics_source.exists():
+            metabolomics_source.rename(metabolomics_dest)
+            print(f"✓ Moved {metabolomics_filename} to input_files directory")
+        else:
+            print(f"⚠ Warning: Could not find {metabolomics_filename}")
+    except Exception as e:
+        print(f"✗ Error moving {metabolomics_filename}: {e}")
 #########################
 #########################
 
@@ -799,7 +844,7 @@ def makeFAUploadFiles(merged_df, well_list_96w):
     dest_list = merged_df['Isotope_plate_barcode'].unique().tolist()
 
     # get two columns from merged_df
-    FA_df = merged_df[['Isotope_well', 'ITS_sample_id']]
+    FA_df = merged_df[['Isotope_well', 'ITS_sample_id']].copy()
 
     # make temporary df of just 96 wells
     tmp_df = pd.DataFrame(well_list_96w)
@@ -810,7 +855,7 @@ def makeFAUploadFiles(merged_df, well_list_96w):
     tmp_df = tmp_df.merge(FA_df, how='outer', left_on=['Well'],
                           right_on=['Isotope_well'])
 
-    tmp_df.drop(columns=('Isotope_well'), inplace=True)
+    tmp_df = tmp_df.drop(columns=['Isotope_well'])
 
     # reset index so begins at 1 insted of 0
     tmp_df.index = range(1, tmp_df.shape[0]+1)
@@ -895,6 +940,7 @@ parent_all_inclusive = file_type_dict['sip_metadata']
 
 
 # create all sub folders for project folder
+#BASE_DIR, ISO_DIR, ISO_IN_DIR
 BASE_OUTPUT_DIR, ISO_OUTPUT_DIR, ISO_INPUT_DIR = createDirectories()
 
 # get a list of wells and a dict where key is well location in 96 format and value is location in 384 format
