@@ -113,7 +113,7 @@ def checkTubesInDatabase(my_tubes, all_samples_df):
         tubes)].copy()
 
     if len(my_tubes) != my_centrifuge_df.shape[0]:
-        print('\n\n\n')
+        print('\n')
         print('At least one of the sample IDs was not found in the project summary database.  Aborting process\n\n')
         sys.exit()
 
@@ -128,8 +128,8 @@ def checkTubesInDatabase(my_tubes, all_samples_df):
 def checkIfEnoughMassorVolume(centrifuge_df):
     # make sure the tubes have some amount of Available volume
     if (any(centrifuge_df['Available_vol_(ul)'] <= 0)):
-        print(centrifuge_df[centrifuge_df['Available_vol_(ul)'] <= 0])
-        print("\n\nAt least one sample doesn't have any remaining volume\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
+        # print(centrifuge_df[centrifuge_df['Available_vol_(ul)'] <= 0])
+        print("\nAt least one sample doesn't have any remaining volume\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
 
         val = input()
 
@@ -149,9 +149,9 @@ def checkIfEnoughMassorVolume(centrifuge_df):
 
     # abort if not enough sample mass for ultracentrifuge transfer
     if (any(centrifuge_df['Available_mass_(ng)'] < centrifug_mass)):
-        print(
-            centrifuge_df[centrifuge_df['Available_mass_(ng)'] < centrifug_mass])
-        print("\n\nAt least one sample doesn't have enough DNA mass\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
+        # print(
+        #     centrifuge_df[centrifuge_df['Available_mass_(ng)'] < centrifug_mass])
+        print("\nAt least one sample doesn't have enough DNA mass\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
 
         val = input()
 
@@ -332,14 +332,14 @@ def createSQLdb(df):
 ###########################
 # check if path  was provided, otherwise use current directory
 if len(sys.argv) < 2:
-    print('\n\nDid not provide all required input files. Aborting. \n\n')
+    print('\nDid not provide all required input files. Aborting. \n')
     sys.exit()
 else:
 
     # loop through all provided input files and confirm they exist
     for s in sys.argv[1:]:  # Skip script name (sys.argv[0])
         if (file_exists(s) == 0):
-            print(f'\n\nCould not find file {s} \nAborting\n\n')
+            print(f'\nCould not find file {s} \nAborting\n')
             sys.exit()
 
 
@@ -433,9 +433,9 @@ try:
     tube_file_name = tube_file.name
     destination = OLD_DIR / tube_file_name
     shutil.move(str(tube_file), str(destination))
-    print(f"Moved input file {tube_file_name} to {OLD_DIR}")
+    # print(f"Moved input file {tube_file_name} to {OLD_DIR}")
 except Exception as e:
-    print(f"Warning: Could not move {tube_file} to {OLD_DIR}: {e}")
+    print(f"\nWarning: Could not move {tube_file} to {OLD_DIR}: {e}")
 
 Path(PROJECT_DIR /
      "project_database.csv").rename(ARCHIV_DIR / f"archive_project_database_{date}.csv")
