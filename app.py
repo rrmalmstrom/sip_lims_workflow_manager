@@ -16,6 +16,9 @@ st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", lay
 
 import streamlit.components.v1 as components
 
+# --- Terminal Configuration ---
+TERMINAL_HEIGHT = 450  # Reduced height for better screen utilization
+
 # --- Helper Functions ---
 def validate_workflow_yaml(file_path):
     """
@@ -179,13 +182,13 @@ def handle_terminal_input_change():
 
 def select_file_via_subprocess():
     python_executable = sys.executable
-    script_path = Path(__file__).parent / "file_dialog.py"
+    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
     process = subprocess.run([python_executable, str(script_path), 'file'], capture_output=True, text=True)
     return process.stdout.strip()
 
 def select_folder_via_subprocess():
     python_executable = sys.executable
-    script_path = Path(__file__).parent / "file_dialog.py"
+    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
     process = subprocess.run([python_executable, str(script_path)], capture_output=True, text=True)
     return process.stdout.strip()
 
@@ -818,14 +821,13 @@ def main():
                     st.session_state.project = None
 
     # --- Main Content Area ---
-    st.header("Workflow Status")
-
     if not st.session_state.project:
         st.info("Select a project folder using the 'Browse' button in the sidebar.")
     else:
         project = st.session_state.project
         
-        st.subheader(f"Workflow: {project.workflow.name}")
+        # Display project folder name prominently beneath the main header
+        st.markdown(f"## 📁 {project.path.name}")
 
         # --- Terminal Output and Interaction ---
         # Show terminal for running scripts
@@ -842,7 +844,7 @@ def main():
             st.text_area(
                 "Terminal Output",
                 value=st.session_state.terminal_output,
-                height=300,
+                height=TERMINAL_HEIGHT,
                 key="terminal_view",
                 disabled=True,
                 help="This is the live terminal output. Watch for prompts that require your input."
@@ -896,7 +898,7 @@ def main():
             st.text_area(
                 "Script Output",
                 value=st.session_state.completed_script_output,
-                height=300,
+                height=TERMINAL_HEIGHT,
                 key="completed_terminal_view",
                 disabled=True,
                 help="This is the output from the completed script."
