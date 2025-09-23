@@ -18,6 +18,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 12 (Rollback System Unification):** Complete. Unified rollback behavior between manual undo and automatic failed step rollback for consistent project restoration.
 - **Phase 13 (Timestamp Preservation):** Complete. Implemented timestamp preservation during rollback operations to maintain accurate file modification times.
 - **Phase 14 (Conditional Workflow System):** Complete. Implemented comprehensive conditional workflow functionality allowing users to make Yes/No decisions at specific workflow points with automatic triggering, enhanced undo behavior, and complete state management.
+- **Phase 15 (Terminal Output Cleanup):** Complete. Cleaned up verbose debug output from user-visible terminal interface while preserving comprehensive debug logging in background files for troubleshooting.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -55,6 +56,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 24. **Conditional Workflow System**: Implemented comprehensive conditional workflow functionality with automatic triggering, Yes/No decision prompts, enhanced undo behavior for decision points, and complete integration with existing workflow management.
 25. **Script Termination Functionality**: Added terminate button in terminal interface allowing users to stop running scripts and automatically rollback to pre-execution state.
 26. **SIP Branding Update**: Updated application title and branding from "LIMS Workflow Manager" to "SIP LIMS Workflow Manager" to reflect Stable Isotope Probing laboratory focus.
+27. **Terminal Output Cleanup**: Removed verbose debug messages from user-visible terminal output while preserving comprehensive debug logging in background files for professional user experience.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -206,3 +208,17 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Test Coverage**: Comprehensive TDD approach with 17 test cases validating all conditional workflow functionality
 - **User Experience**: Seamless integration with existing workflow interface, clear visual indicators for conditional states, and intuitive decision-making process
 - **Universal Compatibility**: Works with all existing workflows while providing new conditional capabilities for enhanced workflow flexibility
+
+## 16. Latest Features (Session 15)
+### Terminal Output Cleanup
+- **Problem Solved**: Users were seeing verbose debug information (process IDs, file descriptors, exit codes) that cluttered the terminal interface and made it less professional
+- **Root Cause Addressed**: Debug messages intended for development were being displayed to end users in the terminal output
+- **Technical Implementation**: Separated debug logging from user output using dual logging functions in ScriptRunner class
+- **Key Features**:
+  - **Clean Terminal Interface**: Users now see only relevant script output and interactive prompts
+  - **Professional Appearance**: Removed technical jargon and debug clutter from user interface
+  - **Preserved Debug Capability**: All technical information still captured in background log files
+  - **Enhanced User Focus**: Users can concentrate on actual script interactions without distraction
+- **Debug Information Preservation**: Complete execution traces, timing, and error information maintained in `.workflow_logs/debug_script_execution.log`
+- **User Experience**: Significantly improved professional appearance while maintaining full debugging capabilities for troubleshooting
+- **Universal Compatibility**: Works with all existing workflows and maintains backward compatibility

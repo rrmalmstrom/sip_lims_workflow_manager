@@ -2086,3 +2086,126 @@ The Session 14 enhancements provide essential script termination capability that
 14. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the control and safety features needed for complex SIP laboratory workflows where user intervention and error recovery are essential for successful experimental outcomes.
+
+## Feature 14: Terminal Output Cleanup (Session 15)
+
+### Problem Statement
+The pseudo-terminal displayed verbose debug information to users that was intended for development purposes only. Users saw technical details like process IDs, file descriptors, exit codes, and internal state messages that cluttered the terminal interface and made it less professional.
+
+### Solution Implementation
+
+#### Enhanced Logging Strategy
+**Separated Debug and User Output** (`src/logic.py`):
+- **`log_debug()`** function: Logs debug information only to file (`.workflow_logs/debug_script_execution.log`)
+- **`log_to_terminal()`** function: Logs messages only to terminal output visible to users
+- **File-only debug logging**: All verbose debug messages moved to background logging
+
+#### Debug Messages Moved to File-Only Logging
+**Messages No Longer Visible to Users**:
+```python
+# Previously shown to users, now file-only:
+"=== SCRIPT STARTING (PTY) ==="
+"Process PID: 79528"
+"Master FD: 18"
+"Project path: /Users/..."
+"=== SCRIPT EXECUTION COMPLETE (PTY) ==="
+"Exit Code: 0"
+"Success: True"
+"Process Poll Result: 0"
+"Return Code Type: <class 'int'>"
+"=== END DEBUG INFO ==="
+"=== PUTTING RESULT IN QUEUE: success=True, return_code=0 ==="
+"=== SCRIPT RUNNER THREAD ENDING ==="
+```
+
+#### User Experience Improvements
+**Before Cleanup**:
+```
+=== SCRIPT STARTING (PTY) ===
+Process PID: 79528
+Master FD: 18
+Project path: /Users/RRMalmstrom/Desktop/SIP_workflow_gui_test_folders/test_dummy
+[actual script output]
+=== SCRIPT EXECUTION COMPLETE (PTY) ===
+Exit Code: 0
+Success: True
+Process Poll Result: 0
+Return Code Type: <class 'int'>
+=== END DEBUG INFO ===
+=== PUTTING RESULT IN QUEUE: success=True, return_code=0 ===
+=== SCRIPT RUNNER THREAD ENDING ===
+```
+
+**After Cleanup**:
+```
+[clean script output and interactive prompts only]
+```
+
+#### Debug Information Preservation
+**Comprehensive Debug Logging Maintained**:
+- **Debug log file**: `.workflow_logs/debug_script_execution.log` - Complete technical details
+- **Summary file**: `.workflow_logs/last_script_result.txt` - Script execution summary
+- **Timestamped entries**: All debug information includes timestamps for troubleshooting
+- **Error visibility**: Real errors are still shown to users when they indicate actual problems
+
+#### Technical Implementation Details
+**Enhanced `_read_output_loop()` Method** (`src/logic.py:437-542`):
+```python
+def log_debug(message):
+    """Log debug info to file only (not to terminal output)"""
+    try:
+        with open(debug_log_path, "a") as f:
+            import datetime
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{timestamp}] {message}")
+            f.flush()
+    except:
+        pass  # Don't let logging errors break execution
+
+def log_to_terminal(message):
+    """Log message to terminal output only"""
+    self.output_queue.put(message)
+```
+
+### Performance and Reliability
+**Minimal Impact**:
+- **No performance overhead**: File logging is asynchronous and lightweight
+- **Error resilience**: Logging failures don't affect script execution
+- **Backward compatibility**: All existing functionality preserved
+- **Debug capability**: Full debugging information still available when needed
+
+### User Experience Benefits
+**Professional Interface**:
+- **Clean terminal output**: Users see only relevant script output and prompts
+- **Reduced confusion**: No technical jargon cluttering the interface
+- **Improved focus**: Users can concentrate on actual script interactions
+- **Maintained functionality**: All interactive capabilities preserved
+
+### Troubleshooting Support
+**Debug Information Still Available**:
+- **Development debugging**: Full technical details in log files
+- **Issue investigation**: Complete execution traces for troubleshooting
+- **Performance monitoring**: Detailed timing and process information
+- **Error analysis**: Comprehensive error logging and state tracking
+
+## Conclusion (Updated for Session 15)
+
+The Session 15 enhancements provide a clean, professional terminal interface while maintaining comprehensive debugging capabilities. Combined with all previous session features, the SIP LIMS Workflow Manager now provides:
+
+1. **Clean Terminal Interface**: Professional user experience with debug information moved to background logging
+2. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state
+3. **SIP Laboratory Branding**: Updated application title and branding to reflect Stable Isotope Probing focus
+4. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+5. **Timestamp Preservation**: File modification times preserved during all rollback operations
+6. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+7. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+8. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+9. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+10. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+11. **Reliable Interactive Execution**: Enhanced terminal visibility with clean, professional output
+12. **Comprehensive State Management**: Five-state system with complete project restoration capabilities
+13. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+14. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+15. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the clean, professional interface and comprehensive debugging capabilities needed for complex SIP laboratory workflows.

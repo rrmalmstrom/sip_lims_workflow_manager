@@ -445,8 +445,7 @@ class ScriptRunner:
         debug_log_path = log_dir / "debug_script_execution.log"
         
         def log_debug(message):
-            """Log to both output queue and file for backup"""
-            self.output_queue.put(message)
+            """Log debug info to file only (not to terminal output)"""
             try:
                 with open(debug_log_path, "a") as f:
                     import datetime
@@ -456,7 +455,12 @@ class ScriptRunner:
             except:
                 pass  # Don't let logging errors break execution
         
+        def log_to_terminal(message):
+            """Log message to terminal output only"""
+            self.output_queue.put(message)
+        
         try:
+            # Log debug info to file only (not visible to user)
             log_debug("=== SCRIPT STARTING (PTY) ===\n")
             log_debug(f"Process PID: {self.process.pid if self.process else 'None'}\n")
             log_debug(f"Master FD: {self.master_fd}\n")
@@ -493,9 +497,8 @@ class ScriptRunner:
                 return_code = self.process.wait()  # Ensure process is fully finished
                 success = return_code == 0
                 
-                # Add comprehensive debug info to output AND file
-                debug_msg = f"""
-=== SCRIPT EXECUTION COMPLETE (PTY) ===
+                # Log debug info to file only (not visible to user)
+                debug_msg = f"""=== SCRIPT EXECUTION COMPLETE (PTY) ===
 Exit Code: {return_code}
 Success: {success}
 Process Poll Result: {self.process.poll()}
@@ -530,6 +533,8 @@ Return Code Type: {type(return_code)}
         except Exception as e:
             error_msg = f"[ERROR] Exception in script runner: {str(e)}\n"
             log_debug(error_msg)
+            # Show error to user since this indicates a real problem
+            log_to_terminal(f"Error: {str(e)}\n")
             self.result_queue.put(RunResult(success=False, stdout="", stderr=str(e), return_code=-1))
         finally:
             self.is_running_flag.clear()
