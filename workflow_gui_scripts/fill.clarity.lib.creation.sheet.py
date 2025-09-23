@@ -203,7 +203,7 @@ def updateLibCreationFile(my_sheet, my_merged_df, my_lib_plate):
     target_aliquot_vol = 5
 
     pcr_cycle = int(input(
-        f"\n\nEnter number of PCR cycles used in library creation for {my_lib_plate} (default = 12):\n\n") or 12)
+        f"\nEnter number of PCR cycles used in library creation for {my_lib_plate} (default = 12):") or 12)
 
     # overwrite all cell values from row 26-500 and col 1-21 to create blank slate in lib info area of .xls file
     for r in range(26, 500, 1):

@@ -150,7 +150,7 @@ def updateLibInfo(updated_file_name):
         
     elif updated_file_name == SECOND_FA_DIR / 'updated_2nd_fa_analysis_summary.txt':
         
-        lib_df['check_total_pass'] =  lib_df['Total_passed_attempts'] - lib_df.fillna(0)['Passed_library'] - lib_df.fillna(0)['Redo_Passed_library']
+        lib_df['check_total_pass'] =  lib_df['Total_passed_attempts'] - lib_df['Passed_library'].fillna(0) - lib_df['Redo_Passed_library'].fillna(0)
         
         # abort script if the total passed attempts count does not match  the  sum of individual pass/fail results for each fraction
         if (lib_df['check_total_pass'] != 0).any():
@@ -160,7 +160,7 @@ def updateLibInfo(updated_file_name):
             
     elif updated_file_name == THIRD_FA_DIR / 'updated_3rd_fa_analysis_summary.txt':
     
-        lib_df['check_total_pass'] =  lib_df['Total_passed_attempts'] - lib_df.fillna(0)['Passed_library'] - lib_df.fillna(0)['Redo_Passed_library'] - lib_df.fillna(0)['Third_Passed_library']
+        lib_df['check_total_pass'] =  lib_df['Total_passed_attempts'] - lib_df['Passed_library'].fillna(0) - lib_df['Redo_Passed_library'].fillna(0) - lib_df['Third_Passed_library'].fillna(0)
              
         # abort script if the total passed attempts count does not match  the  sum of individual pass/fail results for each fraction
         if (lib_df['check_total_pass'] != 0).any():

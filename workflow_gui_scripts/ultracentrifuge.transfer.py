@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 import sys
 import os
+import shutil
 from datetime import datetime
 from os.path import exists as file_exists
 from pathlib import Path
@@ -112,7 +113,7 @@ def checkTubesInDatabase(my_tubes, all_samples_df):
         tubes)].copy()
 
     if len(my_tubes) != my_centrifuge_df.shape[0]:
-        print('\n\n\n')
+        print('\n')
         print('At least one of the sample IDs was not found in the project summary database.  Aborting process\n\n')
         sys.exit()
 
@@ -127,8 +128,8 @@ def checkTubesInDatabase(my_tubes, all_samples_df):
 def checkIfEnoughMassorVolume(centrifuge_df):
     # make sure the tubes have some amount of Available volume
     if (any(centrifuge_df['Available_vol_(ul)'] <= 0)):
-        print(centrifuge_df[centrifuge_df['Available_vol_(ul)'] <= 0])
-        print("\n\nAt least one sample doesn't have any remaining volume\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
+        # print(centrifuge_df[centrifuge_df['Available_vol_(ul)'] <= 0])
+        print("\nAt least one sample doesn't have any remaining volume\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
 
         val = input()
 
@@ -148,9 +149,9 @@ def checkIfEnoughMassorVolume(centrifuge_df):
 
     # abort if not enough sample mass for ultracentrifuge transfer
     if (any(centrifuge_df['Available_mass_(ng)'] < centrifug_mass)):
-        print(
-            centrifuge_df[centrifuge_df['Available_mass_(ng)'] < centrifug_mass])
-        print("\n\nAt least one sample doesn't have enough DNA mass\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
+        # print(
+        #     centrifuge_df[centrifuge_df['Available_mass_(ng)'] < centrifug_mass])
+        print("\nAt least one sample doesn't have enough DNA mass\n\n See table above\n\n Do you wish to continue (Y/N)\n\n")
 
         val = input()
 
@@ -266,7 +267,7 @@ def updateProjectDatabase(centrifuge_df, unused_tubes_df, dead_volume):
 
 #########################
 #########################
-def makeBarcodeLabels(tubes):
+def makeBarcodeLabels(tubes, min_tube, max_tube):
     
     # sort tube numbers from largest to smallest so they eventually
     # print out smallest to largest
@@ -278,7 +279,7 @@ def makeBarcodeLabels(tubes):
     x = '%BTW% /AF="\\\BARTENDER\shared\\templates\ECHO_BCode8.btw" /D="%Trigger File Name%" /PRN="bcode8" /R=3 /P /DD\r\n\r\n%END%\r\n\r\n\r\n'
 
 
-    bc_file = open(ULTRA_DIR / "BARTENDER_ultracentrifuge_tube_labels.txt", "w")
+    bc_file = open(BARTEND_DIR / f"BARTENDER_ultracentrifuge_tube_labels_{min_tube}_to_{max_tube}.txt", "w")
 
     bc_file.writelines(x)  
 
@@ -331,14 +332,14 @@ def createSQLdb(df):
 ###########################
 # check if path  was provided, otherwise use current directory
 if len(sys.argv) < 2:
-    print('\n\nDid not provide all required input files. Aborting. \n\n')
+    print('\nDid not provide all required input files. Aborting. \n')
     sys.exit()
 else:
 
     # loop through all provided input files and confirm they exist
     for s in sys.argv[1:]:  # Skip script name (sys.argv[0])
         if (file_exists(s) == 0):
-            print(f'\n\nCould not find file {s} \nAborting\n\n')
+            print(f'\nCould not find file {s} \nAborting\n')
             sys.exit()
 
 
@@ -350,6 +351,15 @@ else:
 PROJECT_DIR = Path.cwd()
 
 ULTRA_DIR = PROJECT_DIR / "2_load_ultracentrifuge"
+
+BARTEND_DIR = ULTRA_DIR / "BARTENDER_files"
+BARTEND_DIR.mkdir(parents=True, exist_ok=True)
+
+TRASNFER_DIR = ULTRA_DIR / "Hamilton_transfer_files"
+TRASNFER_DIR.mkdir(parents=True, exist_ok=True)
+
+OLD_DIR = ULTRA_DIR / "previously_processed_sample_lists"
+OLD_DIR.mkdir(parents=True, exist_ok=True)  
 
 ARCHIV_DIR = PROJECT_DIR / "archived_files"
 
@@ -409,14 +419,23 @@ project_df = updateProjectDatabase(centrifuge_df, unused_tubes_df, dead_volume)
 # makeTubewriterFile(tubes, min_tube, max_tube)
 
 # make file for printing BARTENDER barcodes for ultracentrifuge tubes
-makeBarcodeLabels(tubes)
+makeBarcodeLabels(tubes,min_tube, max_tube)
 
 # print out csv file for transfering from matrix to ultraceentrifuge tubes
-output_df.to_csv(ULTRA_DIR /
+output_df.to_csv(TRASNFER_DIR /
     f'Ultracentrifuge_transfer_{min_tube}_to_{max_tube}.csv', index=False)
 
 # update project database and archive older version of project database
 date = datetime.now().strftime("%Y_%m_%d-Time%H-%M-%S")
+
+# Move the tube_file to OLD_DIR for archival
+try:
+    tube_file_name = tube_file.name
+    destination = OLD_DIR / tube_file_name
+    shutil.move(str(tube_file), str(destination))
+    # print(f"Moved input file {tube_file_name} to {OLD_DIR}")
+except Exception as e:
+    print(f"\nWarning: Could not move {tube_file} to {OLD_DIR}: {e}")
 
 Path(PROJECT_DIR /
      "project_database.csv").rename(ARCHIV_DIR / f"archive_project_database_{date}.csv")
@@ -441,7 +460,7 @@ if success_file.exists():
 try:
     with open(success_file, "w") as f:
         f.write(f"SUCCESS: {script_name} completed at {datetime.now()}")
-    print(f"✓ Step {script_name} completed successfully")
+    #print(f"✓ Step {script_name} completed successfully")
 except Exception as e:
     print(f"✗ Failed to create success marker: {e}")
     sys.exit(1)

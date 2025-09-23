@@ -307,7 +307,7 @@ def mergeIndividualPlates(dirname, matched, pre_post):
 
     else:  # sort list of sucessfully merged fraction plates
         list_merged_plates.sort()
-        print("\nList of merged sample plates:\n\n", list_merged_plates)
+        print("\nList of merged sample plates:\n", list_merged_plates)
 
     return list_merged_plates, d
 
@@ -438,7 +438,7 @@ def removeEmptyFractions(result_df):
 
     # ask user for total number of fractions collected
     total_fractions = float(
-        input("\n\nEnter the total # fractions collected (default 24): ") or 24)
+        input("\nEnter the total # fractions collected (default 24): ") or 24)
 
     if (total_fractions <= 0):
         print('\n\nError.  Fractions must be >0.  Aborting.\n\n')
@@ -501,8 +501,6 @@ def resolveDuplicates(result_df, dups_df2, dup_list):
 
 ##########################
 ##########################
-
-
 def findDuplicateSamples(result_df):
 
     find_dups_df = result_df.groupby(['Sample Barcode', 'Plate Barcode'])[
@@ -517,9 +515,9 @@ def findDuplicateSamples(result_df):
 
     if len(dup_list) > 0:
         # print(df2[(df2['Courses'].isin(y))].copy())
-        print('\n\n Duplicate samples were found on multiple SIP fraction plates. See below and open duplicate_samples.csv to see problem:\n\n')
-        print(find_dups_df[find_dups_df['Sample Barcode'].isin(dup_list)])
-        find_dups_df[find_dups_df['Sample Barcode'].isin(dup_list)].to_csv(
+        print('\nDuplicate samples were found on multiple SIP fraction plates. See below and open duplicate_samples.csv to see problem:\n')
+        # print(find_dups_df[find_dups_df['Sample Barcode'].isin(dup_list)])
+        find_dups_df[find_dups_df['Sample Barcode'].isin(dup_list)].to_csv(MERGE_DIR /
             'summary_duplicate_samples.csv', index=False)
 
         keep_going = str(input("""

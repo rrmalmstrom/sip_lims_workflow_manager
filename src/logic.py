@@ -642,6 +642,20 @@ Return Code Type: {type(return_code)}
                 pass
             self.slave_fd = None
 
+        # Clear the output and result queues to prevent old output from appearing
+        # when the next script runs
+        while not self.output_queue.empty():
+            try:
+                self.output_queue.get_nowait()
+            except queue.Empty:
+                break
+        
+        while not self.result_queue.empty():
+            try:
+                self.result_queue.get_nowait()
+            except queue.Empty:
+                break
+
         self.process = None
         self.reader_thread = None
 
