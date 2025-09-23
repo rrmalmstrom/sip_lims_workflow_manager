@@ -243,6 +243,11 @@ FA_list.sort()
 
 last_FA = FA_list[-1]
 
+# Validate that last_FA is not empty or None
+if not last_FA or last_FA is None or str(last_FA).strip() == '':
+    print('\n\nError: Could not identify the latest FA run. The FA plate barcode list appears to be empty or invalid. Aborting script.\n\n')
+    sys.exit()
+
 # next_FA_num = int(last_FA[-1])+1
 
 # make last_df with only data from most recent pooling/size selection run, i.e.
@@ -257,7 +262,10 @@ last_df['old_index'] = last_df.index
 
 update_df = pd.merge(last_df, fa_df, left_on=['FA_plate_barcode','Dest_Tube_Size_Selected','FA_well'], right_on=['FA_plate_barcode','Dest_Tube_Size_Selected','Well'])
 
-
+# Check if update_df is empty after merge operation
+if update_df.empty:
+    print('\n\nError: No matching data found between FA results and pool_summary.csv. There was a problem matching data from FA results with data in pool_summary.csv. Aborting script.\n\n')
+    sys.exit()
 
 
 if "Passed_Pool" not in update_df.columns:
