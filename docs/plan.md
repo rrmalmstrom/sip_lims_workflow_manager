@@ -98,6 +98,20 @@ The system includes comprehensive validation for workflow.yml files:
 - **Recovery Options**: Multiple paths to fix corrupted workflow files
 
 ### 3.5. Distribution & Updates
+
+#### Two-Repository Architecture
+The system uses separate repositories for better version control and independent updates:
+
+- **Main Application Repository (`sip_lims_workflow_manager`)**:
+  - Contains GUI application, workflow engine, setup scripts, documentation
+  - Updates include new features, bug fixes, user interface improvements
+  
+- **Scripts Repository (`sip_scripts_workflow_gui`)**:
+  - Contains all Python workflow scripts for laboratory analysis
+  - Updates include scientific workflow improvements, new analysis methods, script bug fixes
+  - Automatically cloned during setup process
+
+#### Application Updates
 - **Automated Release Script (`release.py`):** A dedicated release script will automate the creation of new versions. It will:
   - Prompt for a new version number.
   - Update an internal `version.json` file.
@@ -108,6 +122,12 @@ The system includes comprehensive validation for workflow.yml files:
   - It reads its internal `version.json`.
   - It attempts to read `latest.json` from the central location. If this file is missing, the check fails silently.
   - If a new version is detected, a non-blocking notification is displayed to the user.
+
+#### Script Updates
+- **Independent Versioning**: Scripts can be updated without updating the main application
+- **Automatic Detection**: Application checks for script updates on startup
+- **Simple Update Process**: Users run `update_scripts.command` or `update_scripts.bat` to get latest scripts
+- **Git-Based**: Uses standard Git pull mechanism for reliable updates
 
 ### 3.6. Script Execution Context
 A critical feature of the system is how it provides a consistent environment for the executed scripts.

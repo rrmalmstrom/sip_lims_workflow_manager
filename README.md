@@ -32,8 +32,27 @@ The setup process needs to be performed only **once** per computer.
     -   **On Windows**: Open the `lims_workflow_manager` folder and double-click the `setup.bat` file.
 
     This script will perform two key actions:
-    a.  **Clone the Script Repository**: It will download the central repository of workflow scripts into a `scripts` folder inside the application directory.
+    a.  **Clone the Script Repository**: It will download the central repository of workflow scripts from `sip_scripts_workflow_gui` into a `scripts` folder inside the application directory.
     b.  **Create the Environment**: It will create an isolated Python virtual environment and install all necessary dependencies. This will not affect any other Python installations on your system.
+
+## Repository Architecture
+
+This application uses a **two-repository architecture** for better separation and independent versioning:
+
+### **Main Application Repository**
+- **Repository**: `sip_lims_workflow_manager`
+- **Contains**: GUI application, workflow engine, setup scripts, documentation
+- **Updates**: New features, bug fixes, user interface improvements
+
+### **Scripts Repository**
+- **Repository**: `sip_scripts_workflow_gui`
+- **Contains**: All Python workflow scripts for laboratory analysis
+- **Updates**: Scientific workflow improvements, new analysis methods, script bug fixes
+
+### **Benefits**
+- **Independent Updates**: Scripts and app can be updated separately
+- **Smaller Downloads**: App downloads don't include large script files
+- **Version Control**: Each component has its own release cycle
 
 ## Updating the Workflow Scripts
 
@@ -42,6 +61,7 @@ This application is designed so that the workflow scripts can be updated indepen
 -   The application will automatically check for new script versions every time it starts.
 -   If new scripts are available, a notification will appear in the sidebar.
 -   To get the latest scripts, simply close the application and run the `update_scripts.command` (macOS) or `update_scripts.bat` (Windows) file.
+-   **Script updates are independent**: You can update scripts without updating the main application.
 
 ## Running the Application
 

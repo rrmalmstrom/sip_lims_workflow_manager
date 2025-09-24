@@ -27,7 +27,8 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Error Handling:** The engine automatically restores the pre-run snapshot if any script fails. Enhanced with success marker files for reliable failure detection.
 - **Script Management (Centralized Git Repository):**
     - The application's workflow scripts are managed in a central, private Git repository and cloned into a local `scripts` folder during setup.
-- **Distribution Model:** The application is distributed as a folder. A one-time `setup` script prepares the environment. A `run` script launches the app.
+- **Distribution Model:** The application is distributed as a folder. A one-time `setup` script prepares the environment and clones the separate scripts repository. A `run` script launches the app.
+- **Two-Repository Architecture:** Main application (`sip_lims_workflow_manager`) and scripts (`sip_scripts_workflow_gui`) are managed in separate repositories for independent versioning.
 
 ## 4. Recent Major Accomplishments
 1. **Critical Rollback Bug Fix**: Resolved issue where failed scripts were incorrectly marked as "completed" instead of triggering rollback.
@@ -57,6 +58,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 25. **Script Termination Functionality**: Added terminate button in terminal interface allowing users to stop running scripts and automatically rollback to pre-execution state.
 26. **SIP Branding Update**: Updated application title and branding from "LIMS Workflow Manager" to "SIP LIMS Workflow Manager" to reflect Stable Isotope Probing laboratory focus.
 27. **Terminal Output Cleanup**: Removed verbose debug messages from user-visible terminal output while preserving comprehensive debug logging in background files for professional user experience.
+28. **Repository Separation**: Separated workflow scripts into independent `sip_scripts_workflow_gui` repository for better version control, independent updates, and cleaner architecture.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -222,3 +224,19 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Debug Information Preservation**: Complete execution traces, timing, and error information maintained in `.workflow_logs/debug_script_execution.log`
 - **User Experience**: Significantly improved professional appearance while maintaining full debugging capabilities for troubleshooting
 - **Universal Compatibility**: Works with all existing workflows and maintains backward compatibility
+
+## 17. Latest Features (Session 16)
+### Repository Separation and Architecture Improvement
+- **Problem Solved**: Scripts were bundled with main application repository, preventing independent versioning and updates
+- **Root Cause Addressed**: During development, scripts evolved within main repository and became more current than separate scripts repository
+- **Technical Implementation**: Created new `sip_scripts_workflow_gui` repository with updated scripts and modified setup process
+- **Key Features**:
+  - **Independent Repositories**: Main app (`sip_lims_workflow_manager`) and scripts (`sip_scripts_workflow_gui`) now completely separate
+  - **Automatic Script Cloning**: Setup process automatically clones scripts from separate repository
+  - **Independent Updates**: Scripts and app can be updated separately with different release cycles
+  - **Cleaner Architecture**: App repository no longer contains bundled scripts, reducing download size
+- **Setup Process Enhancement**: Modified `setup.command` and `setup.bat` to clone from new scripts repository
+- **User Experience**: No change to user workflow - scripts still appear in same `scripts/` folder location
+- **Version Control**: Each component (app vs scripts) has independent Git history and release management
+- **Documentation Updates**: Updated README.md and technical documentation to reflect new architecture
+- **Universal Compatibility**: Existing user workflows unchanged while providing better development architecture
