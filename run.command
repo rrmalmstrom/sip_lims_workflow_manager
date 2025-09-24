@@ -35,7 +35,7 @@ source .venv/bin/activate
 
 # Pass update status to the streamlit app
 if [[ $UPDATE_STATUS == *"Your branch is behind"* ]]; then
-    streamlit run app.py --server.headless=true -- --scripts-update-available
+    streamlit run app.py --server.headless=true --server.address=127.0.0.1 -- --scripts-update-available
 else
-    streamlit run app.py --server.headless=true
+    streamlit run app.py --server.headless=true --server.address=127.0.0.1
 fi

@@ -15,6 +15,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   **Intelligent project setup** with automatic file scenario detection.
 -   Interactive script support with real-time terminal output.
 -   **Script termination capability** with automatic rollback to pre-execution state.
+-   **Localhost-only security** - application is only accessible from your computer, not from the network.
 -   Cross-platform support for macOS and Windows.
 
 ## Prerequisites
@@ -71,6 +72,17 @@ After the one-time setup is complete, you can start the application at any time:
 -   **On Windows**: Double-click the `run.bat` file.
 
 A terminal window will open, and after a few moments, the application's user interface will open in your default web browser.
+
+### Security Configuration
+
+The SIP LIMS Workflow Manager is configured for **localhost-only access** for enhanced security:
+
+-   **Access URL**: The application will only show `http://127.0.0.1:8501` (localhost)
+-   **Network Security**: The application is **NOT accessible** from other computers on your network
+-   **Privacy Protection**: Your workflow data and project files remain completely private to your computer
+-   **No Network Exposure**: Other users on the same network cannot access or view your workflows
+
+This localhost-only configuration ensures that your sensitive laboratory data and workflows are only accessible from your own computer, providing an additional layer of security for your research data.
 
 ## How to Use
 
