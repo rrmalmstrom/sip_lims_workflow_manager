@@ -2209,3 +2209,199 @@ The Session 15 enhancements provide a clean, professional terminal interface whi
 15. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the clean, professional interface and comprehensive debugging capabilities needed for complex SIP laboratory workflows.
+
+## Feature 15: Persistent Script Update Notifications (Session 16)
+
+### Problem Statement
+Users needed persistent script update notifications during app runtime. The original system only checked for script updates at application startup, meaning users who kept the app running for extended periods would never see new script versions. Browser refresh didn't trigger update checks, requiring users to fully restart the application to see script updates.
+
+### Root Cause Analysis
+
+#### The Original Limitation
+The startup scripts ([`run.command`](run.command:26-31) and [`run.bat`](run.bat:28-36)) only checked for script updates when launching the app:
+- **Startup-only checking**: Git operations only occurred during app launch
+- **No persistent monitoring**: Once running, no further script update checks occurred
+- **Browser refresh ineffective**: Page refresh didn't trigger script update checks
+- **Manual restart required**: Users had to remember to periodically restart the app
+
+#### Comparison with App Updates
+The app already had persistent update checking via [`UpdateManager`](src/update_manager.py:7) with [`@st.cache_data(ttl=3600)`](app.py:25), but script updates lacked this capability.
+
+### Solution Implementation
+
+#### Enhanced ScriptUpdateManager Class (`src/script_update_manager.py`)
+
+**Core Functionality**:
+```python
+class ScriptUpdateManager:
+    """Manages checking and updating workflow scripts from Git repository."""
+    
+    def __init__(self, scripts_dir: Path, cache_ttl: int = 1800):
+        """Initialize with 30-minute cache TTL for optimal performance."""
+    
+    def check_for_updates(self, timeout: int = 10) -> Dict[str, Any]:
+        """Check if script repository has updates available with caching."""
+    
+    def update_scripts(self, timeout: int = 30) -> Dict[str, Any]:
+        """Update scripts by pulling from remote repository."""
+```
+
+**Key Features**:
+- **Git Integration**: Uses `subprocess` to run Git commands (`fetch`, `status`, `pull`) safely
+- **Intelligent Caching**: 30-minute cache TTL balances responsiveness with performance
+- **Comprehensive Error Handling**: Network timeouts, missing Git repos, permission issues
+- **Cross-Platform Compatibility**: Works on both macOS and Windows
+- **Cache Management**: Automatic cache clearing after successful updates
+
+#### GUI Integration (`app.py`)
+
+**Cached Update Checking**:
+```python
+@st.cache_data(ttl=1800)  # 30-minute cache
+def check_for_script_updates():
+    """Check for script updates with caching."""
+    scripts_dir = Path(__file__).parent / "scripts"
+    manager = ScriptUpdateManager(scripts_dir)
+    return manager.check_for_updates()
+```
+
+**Sidebar Notification System**:
+```python
+# Script Update Notification in sidebar
+script_update_info = check_for_script_updates()
+if script_update_info['update_available']:
+    st.subheader("🔄 Script Updates Available")
+    st.info("**New workflow scripts available!**")
+    
+    # Show last check time
+    if script_update_info.get('last_check'):
+        last_check_formatted = format_last_check_time(script_update_info['last_check'])
+        st.caption(f"Last checked: {last_check_formatted}")
+    
+    # Action buttons
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📥 Update Scripts"):
+            # Perform update with progress indicator
+    with col2:
+        if st.button("🔄 Check Now"):
+            # Force cache refresh
+```
+
+### Technical Implementation Details
+
+#### Caching Strategy
+- **30-minute TTL**: Balances timely notifications with performance
+- **Automatic invalidation**: Cache cleared after successful updates
+- **Manual refresh**: Users can force immediate cache refresh
+- **Memory efficient**: Cached results stored in Streamlit's cache system
+
+#### Error Handling
+- **Network timeouts**: 10-second timeout for Git fetch operations
+- **Repository validation**: Checks for `.git` directory before operations
+- **Permission handling**: Graceful handling of Git permission issues
+- **Merge conflicts**: Clear error messages for update conflicts
+
+#### User Experience Enhancements
+- **Visual prominence**: Update notifications clearly visible in sidebar
+- **Progress feedback**: Spinner during update operations
+- **Success/error messages**: Clear feedback on operation results
+- **Timestamp display**: Shows when updates were last checked
+- **Non-intrusive**: Only appears when updates are actually available
+
+### Performance Considerations
+
+#### Efficiency
+- **Cached operations**: Git commands only run when cache expires
+- **Background processing**: Updates don't block the main UI
+- **Minimal overhead**: Git operations are lightweight and fast
+- **Smart scheduling**: 30-minute intervals prevent excessive Git calls
+
+#### Reliability
+- **Transaction-like updates**: Updates either succeed completely or fail cleanly
+- **State consistency**: Repository never left in inconsistent state
+- **Graceful degradation**: App continues working even if script updates fail
+- **Comprehensive logging**: All operations logged for troubleshooting
+
+### Comparison: App Updates vs Script Updates
+
+| Feature | App Updates | Script Updates |
+|---------|-------------|----------------|
+| **Check Frequency** | Every hour | Every 30 minutes |
+| **Update Source** | Google Drive | Git repository |
+| **Update Method** | Manual download | One-click in-app |
+| **Cache Duration** | 60 minutes | 30 minutes |
+| **Restart Required** | Yes | No |
+| **User Interaction** | External browser | In-app interface |
+
+### Test-Driven Development Implementation
+
+#### Comprehensive Test Suite
+**Core Functionality Tests** (`tests/test_script_update_manager.py`):
+- 14 test cases covering all ScriptUpdateManager functionality
+- Mock-based testing for reliable unit tests
+- Complete error scenario coverage
+- Cache behavior validation
+
+**GUI Integration Tests** (`tests/test_script_update_gui.py`):
+- 11 test cases covering user interface components
+- Button logic and notification display testing
+- Timestamp formatting and cache clearing validation
+- User interaction workflow testing
+
+#### Test Results
+✅ **All 25 tests passing** - Complete validation of functionality
+✅ **No regression** - Existing functionality remains unchanged
+✅ **Cross-platform compatibility** - Tests pass on all supported platforms
+
+### User Benefits
+
+#### Immediate Advantages
+- **No restart required**: Script updates applied instantly
+- **Persistent awareness**: Always know when updates are available
+- **One-click convenience**: Update scripts with single button click
+- **Clear feedback**: Always know status of script updates
+
+#### Workflow Improvements
+- **Uninterrupted work**: Continue using app while scripts update
+- **Timely updates**: See new scripts within 30 minutes of release
+- **Reduced friction**: No need to remember to restart app
+- **Better productivity**: Seamless integration with existing workflow
+
+### Future Enhancement Opportunities
+
+#### Potential Improvements
+1. **Update details**: Show commit messages and change summaries
+2. **Selective updates**: Allow choosing specific commits to pull
+3. **Update scheduling**: Custom check intervals
+4. **Branch switching**: Allow switching between script branches
+5. **Rollback capability**: Revert to previous script versions
+
+#### Advanced Features
+1. **Conflict resolution**: GUI for resolving merge conflicts
+2. **Update history**: Track and display update history
+3. **Notification preferences**: Customizable notification settings
+4. **Desktop notifications**: System notifications for critical updates
+
+## Conclusion (Updated for Session 16)
+
+The Session 16 enhancements complete the update system by providing persistent script update notifications that eliminate the need to restart the application. Combined with all previous session features, the SIP LIMS Workflow Manager now provides:
+
+1. **Persistent Script Update Notifications**: 30-minute automatic checking with sidebar notifications and one-click updates
+2. **Clean Terminal Interface**: Professional user experience with debug information moved to background logging
+3. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state
+4. **SIP Laboratory Branding**: Updated application title and branding to reflect Stable Isotope Probing focus
+5. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+6. **Timestamp Preservation**: File modification times preserved during all rollback operations
+7. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+8. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+9. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+10. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+11. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+12. **Reliable Interactive Execution**: Enhanced terminal visibility with clean, professional output
+13. **Comprehensive State Management**: Five-state system with complete project restoration capabilities
+14. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+15. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+16. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the persistent update notifications and seamless script management needed for complex SIP laboratory workflows where staying current with the latest analysis methods is critical for research success.

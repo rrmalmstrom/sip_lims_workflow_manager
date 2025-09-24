@@ -253,3 +253,25 @@ We have successfully completed a major refactoring of the application's core log
     * **`log_to_terminal()` Function**: Logs only user-relevant messages to terminal
     * **Comprehensive Debug Files**: Complete execution traces, timing, and error information preserved
     * **Professional Interface**: Users see clean, focused terminal output without technical clutter
+
+### Session 16: Persistent Script Update Notifications
+1. **Comprehensive Script Update System**: Implemented persistent script update checking that addresses the critical limitation where users only saw script updates when restarting the application.
+    * **Problem Solved**: Users who kept the app running for extended periods never saw script update notifications, and browser refresh didn't trigger update checks
+    * **Solution**: Added ScriptUpdateManager class with 30-minute automatic checking, sidebar notifications, and one-click updates
+    * **User Experience**: Script updates now appear prominently in sidebar with "📥 Update Scripts" and "🔄 Check Now" buttons
+    * **No Restart Required**: Users can update scripts instantly without closing the application
+2. **Enhanced Update Architecture**: Implemented dual update system with different strategies for app updates vs script updates.
+    * **App Updates**: Hourly checks via Google Drive with manual download (existing system)
+    * **Script Updates**: 30-minute checks via Git with one-click in-app updates (new system)
+    * **Cache Management**: Intelligent caching prevents excessive Git operations while ensuring timely notifications
+    * **Error Handling**: Comprehensive error handling for network issues, timeouts, and Git repository problems
+3. **Test-Driven Development**: Created comprehensive test suite with 25 tests covering all functionality.
+    * **Core Tests**: 14 tests for ScriptUpdateManager covering initialization, update detection, error handling, and caching
+    * **GUI Tests**: 11 tests for GUI integration covering notification display, button logic, and user interactions
+    * **Mock-Based Testing**: No dependency on actual Git repositories for reliable unit testing
+    * **Complete Coverage**: All scenarios including success, failure, timeouts, and edge cases
+4. **Professional Documentation**: Created comprehensive documentation explaining the new system.
+    * **Technical Documentation**: Complete implementation details in SCRIPT_UPDATE_SYSTEM.md
+    * **User Documentation**: Updated README.md with clear instructions for the new update system
+    * **Project Documentation**: Updated SUMMARY.md and PROGRESS.md to reflect the new capabilities
+    * **Comparison Tables**: Clear comparison between app updates and script updates for user understanding

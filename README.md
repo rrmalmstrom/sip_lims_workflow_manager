@@ -59,10 +59,26 @@ This application uses a **two-repository architecture** for better separation an
 
 This application is designed so that the workflow scripts can be updated independently from the main application.
 
--   The application will automatically check for new script versions every time it starts.
--   If new scripts are available, a notification will appear in the sidebar.
--   To get the latest scripts, simply close the application and run the `update_scripts.command` (macOS) or `update_scripts.bat` (Windows) file.
+### Automatic Script Update Notifications
+
+-   **Persistent checking**: The application automatically checks for new script versions every 30 minutes while running.
+-   **Sidebar notifications**: When new scripts are available, a prominent notification appears in the sidebar.
+-   **One-click updates**: Click "📥 Update Scripts" in the sidebar to update immediately without restarting the app.
+-   **Manual refresh**: Use "🔄 Check Now" to force an immediate check for updates.
+-   **No restart required**: Script updates are applied instantly without closing the application.
+
+### Legacy Update Method (Still Available)
+
+-   **Startup check**: The application also checks for script updates when it starts.
+-   **Manual update**: You can still use `update_scripts.command` (macOS) or `update_scripts.bat` (Windows) files.
 -   **Script updates are independent**: You can update scripts without updating the main application.
+
+### Benefits of the New System
+
+-   **Never miss updates**: No need to restart the app to see new script versions.
+-   **Immediate updates**: Apply script updates instantly from within the application.
+-   **Better workflow**: Continue working while scripts are updated in the background.
+-   **Clear feedback**: Always know when your scripts were last checked and updated.
 
 ## Running the Application
 

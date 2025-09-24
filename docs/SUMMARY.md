@@ -19,6 +19,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 13 (Timestamp Preservation):** Complete. Implemented timestamp preservation during rollback operations to maintain accurate file modification times.
 - **Phase 14 (Conditional Workflow System):** Complete. Implemented comprehensive conditional workflow functionality allowing users to make Yes/No decisions at specific workflow points with automatic triggering, enhanced undo behavior, and complete state management.
 - **Phase 15 (Terminal Output Cleanup):** Complete. Cleaned up verbose debug output from user-visible terminal interface while preserving comprehensive debug logging in background files for troubleshooting.
+- **Phase 16 (Persistent Script Update Notifications):** Complete. Implemented comprehensive script update notification system that checks for updates every 30 minutes during app runtime, displays notifications in sidebar, and allows one-click updates without restarting the application.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -59,6 +60,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 26. **SIP Branding Update**: Updated application title and branding from "LIMS Workflow Manager" to "SIP LIMS Workflow Manager" to reflect Stable Isotope Probing laboratory focus.
 27. **Terminal Output Cleanup**: Removed verbose debug messages from user-visible terminal output while preserving comprehensive debug logging in background files for professional user experience.
 28. **Repository Separation**: Separated workflow scripts into independent `sip_scripts_workflow_gui` repository for better version control, independent updates, and cleaner architecture.
+29. **Persistent Script Update Notifications**: Implemented comprehensive script update system with 30-minute automatic checking, sidebar notifications, one-click updates, and manual refresh capability, eliminating the need to restart the app to see script updates.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
