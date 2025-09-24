@@ -8,8 +8,10 @@ import threading
 import time
 import queue
 import yaml
+import webbrowser
 from src.core import Project
 from src.logic import RunResult
+from src.update_manager import UpdateManager
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -20,6 +22,25 @@ import streamlit.components.v1 as components
 TERMINAL_HEIGHT = 450  # Reduced height for better screen utilization
 
 # --- Helper Functions ---
+@st.cache_data(ttl=3600)  # Cache for 1 hour to avoid checking too often
+def check_for_updates():
+    """
+    Check for available updates using the UpdateManager.
+    Cached to avoid frequent API calls.
+    """
+    try:
+        # Use the Google Drive URL provided in the task
+        update_manager = UpdateManager()
+        update_manager.remote_version_url = "https://drive.google.com/uc?id=1pRsUbaKoieuInH67ghExSZw7p2I64-FQ&export=download"
+        return update_manager.check_for_updates()
+    except Exception as e:
+        return {
+            'update_available': False,
+            'local_version': None,
+            'remote_version': None,
+            'error': f"Failed to check for updates: {str(e)}"
+        }
+
 def validate_workflow_yaml(file_path):
     """
     Validates a workflow.yml file for basic syntax and structure.
@@ -416,6 +437,32 @@ def main():
     # --- Sidebar ---
     with st.sidebar:
         st.header("Controls")
+        
+        # --- Update Notification ---
+        update_info = check_for_updates()
+        if update_info['update_available'] and not update_info['error']:
+            st.subheader("🔄 Update Available")
+            st.info(f"**Update Available: v{update_info['remote_version']}**")
+            st.caption(f"Current version: v{update_info['local_version']}")
+            
+            if st.button("📥 Download Update", key="download_update"):
+                # Use the download URL from the update info, fallback to version check URL
+                download_url = update_info.get('download_url')
+                if not download_url:
+                    download_url = "https://drive.google.com/uc?id=1pRsUbaKoieuInH67ghExSZw7p2I64-FQ&export=download"
+                
+                try:
+                    webbrowser.open(download_url)
+                    st.success("✅ Download started in your browser!")
+                except Exception as e:
+                    st.error(f"❌ Failed to open download: {e}")
+                    st.info(f"Please manually visit: {download_url}")
+            
+            st.markdown("---")
+        elif update_info['error']:
+            # Only show error in debug mode or if explicitly requested
+            if st.session_state.get('show_update_errors', False):
+                st.error(f"Update check failed: {update_info['error']}")
         
         st.subheader("Project")
         if st.button("Browse for Project Folder", key="browse_button"):
