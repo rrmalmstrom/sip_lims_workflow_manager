@@ -16,7 +16,7 @@ IF EXIST scripts (
     git pull
     cd ..
 ) ELSE (
-    git clone git@github.com:rrmalmstrom/sip_scripts.git scripts
+    git clone git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git scripts
 )
 set GIT_SSH_COMMAND=
 

@@ -103,3 +103,6 @@ test_project*/
 build/
 dist/
 *.pkg
+
+# Scripts directory - managed in separate repository
+scripts/

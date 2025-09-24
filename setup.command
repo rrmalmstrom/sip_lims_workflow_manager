@@ -25,7 +25,7 @@ if [ -d "scripts" ]; then
     cd ..
 else
     # Use the SSH URL for the repository
-    git clone git@github.com:rrmalmstrom/sip_scripts.git scripts
+    git clone git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git scripts
 fi
 
 # Unset the variable so it doesn't interfere with other git operations
