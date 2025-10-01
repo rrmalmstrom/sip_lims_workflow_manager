@@ -114,12 +114,12 @@ The system uses separate repositories for better version control and independent
 #### Application Updates
 - **Automated Release Script (`release.py`):** A dedicated release script will automate the creation of new versions. It will:
   - Prompt for a new version number.
-  - Update an internal `version.json` file.
+  - Create a Git tag for the version.
   - Run the PyInstaller build process.
   - Create a versioned release folder on a shared drive.
   - Automatically generate the `latest.json` file in the central distribution location.
 - **Application Update Check:** The packaged application will check for updates on startup.
-  - It reads its internal `version.json`.
+  - It reads its current version from Git tags.
   - It attempts to read `latest.json` from the central location. If this file is missing, the check fails silently.
   - If a new version is detected, a non-blocking notification is displayed to the user.
 

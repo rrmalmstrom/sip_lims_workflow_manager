@@ -191,7 +191,7 @@ if not latest_version:
 ### Deprecated Components
 - ~~Google Drive distribution~~
 - ~~Dual update interfaces~~
-- ~~Manual version.json management~~
+- ~~Manual version.json management~~ (Now uses Git tags only)
 - ~~Separate authentication systems~~
 
 ### Backward Compatibility

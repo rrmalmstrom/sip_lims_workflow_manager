@@ -633,6 +633,15 @@ def main():
             
             if not can_undo:
                 st.caption("No completed steps to undo")
+        
+        # Add permanent update cache clearing option in sidebar
+        st.subheader("Updates")
+        if st.button("🔄 Manual Check for Updates", key="sidebar_check_updates"):
+            check_for_app_updates.clear()
+            check_for_script_updates.clear()
+            st.success("✅ Update cache cleared!")
+            st.rerun()
+        st.caption("Clears update cache and checks for new versions")
 
     if st.session_state.project_path and not st.session_state.project:
         project_path = st.session_state.project_path

@@ -88,9 +88,9 @@ pip install -r requirements.txt
 ```
 
 ### Verify Configuration Files
-1. **Check that `config/version.json` exists**:
+1. **Check that Git tags are available** (version.json is no longer used):
    ```bash
-   cat config/version.json
+   git describe --tags --abbrev=0
    ```
    Should show:
    ```json
@@ -101,8 +101,8 @@ pip install -r requirements.txt
 
 2. **If the file doesn't exist, create it**:
    ```bash
-   mkdir -p config
-   echo '{"version": "0.9.0"}' > config/version.json
+   # Version is now managed via Git tags only
+   git tag v0.9.0
    ```
 
 ## Step 3: Start the Updated App
@@ -157,7 +157,7 @@ Check the following:
 3. **Verify internet connection** - the app needs to reach Google Drive
 4. **Check the version file**:
    ```bash
-   cat config/version.json
+   git describe --tags --abbrev=0
    ```
    Should show version "0.9.0" (lower than remote version "1.0.0")
 
@@ -183,7 +183,7 @@ Check the following:
 1. **Stop the app** (`Ctrl+C`)
 2. **Edit the version file**:
    ```bash
-   echo '{"version": "1.1.0"}' > config/version.json
+   git tag v1.1.0
    ```
 3. **Restart the app**:
    ```bash
@@ -195,7 +195,7 @@ Check the following:
 1. **Stop the app** (`Ctrl+C`)
 2. **Reset the version file**:
    ```bash
-   echo '{"version": "0.9.0"}' > config/version.json
+   git tag v0.9.0
    ```
 3. **Restart the app**:
    ```bash
@@ -217,7 +217,7 @@ streamlit run app.py
 ### Issue: No update notification appears
 **Checklist**:
 - [ ] Internet connection working?
-- [ ] `config/version.json` exists with version "0.9.0"?
+- [ ] Git tag v0.9.0 exists? (`git describe --tags --abbrev=0`)
 - [ ] Any error messages in terminal?
 - [ ] Browser cache cleared? (Ctrl+Shift+R)
 

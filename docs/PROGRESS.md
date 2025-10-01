@@ -1,6 +1,6 @@
 # SIP LIMS Workflow Manager - Development Progress
 
-**Last Updated:** 2025-09-22
+**Last Updated:** 2025-10-01
 
 This document tracks the development progress of the LIMS Workflow Manager application.
 
@@ -275,3 +275,25 @@ We have successfully completed a major refactoring of the application's core log
     * **User Documentation**: Updated README.md with clear instructions for the new update system
     * **Project Documentation**: Updated SUMMARY.md and PROGRESS.md to reflect the new capabilities
     * **Comparison Tables**: Clear comparison between app updates and script updates for user understanding
+
+### Session 17: Manual Update Cache Clearing Fix
+1. **Critical Caching Issue Resolution**: Identified and fixed Streamlit caching catch-22 preventing script update detection.
+    * **Problem Identified**: [`@st.cache_data(ttl=3600)`](../app.py:26) decorator was caching "no updates available" for 60 minutes
+    * **Catch-22 Situation**: Original "Force Check Updates" button only appeared when updates were already detected
+    * **Root Cause**: When first loaded (before new tags), system cached "no updates available" and persisted after tag creation
+    * **Impact**: Users couldn't see new script updates even after manual refresh due to persistent cache
+2. **Permanent Manual Cache Clearing Solution**: Added always-visible manual update check button in sidebar.
+    * **Solution**: "🔄 Manual Check for Updates" button permanently available in sidebar regardless of update status
+    * **Functionality**: Clears both app and script update caches when clicked, provides immediate feedback, triggers page refresh
+    * **User Experience**: Users can now manually force update checks anytime, bypassing the 60-minute cache limitation
+    * **Integration**: Maintains existing automatic update detection while providing manual override capability
+3. **Test-Driven Development**: Created comprehensive test suite for manual cache clearing functionality.
+    * **Test Suite Creation**: [`tests/test_manual_update_check.py`](../tests/test_manual_update_check.py) with 8 comprehensive test cases
+    * **Complete Coverage**: Button existence, placement, cache clearing, user feedback, integration with existing system
+    * **Test Results**: All 8 new tests passed, all 169 total tests passed with no regression
+    * **Validation**: Confirmed button appears correctly, clears caches, and integrates properly with existing update system
+4. **Manual Verification and Documentation**: Confirmed fix works in real-world scenario and updated documentation.
+    * **User Testing**: Manual verification confirmed button works correctly, clears cache, and shows available updates
+    * **Script Update Success**: User successfully updated scripts from v1.0.0 to v1.0.1 using the new functionality
+    * **Documentation Updates**: Enhanced [`docs/SCRIPT_UPDATE_SYSTEM.md`](../docs/SCRIPT_UPDATE_SYSTEM.md) with cache management section
+    * **Technical Details**: Added comprehensive explanation of the caching issue, solution, and testing coverage

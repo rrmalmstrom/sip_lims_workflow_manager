@@ -63,8 +63,9 @@ SCRIPTS_REPOSITORY = {
 
 1. **Automatic Detection**: System checks every 60 minutes + on page refresh
 2. **Smart Notification**: "🔔 Updates Available" appears only when needed
-3. **Expandable Details**: Click to reveal script update information
-4. **One-Click Update**: "📥 Update Scripts Now" button applies updates instantly
+3. **Manual Cache Clearing**: "🔄 Manual Check for Updates" button always available in sidebar
+4. **Expandable Details**: Click to reveal script update information
+5. **One-Click Update**: "📥 Update Scripts Now" button applies updates instantly
 
 ### Interface Layout
 
@@ -241,7 +242,8 @@ def check_for_script_updates():
 ### Efficient Operations
 - **GitHub API Primary**: Fast version checking via API
 - **SSH Fallback**: Only when API unavailable
-- **Smart Caching**: Prevents redundant Git operations
+- **Smart Caching**: Prevents redundant Git operations with 60-minute TTL
+- **Manual Cache Override**: Always-available manual cache clearing button
 - **Background Processing**: Non-blocking update detection
 
 ## Migration Notes
@@ -279,6 +281,51 @@ def check_for_script_updates():
 - **Conflict Resolution**: GUI for handling merge conflicts
 - **Update Scheduling**: Custom update check intervals
 - **Notification Preferences**: Customizable update notifications
+
+## Cache Management
+
+### Streamlit Caching Issue Resolution
+
+**Problem Identified**: The [`@st.cache_data(ttl=3600)`](../app.py:26) decorator was causing a caching catch-22 where:
+- Update checks were cached for 60 minutes
+- When first loaded (before new tags), it cached "no updates available"
+- After new tags were created, the cached result persisted
+- The original "Force Check Updates" button only appeared when updates were already detected
+
+**Solution Implemented**: Added a permanent "🔄 Manual Check for Updates" button in the sidebar that:
+- Is always visible regardless of update status
+- Clears both app and script update caches when clicked
+- Provides immediate feedback with success message
+- Triggers automatic page refresh to show new update status
+
+### Manual Cache Clearing
+
+```python
+# Sidebar manual update check button
+if st.button("🔄 Manual Check for Updates", key="sidebar_check_updates"):
+    # Clear both update caches
+    check_for_app_updates.clear()
+    check_for_script_updates.clear()
+    st.success("✅ Update cache cleared!")
+    st.rerun()
+```
+
+**Benefits**:
+- ✅ Resolves caching catch-22 situation
+- ✅ Always accessible to users
+- ✅ Provides immediate cache refresh capability
+- ✅ Maintains existing automatic update detection
+- ✅ No impact on performance or user experience
+
+### Testing Coverage
+
+The manual cache clearing functionality is covered by comprehensive tests in [`tests/test_manual_update_check.py`](../tests/test_manual_update_check.py):
+
+- Button existence and placement verification
+- Cache clearing functionality validation
+- User feedback and interaction testing
+- Integration with existing update system
+- Proper key assignment and caption text
 
 ## Conclusion
 
