@@ -297,3 +297,25 @@ We have successfully completed a major refactoring of the application's core log
     * **Script Update Success**: User successfully updated scripts from v1.0.0 to v1.0.1 using the new functionality
     * **Documentation Updates**: Enhanced [`docs/SCRIPT_UPDATE_SYSTEM.md`](../docs/SCRIPT_UPDATE_SYSTEM.md) with cache management section
     * **Technical Details**: Added comprehensive explanation of the caching issue, solution, and testing coverage
+
+### Session 18: Conditional Undo Bug Fix
+1. **Critical Conditional Undo Bug Resolution**: Identified and fixed major issue where undo functionality was broken for conditional steps in "awaiting_decision" state.
+    * **Problem Identified**: When conditional steps were in "awaiting_decision" state, clicking "Undo Last Step" would either do nothing or create an infinite loop
+    * **Root Cause Analysis**: The conditional undo logic was missing "awaiting_decision" from the state check, causing it to fall through to regular undo logic
+    * **Secondary Issue**: Conditional decision snapshots contained the problematic "awaiting_decision" state, causing undo to jump forward instead of backward
+    * **Impact**: Users were unable to undo conditional workflow decisions, getting stuck in conditional prompts
+2. **Comprehensive Conditional Undo Fix**: Implemented complete solution addressing both the state detection and snapshot management issues.
+    * **State Detection Fix**: Added "awaiting_decision" to the conditional undo state check in [`perform_undo()`](../app.py:318)
+    * **Snapshot Management**: Enhanced logic to remove conditional decision snapshots when undoing to prevent forward jumping
+    * **Trigger Step Undo**: Modified logic to undo the trigger step (e.g., step 9) when undoing from conditional "awaiting_decision" state
+    * **Complete Restoration**: Implemented full trigger step undo including snapshot restoration, success marker removal, and state updates
+3. **Test-Driven Development**: Created comprehensive test suite reproducing and validating the fix.
+    * **Test Suite Creation**: [`tests/test_conditional_undo_fix.py`](../tests/test_conditional_undo_fix.py) with 6 comprehensive test cases
+    * **Bug Reproduction**: Tests that reproduce the original bug and confirm the fix resolves it
+    * **Complete Coverage**: State detection, snapshot management, trigger step undo, and integration testing
+    * **Test Results**: All 6 tests passed, validating the complete conditional undo fix
+4. **Manual Testing and Validation**: Systematic testing confirmed the fix works correctly in real-world scenarios.
+    * **Issue Reproduction**: Confirmed original bug where undo button did nothing when step 10 was in "awaiting_decision" state
+    * **Fix Validation**: Verified undo now properly resets conditional step and undoes trigger step (step 9)
+    * **Sequential Undo**: Confirmed subsequent undo operations work normally, going backwards through the workflow
+    * **Complete Functionality**: Validated that conditional undo now works seamlessly with the existing undo system

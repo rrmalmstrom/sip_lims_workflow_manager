@@ -307,8 +307,141 @@ def perform_undo(project):
     Uses the complete snapshot system for comprehensive rollback.
     Enhanced to handle conditional workflow states properly.
     """
-    # Check if there are any conditional steps that were affected by a decision
-    # These should be undone to their conditional decision point first
+    # Check if there are any conditional steps in "awaiting_decision" state
+    # For these, we should undo the trigger step instead of the conditional step
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        # Check if this is a conditional step in awaiting_decision state
+        if (('conditional' in step) and (current_state == 'awaiting_decision')):
+            conditional_config = step.get('conditional', {})
+            trigger_script = conditional_config.get('trigger_script')
+            
+            if trigger_script:
+                # Find the step that runs this trigger script
+                trigger_step = None
+                for workflow_step in project.workflow.steps:
+                    if workflow_step.get('script') == trigger_script:
+                        trigger_step = workflow_step
+                        break
+                
+                if trigger_step and project.get_state(trigger_step['id']) == 'completed':
+                    # Reset the conditional step to pending first
+                    project.update_state(step_id, "pending")
+                    print(f"UNDO: Reset conditional step {step_id} from awaiting_decision to pending")
+                    
+                    # Remove the conditional decision snapshot to prevent it from interfering with future undos
+                    conditional_decision_snapshot = f"{step_id}_conditional_decision"
+                    conditional_snapshot_path = project.snapshot_manager.snapshots_dir / f"{conditional_decision_snapshot}_complete.zip"
+                    if conditional_snapshot_path.exists():
+                        conditional_snapshot_path.unlink()
+                        print(f"UNDO: Removed conditional decision snapshot {conditional_decision_snapshot}")
+                    
+                    # Now undo the trigger step using regular undo logic
+                    trigger_step_id = trigger_step['id']
+                    
+                    # Find the step index of the trigger step
+                    trigger_step_index = next(i for i, s in enumerate(project.workflow.steps) if s['id'] == trigger_step_id)
+                    
+                    try:
+                        # Get the effective current run number for the trigger step
+                        effective_run = project.snapshot_manager.get_effective_run_number(trigger_step_id)
+                        
+                        if effective_run > 1:
+                            # Search backwards to find the highest available "after" snapshot
+                            target_run = None
+                            for run_num in range(effective_run - 1, 0, -1):
+                                candidate_snapshot = f"{trigger_step_id}_run_{run_num}_after"
+                                if project.snapshot_manager.snapshot_exists(candidate_snapshot):
+                                    target_run = run_num
+                                    break
+                            
+                            if target_run:
+                                # Restore to the found "after" snapshot
+                                target_snapshot = f"{trigger_step_id}_run_{target_run}_after"
+                                project.snapshot_manager.restore_complete_snapshot(target_snapshot)
+                                # Remove the current run's 'after' snapshot to track that it's been undone
+                                project.snapshot_manager.remove_run_snapshots_from(trigger_step_id, effective_run)
+                                print(f"UNDO: Restored trigger step {trigger_step_id} to state after run {target_run}")
+                                # Step should remain "completed" since we still have a previous run
+                                return True
+                            else:
+                                # No "after" snapshots available for this step, check previous step
+                                if trigger_step_index > 0:
+                                    # Look for the previous step's latest "after" snapshot
+                                    previous_step = project.workflow.steps[trigger_step_index - 1]
+                                    previous_step_id = previous_step['id']
+                                    previous_effective_run = project.snapshot_manager.get_effective_run_number(previous_step_id)
+                                    
+                                    if previous_effective_run > 0:
+                                        # Restore to previous step's most recent "after" snapshot
+                                        previous_after_snapshot = f"{previous_step_id}_run_{previous_effective_run}_after"
+                                        if project.snapshot_manager.snapshot_exists(previous_after_snapshot):
+                                            project.snapshot_manager.restore_complete_snapshot(previous_after_snapshot)
+                                            # Remove current step's "after" snapshot and mark as pending
+                                            project.snapshot_manager.remove_run_snapshots_from(trigger_step_id, effective_run)
+                                            print(f"UNDO: Restored project to state after {previous_step_id} (run {previous_effective_run})")
+                                            # Mark trigger step as pending since we're undoing it completely
+                                            script_name = trigger_step.get('script', '').replace('.py', '')
+                                            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
+                                            if success_marker.exists():
+                                                success_marker.unlink()
+                                                print(f"UNDO: Removed success marker for {script_name}")
+                                            project.update_state(trigger_step_id, "pending")
+                                            print(f"UNDO: Marked trigger step {trigger_step_id} as pending")
+                                            return True
+                                
+                                # No previous step or no previous step snapshots, treat as undoing the entire step
+                                effective_run = 1  # Fall through to the next condition
+                            
+                        elif effective_run == 1:
+                            # This is the last run - undo the entire trigger step
+                            # Use the run 1 "before" snapshot (taken before first run)
+                            run_1_before_snapshot = f"{trigger_step_id}_run_1"
+                            if project.snapshot_manager.snapshot_exists(run_1_before_snapshot):
+                                project.snapshot_manager.restore_complete_snapshot(run_1_before_snapshot)
+                                print(f"UNDO: Restored project to state before trigger step {trigger_step_id} ran")
+                            else:
+                                # Fallback to legacy snapshot naming if run snapshot doesn't exist
+                                project.snapshot_manager.restore_complete_snapshot(trigger_step_id)
+                                print(f"UNDO: Restored project to state before trigger step {trigger_step_id} ran (legacy)")
+                            # Remove all run snapshots since we're undoing the entire step
+                            project.snapshot_manager.remove_run_snapshots_from(trigger_step_id, 1)
+                            
+                            # Handle success marker and step status
+                            script_name = trigger_step.get('script', '').replace('.py', '')
+                            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
+                            if success_marker.exists():
+                                success_marker.unlink()
+                                print(f"UNDO: Removed success marker for {script_name}")
+                            project.update_state(trigger_step_id, "pending")
+                            print(f"UNDO: Marked trigger step {trigger_step_id} as pending")
+                        else:
+                            # No run snapshots exist - fallback to original behavior
+                            project.snapshot_manager.restore_complete_snapshot(trigger_step_id)
+                            print(f"UNDO: Restored project to state before trigger step {trigger_step_id} ran")
+                            # Mark trigger step as pending
+                            script_name = trigger_step.get('script', '').replace('.py', '')
+                            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
+                            if success_marker.exists():
+                                success_marker.unlink()
+                                print(f"UNDO: Removed success marker for {script_name}")
+                            project.update_state(trigger_step_id, "pending")
+                            print(f"UNDO: Marked trigger step {trigger_step_id} as pending")
+                        
+                        return True
+                        
+                    except FileNotFoundError as e:
+                        print(f"UNDO ERROR: {e}")
+                        print("Complete snapshot not found for trigger step.")
+                        return False
+                    except Exception as e:
+                        print(f"UNDO ERROR: Unexpected error during trigger step undo: {e}")
+                        return False
+    
+    # Check if there are any conditional steps that were affected by a decision (but not awaiting_decision)
+    # These should be undone to their conditional decision point
     for step in project.workflow.steps:
         step_id = step['id']
         current_state = project.get_state(step_id)

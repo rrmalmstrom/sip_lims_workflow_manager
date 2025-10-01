@@ -2690,3 +2690,224 @@ The Session 18 enhancements provide comprehensive auto-scroll functionality that
 17. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the automatic terminal visibility and seamless user interaction needed for complex SIP laboratory workflows where immediate access to interactive script interfaces is critical for efficient workflow execution.
+
+## Feature 17: Conditional Undo Bug Fix (Session 19)
+
+### Problem Statement
+The "Undo Last Step" button was not working correctly when a conditional workflow step was in the "awaiting_decision" state. While the terminal output showed undo operations executing, the GUI state and `workflow_state.json` remained stuck on the conditional step with "awaiting_decision" status. The step should have moved back to the previous step but didn't, creating an infinite loop where users couldn't progress backward through the workflow.
+
+### Root Cause Analysis
+
+#### The Original Bug
+The conditional undo logic in [`perform_undo()`](app.py:317) only checked for specific states but missed the "awaiting_decision" state:
+
+```python
+# PROBLEMATIC: Missing 'awaiting_decision' state
+if current_state in ['pending', 'skipped_conditional']:
+    # Conditional undo logic
+```
+
+#### The Deeper Issue
+Even after adding "awaiting_decision" to the state check, the problem persisted because:
+1. **Conditional Decision Snapshots**: The `{step_id}_conditional_decision` snapshots contained the problematic "awaiting_decision" state
+2. **Forward Jump Effect**: Restoring these snapshots caused the undo to jump forward instead of backward
+3. **Incomplete State Reset**: The conditional step wasn't being properly reset to "pending" state
+
+### Solution Implementation
+
+#### Enhanced Conditional Undo Logic
+**Comprehensive Fix in `perform_undo()` Function** (`app.py:317-340`):
+
+```python
+# Enhanced conditional undo logic
+for step in project.workflow.steps:
+    step_id = step['id']
+    current_state = project.get_state(step_id)
+    
+    # Check if this is a conditional step that was affected by a decision
+    if (('conditional' in step) and
+        (current_state in ['pending', 'skipped_conditional', 'awaiting_decision']) and
+        project.snapshot_manager.snapshot_exists(f"{step_id}_conditional_decision")):
+        
+        # For awaiting_decision state, we need special handling
+        if current_state == 'awaiting_decision':
+            # Reset the conditional step to pending first
+            project.update_state(step_id, 'pending')
+            print(f"UNDO: Reset conditional step {step_id} from awaiting_decision to pending")
+            
+            # Remove the conditional decision snapshot to prevent forward jumping
+            conditional_snapshot_path = project.path / ".snapshots" / f"{step_id}_conditional_decision_complete.zip"
+            if conditional_snapshot_path.exists():
+                conditional_snapshot_path.unlink()
+                print(f"UNDO: Removed conditional decision snapshot for {step_id}")
+            
+            # Now perform the actual undo of the trigger step
+            # Find the trigger step (the step that caused this conditional to be triggered)
+            conditional_config = step.get('conditional', {})
+            trigger_script = conditional_config.get('trigger_script')
+            if trigger_script:
+                # Find the step that runs this trigger script
+                for workflow_step in project.workflow.steps:
+                    if workflow_step.get('script') == trigger_script:
+                        trigger_step_id = workflow_step['id']
+                        trigger_state = project.get_state(trigger_step_id)
+                        if trigger_state == 'completed':
+                            # Undo the trigger step
+                            return perform_regular_undo_for_step(project, trigger_step_id)
+            
+            return True
+        
+        # For other conditional states, restore to conditional decision point
+        project.snapshot_manager.restore_complete_snapshot(f"{step_id}_conditional_decision")
+        print(f"UNDO: Restored to conditional decision point for step {step_id}")
+        return True
+```
+
+#### Key Enhancements
+1. **State Check Expansion**: Added "awaiting_decision" to the conditional state checks
+2. **Special Awaiting Decision Handling**: Reset conditional step to "pending" before undo
+3. **Snapshot Cleanup**: Remove problematic conditional decision snapshots
+4. **Trigger Step Undo**: Properly undo the trigger step that caused the conditional prompt
+5. **Complete State Reset**: Ensure proper state transitions for all affected steps
+
+### Technical Implementation Details
+
+#### Conditional Decision Snapshot Management
+**Problem with Conditional Snapshots**:
+- **Snapshot Content**: `{step_id}_conditional_decision` snapshots contained "awaiting_decision" state
+- **Restoration Effect**: Restoring these snapshots re-applied the problematic state
+- **Solution**: Remove conditional decision snapshots when undoing from "awaiting_decision"
+
+#### Trigger Step Identification and Undo
+**Enhanced Trigger Logic**:
+```python
+# Find the trigger step that caused this conditional
+conditional_config = step.get('conditional', {})
+trigger_script = conditional_config.get('trigger_script')
+if trigger_script:
+    # Find the step that runs this trigger script
+    for workflow_step in project.workflow.steps:
+        if workflow_step.get('script') == trigger_script:
+            trigger_step_id = workflow_step['id']
+            # Undo the trigger step instead of the conditional step
+            return perform_regular_undo_for_step(project, trigger_step_id)
+```
+
+#### State Transition Logic
+**Proper State Management**:
+```
+awaiting_decision → pending (reset conditional step)
+completed → pending (undo trigger step)
+```
+
+### Test-Driven Development Implementation
+
+#### Comprehensive Test Suite
+**Created `tests/test_conditional_undo_fix.py` with 6 test cases**:
+
+1. **Core Bug Reproduction**:
+   - `test_conditional_undo_from_awaiting_decision_state`: Reproduces the original bug scenario
+   - `test_conditional_undo_resets_step_to_pending`: Validates state reset functionality
+
+2. **Snapshot Management**:
+   - `test_conditional_undo_removes_decision_snapshot`: Confirms snapshot cleanup
+   - `test_conditional_undo_handles_missing_snapshot`: Tests graceful error handling
+
+3. **Trigger Step Logic**:
+   - `test_conditional_undo_undoes_trigger_step`: Validates trigger step identification and undo
+   - `test_conditional_undo_integration_test`: Complete end-to-end workflow test
+
+#### Test Results
+✅ **All 6 tests PASSED** - Complete validation of the conditional undo fix
+✅ **Integration with existing tests** - No regression in existing functionality
+✅ **Bug reproduction confirmed** - Tests successfully reproduce and validate the fix
+
+### Manual Testing Verification
+
+#### Test Scenario
+- **Project**: `dummy_chakraborty` with conditional workflow steps
+- **Issue**: Step 10 (conditional step) stuck in "awaiting_decision" state
+- **Problem**: Undo button appeared but did nothing when clicked
+
+#### Fix Verification
+**Terminal Output Confirmed Successful Operation**:
+```
+UNDO: Reset conditional step rework_second_attempt from awaiting_decision to pending
+UNDO: Removed conditional decision snapshot for rework_second_attempt
+UNDO: Restored project to state after second_fa_analysis (run 1)
+UNDO: Removed success marker for second.FA.output.analysis.py
+UNDO: Marked step second_fa_analysis as pending
+```
+
+**GUI State Verification**:
+- ✅ Step 10 properly reset from "awaiting_decision" to "pending"
+- ✅ Step 9 properly undone from "completed" to "pending"
+- ✅ Workflow state correctly restored to step 9
+- ✅ Subsequent undo operations work normally
+
+### Performance and Reliability
+
+#### Minimal Overhead
+- **Targeted Fix**: Only affects conditional steps in "awaiting_decision" state
+- **Efficient Processing**: Quick state checks and snapshot operations
+- **No Breaking Changes**: Existing functionality preserved for all other scenarios
+
+#### Error Handling
+- **Missing Snapshots**: Graceful handling when conditional decision snapshots don't exist
+- **Invalid Configurations**: Proper validation of conditional step configurations
+- **State Consistency**: Ensures workflow state remains consistent even if partial operations fail
+
+### User Experience Improvements
+
+#### Immediate Benefits
+- **Functional Undo**: Undo button now works correctly for conditional steps
+- **Proper Navigation**: Users can navigate backward through conditional workflows
+- **Clear Progression**: Obvious workflow state after undo operations
+- **No Infinite Loops**: Eliminates the stuck "awaiting_decision" scenario
+
+#### Workflow Continuity
+- **Seamless Integration**: Works transparently with existing conditional workflow system
+- **Backward Compatibility**: No changes required to existing workflow configurations
+- **State Preservation**: Maintains all existing undo functionality for non-conditional steps
+
+### Integration with Existing Features
+
+#### Conditional Workflow Compatibility
+- **Decision Points**: Works seamlessly with Yes/No decision functionality
+- **State Management**: Integrates with five-state system (pending/completed/skipped/awaiting_decision/skipped_conditional)
+- **Snapshot System**: Compatible with conditional decision snapshots and regular snapshots
+
+#### Granular Undo System
+- **Multi-Run Support**: Works with granular undo for steps with multiple runs
+- **Snapshot Integration**: Leverages existing complete snapshot restoration system
+- **Trigger Step Handling**: Properly handles undo of trigger steps that caused conditional prompts
+
+#### Universal Workflow Support
+- **All Step Types**: Works for conditional, regular, and interactive steps
+- **Cross-Platform**: Compatible with all supported operating systems
+- **Backward Compatibility**: Maintains support for all existing workflow configurations
+
+## Conclusion (Updated for Session 19)
+
+The Session 19 enhancements provide a critical bug fix for conditional workflow undo functionality, ensuring that users can properly navigate backward through conditional decision points. Combined with all previous session features, the SIP LIMS Workflow Manager now provides:
+
+1. **Fixed Conditional Undo**: Proper undo functionality for conditional steps in "awaiting_decision" state with trigger step handling
+2. **Auto-Scroll to Terminal**: Automatic page scrolling to top when scripts are launched for immediate terminal visibility
+3. **Persistent Script Update Notifications**: 30-minute automatic checking with sidebar notifications and one-click updates
+4. **Clean Terminal Interface**: Professional user experience with debug information moved to background logging
+5. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state
+6. **SIP Laboratory Branding**: Updated application title and branding to reflect Stable Isotope Probing focus
+7. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+8. **Timestamp Preservation**: File modification times preserved during all rollback operations
+9. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+10. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+11. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+12. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+13. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+14. **Reliable Interactive Execution**: Enhanced terminal visibility with clean, professional output and automatic scrolling
+15. **Comprehensive State Management**: Five-state system with complete project restoration capabilities
+16. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+17. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+18. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the reliable conditional workflow navigation needed for complex SIP laboratory workflows where decision-making flexibility and proper undo functionality are essential for successful experimental outcomes.

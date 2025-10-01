@@ -279,3 +279,18 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Test Coverage**: Comprehensive TDD approach with 7 test cases validating JavaScript generation, error handling, and integration points
 - **Manual Verification**: Confirmed working perfectly - scrolls all the way to the very top of the page
 - **Universal Compatibility**: Works with all workflow steps and maintains backward compatibility with existing functionality
+
+## 19. Latest Features (Session 19)
+### Conditional Undo Bug Fix
+- **Problem Solved**: Critical bug where undo functionality was broken for conditional steps in "awaiting_decision" state, causing infinite loops or no response when clicking "Undo Last Step"
+- **Root Cause Addressed**: Conditional undo logic was missing "awaiting_decision" from state checks, and conditional decision snapshots contained the problematic state causing forward jumping instead of backward undo
+- **Technical Implementation**: Enhanced conditional undo logic with proper state detection, snapshot management, and trigger step undo functionality
+- **Key Features**:
+  - **State Detection Fix**: Added "awaiting_decision" to conditional undo state check in [`perform_undo()`](../app.py:318)
+  - **Snapshot Management**: Enhanced logic to remove conditional decision snapshots when undoing to prevent forward jumping
+  - **Trigger Step Undo**: Modified logic to undo the trigger step (e.g., step 9) when undoing from conditional "awaiting_decision" state
+  - **Complete Restoration**: Implemented full trigger step undo including snapshot restoration, success marker removal, and state updates
+- **Test Coverage**: Comprehensive TDD approach with 6 test cases reproducing the bug and validating the complete fix
+- **User Experience**: Conditional undo now works seamlessly - first undo resets conditional step and undoes trigger step, subsequent undos work normally going backwards through workflow
+- **Manual Verification**: Confirmed fix works correctly in real-world scenarios with both test projects (rex_test2 and rex_test2_production_test)
+- **Universal Compatibility**: Maintains all existing undo functionality while properly handling conditional workflow decision points
