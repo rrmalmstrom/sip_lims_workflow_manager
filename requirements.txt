@@ -1,16 +1,21 @@
-pytest
-pyyaml
-streamlit
-watchdog
-pandas
-numpy
-openpyxl
-xlwings
-matplotlib
-PyPDF2
-seaborn
-sqlalchemy
-xlrd
-xlutils
-xlwt
-pyte
+# Core application dependencies - pinned to working versions
+pytest==8.4.2
+pyyaml==6.0.2
+streamlit==1.50.0
+watchdog==6.0.0
+pandas==2.3.2
+numpy==2.0.2
+openpyxl==3.1.5
+xlwings==0.33.15
+matplotlib==3.9.4
+PyPDF2==3.0.1
+seaborn==0.13.2
+sqlalchemy==2.0.43
+xlrd==2.0.2
+xlutils==2.0.0
+xlwt==1.3.0
+pyte==0.8.2
+
+# Note: These versions were working as of September 2025
+# Streamlit 1.50.0 was released on 2025-09-23 and installed on 2025-09-24
+# If updating, test thoroughly as widget behavior may change

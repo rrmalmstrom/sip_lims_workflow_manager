@@ -12,7 +12,6 @@ import webbrowser
 from src.core import Project
 from src.logic import RunResult
 from src.update_manager import UpdateManager
-from src.script_update_manager import ScriptUpdateManager
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -41,84 +40,6 @@ def check_for_updates():
             'remote_version': None,
             'error': f"Failed to check for updates: {str(e)}"
         }
-
-@st.cache_data(ttl=1800)  # Cache for 30 minutes
-def check_for_script_updates():
-    """
-    Check for script updates with caching.
-    Cached to avoid frequent Git operations.
-    """
-    try:
-        scripts_dir = Path(__file__).parent / "scripts"
-        if not scripts_dir.exists():
-            return {
-                'update_available': False,
-                'error': 'Scripts directory not found',
-                'status_message': 'Scripts directory not found',
-                'last_check': None
-            }
-        
-        manager = ScriptUpdateManager(scripts_dir)
-        return manager.check_for_updates()
-    except Exception as e:
-        return {
-            'update_available': False,
-            'error': str(e),
-            'status_message': 'Error checking for script updates',
-            'last_check': None
-        }
-
-def update_scripts():
-    """Update scripts and clear cache."""
-    try:
-        scripts_dir = Path(__file__).parent / "scripts"
-        if not scripts_dir.exists():
-            return {
-                'success': False,
-                'error': 'Scripts directory not found',
-                'message': 'Scripts directory not found'
-            }
-        
-        manager = ScriptUpdateManager(scripts_dir)
-        result = manager.update_scripts()
-        
-        # Clear cache on successful update
-        if result['success']:
-            check_for_script_updates.clear()
-        
-        return result
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e),
-            'message': 'Failed to update scripts'
-        }
-
-def format_last_check_time(last_check):
-    """Format last check timestamp for display."""
-    if last_check is None:
-        return "Never"
-    
-    from datetime import datetime, timedelta
-    time_diff = datetime.now() - last_check
-    
-    # Format the actual date/time
-    formatted_time = last_check.strftime("%Y-%m-%d %H:%M:%S")
-    
-    # Add relative time
-    if time_diff.total_seconds() < 60:
-        relative = "just now"
-    elif time_diff.total_seconds() < 3600:
-        minutes = int(time_diff.total_seconds() / 60)
-        relative = f"{minutes} minute{'s' if minutes != 1 else ''} ago"
-    elif time_diff.total_seconds() < 86400:  # Less than 24 hours
-        hours = int(time_diff.total_seconds() / 3600)
-        relative = f"{hours} hour{'s' if hours != 1 else ''} ago"
-    else:  # More than 24 hours
-        days = int(time_diff.total_seconds() / 86400)
-        relative = f"{days} day{'s' if days != 1 else ''} ago"
-    
-    return f"{formatted_time} ({relative})"
 
 def validate_workflow_yaml(file_path):
     """
@@ -543,62 +464,6 @@ def main():
             if st.session_state.get('show_update_errors', False):
                 st.error(f"Update check failed: {update_info['error']}")
         
-        # --- Script Update Notification ---
-        script_update_info = check_for_script_updates()
-        if script_update_info['update_available'] and not script_update_info.get('error'):
-            st.subheader("🔄 Script Updates Available")
-            st.info("**New workflow scripts available!**")
-            
-            # Show last check time
-            if script_update_info.get('last_check'):
-                last_check_formatted = format_last_check_time(script_update_info['last_check'])
-                st.caption(f"Last checked: {last_check_formatted}")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📥 Update Scripts", key="update_scripts"):
-                    with st.spinner("Updating scripts..."):
-                        result = update_scripts()
-                    
-                    if result['success']:
-                        st.success("✅ Scripts updated successfully!")
-                        st.rerun()  # Refresh to clear notification
-                    else:
-                        st.error(f"❌ Update failed: {result.get('error', 'Unknown error')}")
-            
-            with col2:
-                if st.button("🔄 Check Now", key="manual_script_check"):
-                    check_for_script_updates.clear()
-                    st.rerun()
-            
-            st.markdown("---")
-        elif script_update_info.get('error') and st.session_state.get('show_script_update_errors', False):
-            # Only show script update errors in debug mode
-            st.error(f"Script update check failed: {script_update_info['error']}")
-        
-        # --- Script Status (Always Visible) ---
-        st.subheader("📜 Script Status")
-        
-        # Show last check time
-        if script_update_info.get('last_check'):
-            last_check_formatted = format_last_check_time(script_update_info['last_check'])
-            st.caption(f"**Last checked**: {last_check_formatted}")
-        else:
-            st.caption("**Last checked**: Never")
-        
-        # Show current status
-        if script_update_info.get('error'):
-            st.caption(f"**Status**: ❌ Error checking for updates")
-        elif script_update_info['update_available']:
-            st.caption(f"**Status**: 🔄 Updates available")
-        else:
-            st.caption(f"**Status**: ✅ Up to date")
-        
-        # Manual check button (always available)
-        if st.button("🔄 Check for Script Updates", key="manual_script_check_always"):
-            check_for_script_updates.clear()
-            st.rerun()
-        
         st.subheader("Project")
         if st.button("Browse for Project Folder", key="browse_button"):
             folder = select_folder_via_subprocess()
@@ -1022,15 +887,14 @@ def main():
             st.error(f"🚨 **SCRIPT RUNNING**: {running_step['name'] if running_step else 'Unknown Step'}")
             st.warning("⚠️ **IMPORTANT**: Interactive input required below!")
             
-            # Terminal with prominent styling
-            st.text_area(
-                "Terminal Output",
-                value=st.session_state.terminal_output,
-                height=TERMINAL_HEIGHT,
-                key="terminal_view",
-                disabled=True,
-                help="This is the live terminal output. Watch for prompts that require your input."
-            )
+            # Terminal with prominent styling - use st.code for better real-time updates
+            st.subheader("Terminal Output")
+            terminal_container = st.container()
+            with terminal_container:
+                if st.session_state.terminal_output:
+                    st.code(st.session_state.terminal_output, language=None)
+                else:
+                    st.text("Waiting for script output...")
             
             # Input section for terminal
             col1, col2, col3 = st.columns([3, 1, 1])
@@ -1076,15 +940,14 @@ def main():
             else:
                 st.error(f"❌ **SCRIPT FAILED**: {completed_step['name'] if completed_step else 'Unknown Step'}")
             
-            # Show completed output
-            st.text_area(
-                "Script Output",
-                value=st.session_state.completed_script_output,
-                height=TERMINAL_HEIGHT,
-                key="completed_terminal_view",
-                disabled=True,
-                help="This is the output from the completed script."
-            )
+            # Show completed output - use st.code for consistency with running terminal
+            st.subheader("Script Output")
+            completed_container = st.container()
+            with completed_container:
+                if st.session_state.completed_script_output:
+                    st.code(st.session_state.completed_script_output, language=None)
+                else:
+                    st.text("No output captured.")
             
             # Clear button
             col1, col2, col3 = st.columns([1, 1, 4])
@@ -1147,12 +1010,13 @@ def main():
                         if input_def['type'] == 'file':
                             col_a, col_b = st.columns([3, 1])
                             with col_a:
+                                current_value = st.session_state.user_inputs[step_id].get(input_key, "")
+                                
                                 file_path = st.text_input(
                                     label=input_def['name'],
-                                    value=st.session_state.user_inputs[step_id].get(input_key, ""),
-                                    key=f"text_{input_key}"
+                                    value=current_value,
+                                    key=f"text_{input_key}_{current_value}"  # Force widget recreation when value changes
                                 )
-                                st.session_state.user_inputs[step_id][input_key] = file_path
                             with col_b:
                                 if st.button("Browse", key=f"browse_{input_key}"):
                                     selected_file = select_file_via_subprocess()
