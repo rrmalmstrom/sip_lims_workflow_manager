@@ -1,149 +1,287 @@
-# Script Update System Implementation
+# Unified Script Update System
 
 ## Overview
 
-The SIP LIMS Workflow Manager now includes a comprehensive script update notification system that addresses the limitation where users would only see script updates when restarting the application.
+The SIP LIMS Workflow Manager now features a unified update system that manages both application and script updates through a single, clean interface. This document describes the script update component of the unified system.
 
-## Problem Solved
+## Evolution from Previous System
 
-### Original Issue
-- **Script updates only checked at startup**: Users had to restart the entire application to see new script versions
-- **Long-running sessions missed updates**: Users who kept the app open for extended periods never saw script update notifications
-- **Browser refresh didn't help**: Refreshing the browser page didn't trigger script update checks
-- **Manual restart required**: Users had to remember to periodically restart the app to check for script updates
+### Original Implementation (Deprecated)
+- **Separate system**: Script updates used a different system than app updates
+- **30-minute checks**: More frequent checking than app updates
+- **Sidebar notifications**: Persistent update section in sidebar
+- **Independent caching**: Separate cache management
 
-### Solution Implemented
-- **Persistent in-app notifications**: Script updates are now checked every 30 minutes during app runtime
-- **Sidebar integration**: Update notifications appear prominently in the sidebar
-- **One-click updates**: Users can update scripts directly from the GUI without restarting
-- **Manual refresh capability**: Users can force immediate update checks
-- **Cache management**: Intelligent caching prevents excessive Git operations
+### New Unified Implementation
+- **Integrated system**: Scripts and app updates use the same GitUpdateManager
+- **60-minute checks**: Consistent checking frequency for both update types
+- **Clean notifications**: Updates only appear when available
+- **Unified caching**: Single cache strategy for both update types
 
 ## Technical Implementation
 
-### Core Components
+### Unified GitUpdateManager
 
-#### 1. ScriptUpdateManager Class (`src/script_update_manager.py`)
-- **Git Integration**: Uses subprocess to run Git commands safely
-- **Caching System**: 30-minute cache TTL to balance responsiveness with performance
-- **Error Handling**: Graceful handling of network issues, missing Git repos, timeouts
-- **Cross-Platform**: Works on both macOS and Windows
+The script update system now uses the same `GitUpdateManager` class as application updates:
 
-**Key Methods:**
-- `check_for_updates()`: Checks if script repository has updates available
-- `update_scripts()`: Updates scripts by pulling from remote repository
-- `get_update_details()`: Gets details about available updates (commits behind, etc.)
-- `get_last_check_time()`: Returns timestamp of last update check
-- `clear_cache()`: Manually clears cached results
-
-#### 2. GUI Integration (`app.py`)
-- **Cached Function**: `check_for_script_updates()` with 30-minute cache
-- **Update Function**: `update_scripts()` with automatic cache clearing
-- **Timestamp Formatting**: `format_last_check_time()` for user-friendly display
-
-### User Interface
-
-#### Sidebar Notification
-When script updates are available, users see:
-- **Clear heading**: "🔄 Script Updates Available"
-- **Status message**: "New workflow scripts available!"
-- **Last checked timestamp**: Shows when updates were last verified
-- **Two action buttons**:
-  - **"📥 Update Scripts"**: Performs the update with progress indicator
-  - **"🔄 Check Now"**: Forces immediate cache refresh
-
-#### User Experience Features
-- **Visual prominence**: Update notifications are clearly visible in sidebar
-- **Progress feedback**: Spinner shows during update operations
-- **Success/error messages**: Clear feedback on update results
-- **Automatic refresh**: Page refreshes after successful updates to clear notification
-- **Non-intrusive**: Notifications only appear when updates are actually available
-
-## Comparison: App Updates vs Script Updates
-
-| Feature | App Updates | Script Updates |
-|---------|-------------|----------------|
-| **Check Frequency** | Every hour | Every 30 minutes |
-| **Update Source** | Google Drive | Git repository |
-| **Update Method** | Manual download | One-click in-app |
-| **Cache Duration** | 60 minutes | 30 minutes |
-| **Restart Required** | Yes | No |
-
-## Technical Benefits
-
-### Performance
-- **Efficient caching**: Prevents excessive Git operations
-- **Background operations**: Updates don't block the UI
-- **Minimal overhead**: Git operations are fast and lightweight
-- **Smart cache invalidation**: Cache cleared after successful updates
-
-### Reliability
-- **Comprehensive error handling**: Network failures, timeouts, missing repos
-- **Graceful degradation**: App continues working even if script updates fail
-- **Transaction-like updates**: Updates either succeed completely or fail cleanly
-- **Rollback capability**: Failed updates don't leave repository in inconsistent state
-
-### User Experience
-- **No interruption**: Users don't need to restart the app
-- **Immediate awareness**: Updates are visible as soon as they're available
-- **One-click convenience**: Updates can be applied instantly
-- **Clear feedback**: Users always know the status of their scripts
-
-## Implementation Details
-
-### Caching Strategy
 ```python
-@st.cache_data(ttl=1800)  # 30-minute cache
-def check_for_script_updates():
-    # Git operations are cached to prevent excessive calls
-    # Cache is automatically cleared after successful updates
+# Create script update manager
+script_manager = create_update_manager("scripts")
+
+# Check for updates (cached for 60 minutes)
+update_info = script_manager.check_for_updates()
+
+# Apply updates
+result = script_manager.update_to_latest()
 ```
 
-### Error Handling
-- **Network timeouts**: 10-second timeout for Git operations
-- **Missing Git repository**: Clear error message if scripts directory isn't a Git repo
-- **Permission issues**: Graceful handling of Git permission problems
-- **Merge conflicts**: Clear error messages for update conflicts
+### Repository Configuration
 
-### Security Considerations
-- **Local operations only**: All Git operations are local to the scripts directory
-- **No remote execution**: Only standard Git commands (fetch, status, pull) are used
-- **Timeout protection**: All Git operations have configurable timeouts
-- **Error isolation**: Script update failures don't affect main application
+```python
+SCRIPTS_REPOSITORY = {
+    "ssh_url": "git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git",
+    "github_api": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
+    "local_path": "../sip_scripts_workflow_gui"
+}
+```
+
+## User Interface Integration
+
+### Clean, Non-Intrusive Design
+
+**Before (Deprecated)**:
+- Persistent sidebar section
+- Always visible update controls
+- Cluttered interface
+
+**After (Current)**:
+- Updates only appear when available
+- Expandable interface for details
+- Clean sidebar without permanent clutter
+
+### Update Notification Flow
+
+1. **Automatic Detection**: System checks every 60 minutes + on page refresh
+2. **Smart Notification**: "🔔 Updates Available" appears only when needed
+3. **Expandable Details**: Click to reveal script update information
+4. **One-Click Update**: "📥 Update Scripts Now" button applies updates instantly
+
+### Interface Layout
+
+```
+🔔 Updates Available - Check the expandable section below
+
+📦 Available Updates (Click to expand)
+├── 🏠 Application Updates          │  🔧 Script Updates
+│   Current: v1.0.2                 │  Current: v1.0.0  
+│   Latest: v1.1.0                  │  Latest: v1.0.1
+│   [📥 Download App Update]        │  [📥 Update Scripts Now]
+```
+
+## Update Process
+
+### Script Update Workflow
+
+1. **Detection**: GitHub API checks for new tags in scripts repository
+2. **Notification**: Update available message appears in main content area
+3. **User Action**: User clicks "📥 Update Scripts Now"
+4. **Execution**: Git pull operation updates local scripts
+5. **Feedback**: Success message and cache refresh
+6. **Completion**: Updated scripts immediately available
+
+### Technical Process
+
+```python
+def update_scripts():
+    """Update scripts to latest version."""
+    try:
+        script_manager = create_update_manager("scripts")
+        result = script_manager.update_to_latest()
+        
+        if result['success']:
+            # Clear cache to refresh version info
+            check_for_script_updates.clear()
+            return {'success': True}
+        else:
+            return {'success': False, 'error': result['error']}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+```
+
+## Comparison: Old vs New System
+
+| Feature | Old Script System | New Unified System |
+|---------|------------------|-------------------|
+| **Check Frequency** | 30 minutes | 60 minutes |
+| **Interface** | Persistent sidebar | Expandable notification |
+| **Update Method** | One-click in-app | One-click in-app |
+| **Cache Duration** | 30 minutes | 60 minutes |
+| **Restart Required** | No | No |
+| **UI Clutter** | Always visible | Only when needed |
+| **Integration** | Separate system | Unified with app updates |
+
+## Benefits of Unified System
+
+### For Users
+- **Cleaner Interface**: No persistent update clutter
+- **Consistent Experience**: Same interface for all updates
+- **Better Organization**: Related updates grouped together
+- **User Control**: Explicit approval for all updates
+
+### For Developers
+- **Single Codebase**: One update system to maintain
+- **Consistent Authentication**: Same SSH key for both repositories
+- **Unified Testing**: Single test suite for all update functionality
+- **Simplified Architecture**: Reduced complexity
+
+### For Maintenance
+- **Easier Updates**: Single system to enhance
+- **Better Security**: Consistent security model
+- **Unified Logging**: All update operations logged consistently
+- **Simplified Debugging**: Single code path for issues
+
+## Error Handling
+
+### Script-Specific Error Scenarios
+
+**Git Repository Issues**:
+- Scripts directory not a Git repository
+- Remote repository not accessible
+- Merge conflicts during update
+- Authentication failures
+
+**Network Issues**:
+- GitHub API timeouts
+- SSH connection failures
+- DNS resolution problems
+- Firewall blocking Git operations
+
+**File System Issues**:
+- Permission problems in scripts directory
+- Disk space insufficient for updates
+- File locks preventing updates
+- Corrupted Git repository
+
+### Error Recovery
+
+```python
+# Graceful error handling
+try:
+    result = script_manager.update_to_latest()
+    if not result['success']:
+        # Show clear error message to user
+        st.error(f"❌ Update failed: {result['error']}")
+        # Provide recovery suggestions
+        st.info("💡 Try checking your network connection and SSH key setup")
+except Exception as e:
+    # Log error and show user-friendly message
+    st.error("❌ Unexpected error during script update")
+```
+
+## Security Considerations
+
+### SSH Key Security
+- **Same Key**: Uses the same SSH deploy key as application updates
+- **Read-Only Access**: Deploy key has read-only permissions
+- **Key Validation**: Automated security checks before operations
+- **Permission Enforcement**: Strict file permission requirements
+
+### Update Security
+- **Trusted Source**: Updates only from official repository
+- **SSH Encryption**: All Git operations over encrypted SSH
+- **Atomic Updates**: Updates either succeed completely or fail cleanly
+- **Rollback Capability**: Failed updates don't corrupt repository
 
 ## Testing
 
-### Test Coverage
-- **14 core functionality tests**: Complete coverage of ScriptUpdateManager
-- **11 GUI integration tests**: Testing of all user interface components
-- **Mock-based testing**: No dependency on actual Git repositories for unit tests
-- **Error scenario testing**: Comprehensive testing of failure modes
+### Automated Testing
 
-### Test Categories
-1. **Initialization and configuration**
-2. **Update detection (behind, up-to-date, errors)**
-3. **Network error handling and timeouts**
-4. **Script update operations (success and failure)**
-5. **Caching behavior and invalidation**
-6. **GUI integration and user interactions**
+**Integration Tests** (part of unified test suite):
+- Script update detection
+- Update application process
+- Error handling scenarios
+- Cache behavior validation
+
+**Test Coverage**:
+```python
+def test_check_for_script_updates_success()
+def test_check_for_script_updates_no_update()
+def test_check_for_script_updates_error()
+def test_update_scripts_success()
+def test_update_scripts_failure()
+```
+
+### Manual Testing
+
+**User Interface Testing**:
+- Update notification appearance
+- Expandable interface functionality
+- Button interactions
+- Error message display
+
+**Real Update Testing**:
+- Actual Git tag creation
+- Update detection verification
+- Update application process
+- Cache refresh validation
+
+## Performance Optimization
+
+### Caching Strategy
+
+```python
+@st.cache_data(ttl=3600)  # 60-minute cache
+def check_for_script_updates():
+    """
+    Cached script update checking.
+    Prevents excessive Git operations while ensuring timely updates.
+    """
+```
+
+### Efficient Operations
+- **GitHub API Primary**: Fast version checking via API
+- **SSH Fallback**: Only when API unavailable
+- **Smart Caching**: Prevents redundant Git operations
+- **Background Processing**: Non-blocking update detection
+
+## Migration Notes
+
+### From Previous Script System
+
+**Deprecated Components**:
+- ~~ScriptUpdateManager class~~
+- ~~Separate 30-minute caching~~
+- ~~Independent sidebar notifications~~
+- ~~Separate error handling~~
+
+**Maintained Functionality**:
+- ✅ One-click script updates
+- ✅ No restart required
+- ✅ Automatic update detection
+- ✅ Clear user feedback
+
+**Improvements**:
+- ✅ Cleaner interface
+- ✅ Unified authentication
+- ✅ Consistent error handling
+- ✅ Better testing coverage
 
 ## Future Enhancements
 
-### Potential Improvements
-1. **Update details**: Show commit messages and change summaries
-2. **Selective updates**: Allow users to choose which commits to pull
-3. **Update scheduling**: Allow users to set custom check intervals
-4. **Notification preferences**: Allow users to disable/customize notifications
-5. **Update history**: Track and display update history
+### Planned Improvements
+- **Update Details**: Show commit messages for script updates
+- **Selective Updates**: Choose specific commits to apply
+- **Branch Support**: Switch between script branches
+- **Update History**: Track script update history
 
 ### Advanced Features
-1. **Branch switching**: Allow users to switch between script branches
-2. **Rollback capability**: Allow reverting to previous script versions
-3. **Conflict resolution**: GUI for resolving merge conflicts
-4. **Update notifications**: Desktop/email notifications for critical updates
+- **Rollback Capability**: Revert to previous script versions
+- **Conflict Resolution**: GUI for handling merge conflicts
+- **Update Scheduling**: Custom update check intervals
+- **Notification Preferences**: Customizable update notifications
 
 ## Conclusion
 
-The script update system transforms the SIP LIMS Workflow Manager from a restart-dependent application into a continuously updated, self-maintaining system. Users now receive timely notifications about script updates and can apply them instantly without interrupting their workflow.
+The unified script update system maintains all the benefits of the previous implementation while providing a cleaner, more consistent user experience. By integrating script updates with the overall update system, users get a unified interface that reduces clutter while maintaining the convenience of one-click script updates.
 
-This implementation follows the project's established patterns for reliability, user experience, and maintainability while providing the persistent update checking that was missing from the original system.
+The system continues to provide immediate script updates without requiring application restarts, while now offering better security, consistency, and maintainability through the unified architecture.

@@ -84,7 +84,7 @@ class TestTerminalHeightEnhancement:
             import app
             # Check if TERMINAL_HEIGHT is defined in app module
             if hasattr(app, 'TERMINAL_HEIGHT'):
-                assert app.TERMINAL_HEIGHT == 600
+                assert app.TERMINAL_HEIGHT == 450
                 assert isinstance(app.TERMINAL_HEIGHT, int)
             else:
                 # If not defined yet, this test documents what we need to implement

@@ -11,7 +11,8 @@ import yaml
 import webbrowser
 from src.core import Project
 from src.logic import RunResult
-from src.update_manager import UpdateManager
+from src.git_update_manager import create_update_manager
+from src.ssh_key_manager import SSHKeyManager
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -22,24 +23,77 @@ import streamlit.components.v1 as components
 TERMINAL_HEIGHT = 450  # Reduced height for better screen utilization
 
 # --- Helper Functions ---
-@st.cache_data(ttl=3600)  # Cache for 1 hour to avoid checking too often
-def check_for_updates():
+@st.cache_data(ttl=3600)  # Cache for 60 minutes - checks automatically + on page refresh
+def check_for_app_updates():
     """
-    Check for available updates using the UpdateManager.
-    Cached to avoid frequent API calls.
+    Check for application updates using the unified Git system.
+    Automatically checks every 60 minutes + when page is refreshed.
+    User must click button to actually update.
     """
     try:
-        # Use the Google Drive URL provided in the task
-        update_manager = UpdateManager()
-        update_manager.remote_version_url = "https://drive.google.com/uc?id=1pRsUbaKoieuInH67ghExSZw7p2I64-FQ&export=download"
-        return update_manager.check_for_updates()
+        app_manager = create_update_manager("application")
+        return app_manager.check_for_updates()
     except Exception as e:
         return {
             'update_available': False,
-            'local_version': None,
-            'remote_version': None,
-            'error': f"Failed to check for updates: {str(e)}"
+            'current_version': None,
+            'latest_version': None,
+            'error': f"Failed to check for app updates: {str(e)}"
         }
+
+@st.cache_data(ttl=3600)  # Cache for 60 minutes - checks automatically + on page refresh
+def check_for_script_updates():
+    """
+    Check for script updates using the unified Git system.
+    Automatically checks every 60 minutes + when page is refreshed.
+    User must click button to actually update.
+    """
+    try:
+        script_manager = create_update_manager("scripts")
+        return script_manager.check_for_updates()
+    except Exception as e:
+        return {
+            'update_available': False,
+            'current_version': None,
+            'latest_version': None,
+            'error': f"Failed to check for script updates: {str(e)}"
+        }
+
+def update_scripts():
+    """Update scripts to latest version."""
+    try:
+        script_manager = create_update_manager("scripts")
+        return script_manager.update_to_latest()
+    except Exception as e:
+        return {
+            'success': False,
+            'error': f"Failed to update scripts: {str(e)}"
+        }
+
+def format_last_check_time(last_check):
+    """Format the last check time for display."""
+    if not last_check:
+        return "Never"
+    
+    now = time.time()
+    if hasattr(last_check, 'timestamp'):
+        check_time = last_check.timestamp()
+    else:
+        check_time = time.mktime(last_check.timetuple())
+    
+    diff = now - check_time
+    
+    if diff < 60:
+        return "Just now"
+    elif diff < 3600:
+        minutes = int(diff / 60)
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    elif diff < 86400:
+        hours = int(diff / 3600)
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    else:
+        days = int(diff / 86400)
+        return f"{days} day{'s' if days != 1 else ''} ago"
 
 def validate_workflow_yaml(file_path):
     """
@@ -437,32 +491,6 @@ def main():
     # --- Sidebar ---
     with st.sidebar:
         st.header("Controls")
-        
-        # --- Update Notification ---
-        update_info = check_for_updates()
-        if update_info['update_available'] and not update_info['error']:
-            st.subheader("🔄 Update Available")
-            st.info(f"**Update Available: v{update_info['remote_version']}**")
-            st.caption(f"Current version: v{update_info['local_version']}")
-            
-            if st.button("📥 Download Update", key="download_update"):
-                # Use the download URL from the update info, fallback to version check URL
-                download_url = update_info.get('download_url')
-                if not download_url:
-                    download_url = "https://drive.google.com/uc?id=1pRsUbaKoieuInH67ghExSZw7p2I64-FQ&export=download"
-                
-                try:
-                    webbrowser.open(download_url)
-                    st.success("✅ Download started in your browser!")
-                except Exception as e:
-                    st.error(f"❌ Failed to open download: {e}")
-                    st.info(f"Please manually visit: {download_url}")
-            
-            st.markdown("---")
-        elif update_info['error']:
-            # Only show error in debug mode or if explicitly requested
-            if st.session_state.get('show_update_errors', False):
-                st.error(f"Update check failed: {update_info['error']}")
         
         st.subheader("Project")
         if st.button("Browse for Project Folder", key="browse_button"):
@@ -868,6 +896,55 @@ def main():
                     st.session_state.project = None
 
     # --- Main Content Area ---
+    
+    # Check for updates and show notifications at top of main area (only when updates available)
+    app_update_info = check_for_app_updates()
+    script_update_info = check_for_script_updates()
+    
+    # Show update notifications only when updates are available
+    updates_available = (
+        app_update_info.get('update_available', False) or
+        script_update_info.get('update_available', False)
+    )
+    
+    if updates_available:
+        st.info("🔔 **Updates Available** - Check the expandable section below for details")
+        
+        with st.expander("📦 Available Updates", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("**🏠 Application**")
+                if app_update_info.get('update_available'):
+                    st.warning(f"Update: `{app_update_info['current_version']}` → `{app_update_info['latest_version']}`")
+                    if st.button("📥 Download App Update", key="app_update_btn"):
+                        webbrowser.open("https://github.com/RRMalmstrom/sip_lims_workflow_manager/releases/latest")
+                        st.success("🌐 Opening GitHub releases...")
+                else:
+                    st.success("✅ Up to date")
+            
+            with col2:
+                st.markdown("**🔧 Scripts**")
+                if script_update_info.get('update_available'):
+                    st.warning(f"Update: `{script_update_info['current_version']}` → `{script_update_info['latest_version']}`")
+                    if st.button("📥 Update Scripts", key="script_update_btn"):
+                        with st.spinner("Updating scripts..."):
+                            result = update_scripts()
+                            if result['success']:
+                                st.success("✅ Scripts updated!")
+                                check_for_script_updates.clear()
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Update failed: {result['error']}")
+                else:
+                    st.success("✅ Up to date")
+            
+            # Manual refresh option in expander
+            if st.button("🔄 Force Check Updates", key="manual_check"):
+                check_for_app_updates.clear()
+                check_for_script_updates.clear()
+                st.rerun()
+    
     if not st.session_state.project:
         st.info("Select a project folder using the 'Browse' button in the sidebar.")
     else:

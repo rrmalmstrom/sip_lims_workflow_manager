@@ -55,30 +55,45 @@ This application uses a **two-repository architecture** for better separation an
 - **Smaller Downloads**: App downloads don't include large script files
 - **Version Control**: Each component has its own release cycle
 
-## Updating the Workflow Scripts
+## Unified Update System
 
-This application is designed so that the workflow scripts can be updated independently from the main application.
+This application features a **unified update system** that manages both application and script updates through a clean, non-intrusive interface.
 
-### Automatic Script Update Notifications
+### How Updates Work
 
--   **Persistent checking**: The application automatically checks for new script versions every 30 minutes while running.
--   **Sidebar notifications**: When new scripts are available, a prominent notification appears in the sidebar.
--   **One-click updates**: Click "📥 Update Scripts" in the sidebar to update immediately without restarting the app.
--   **Manual refresh**: Use "🔄 Check Now" to force an immediate check for updates.
--   **No restart required**: Script updates are applied instantly without closing the application.
+-   **Automatic checking**: The application automatically checks for updates every 60 minutes + when you refresh the page
+-   **Clean interface**: Update notifications only appear when updates are actually available
+-   **User control**: All updates require your explicit approval - nothing updates automatically
+-   **Smart notifications**: A brief "🔔 Updates Available" message appears at the top when updates are found
 
-### Legacy Update Method (Still Available)
+### Update Interface
 
--   **Startup check**: The application also checks for script updates when it starts.
--   **Manual update**: You can still use `update_scripts.command` (macOS) or `update_scripts.bat` (Windows) files.
--   **Script updates are independent**: You can update scripts without updating the main application.
+When updates are available, you'll see:
 
-### Benefits of the New System
+1. **📦 Expandable Section**: Click to reveal update details in a side-by-side layout
+2. **🏠 Application Updates**: Shows version info and opens GitHub releases for manual download
+3. **🔧 Script Updates**: Shows version info with one-click in-app updates
+4. **🔄 Manual Refresh**: Force an immediate check for updates
 
--   **Never miss updates**: No need to restart the app to see new script versions.
--   **Immediate updates**: Apply script updates instantly from within the application.
--   **Better workflow**: Continue working while scripts are updated in the background.
--   **Clear feedback**: Always know when your scripts were last checked and updated.
+### Update Types
+
+**Application Updates:**
+- New features, bug fixes, user interface improvements
+- Downloaded manually from GitHub releases
+- Requires restarting the application after installation
+
+**Script Updates:**
+- Scientific workflow improvements, new analysis methods, script bug fixes
+- Updated instantly within the application
+- No restart required
+
+### Benefits of the Unified System
+
+-   **Clean interface**: No persistent update clutter - notifications only when needed
+-   **Never miss updates**: Automatic checking ensures you're always informed
+-   **User control**: You decide when to apply updates
+-   **Independent updates**: Scripts and app can be updated separately
+-   **Immediate script updates**: Apply script updates instantly without restarting
 
 ## Running the Application
 

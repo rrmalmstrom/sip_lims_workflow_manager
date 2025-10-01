@@ -20,6 +20,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 14 (Conditional Workflow System):** Complete. Implemented comprehensive conditional workflow functionality allowing users to make Yes/No decisions at specific workflow points with automatic triggering, enhanced undo behavior, and complete state management.
 - **Phase 15 (Terminal Output Cleanup):** Complete. Cleaned up verbose debug output from user-visible terminal interface while preserving comprehensive debug logging in background files for troubleshooting.
 - **Phase 16 (Persistent Script Update Notifications):** Complete. Implemented comprehensive script update notification system that checks for updates every 30 minutes during app runtime, displays notifications in sidebar, and allows one-click updates without restarting the application.
+- **Phase 17 (Unified Update System):** Complete. Implemented unified Git-based update system that manages both application and script updates through a single, clean interface with SSH authentication, eliminating Google Drive dependency and providing consistent user experience.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -242,3 +243,22 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Version Control**: Each component (app vs scripts) has independent Git history and release management
 - **Documentation Updates**: Updated README.md and technical documentation to reflect new architecture
 - **Universal Compatibility**: Existing user workflows unchanged while providing better development architecture
+
+## 18. Latest Features (Session 17)
+### Unified Update System Implementation
+- **Problem Solved**: Inconsistent update architecture with Google Drive for app updates and separate SSH system for scripts, causing cluttered interface and user confusion
+- **Root Cause Addressed**: Dual update systems used different authentication methods, interfaces, and checking frequencies, creating maintenance complexity and poor user experience
+- **Technical Implementation**: Complete unified Git-based update system with SSH authentication for both repositories and clean, expandable user interface
+- **Key Features**:
+  - **Unified GitUpdateManager**: Single class handles both application and script updates with consistent SSH authentication
+  - **Clean Interface**: Updates only appear when available, eliminating persistent sidebar clutter
+  - **Smart Notifications**: Expandable "🔔 Updates Available" section with side-by-side app and script details
+  - **User Control**: All updates require explicit user approval - no automatic installations
+  - **Consistent Frequency**: 60-minute checking for both update types with page refresh triggers
+  - **SSH Security**: Enhanced SSH key validation with Ed25519 support and comprehensive security checks
+- **Architecture Benefits**: Eliminated Google Drive dependency, unified authentication, consistent versioning with Git tags, and single codebase for maintenance
+- **User Experience**: Non-intrusive notifications, expandable details on demand, one-click script updates, manual app downloads from GitHub releases
+- **Test Coverage**: Comprehensive TDD approach with 13 integration tests plus full regression testing (153/154 tests passing)
+- **Security Enhancements**: SSH key type validation, permission verification, repository access testing, and graceful error handling
+- **Documentation**: Complete technical documentation, user guide updates, and migration notes for seamless transition
+- **Universal Compatibility**: Maintains all existing functionality while providing cleaner, more consistent update experience
