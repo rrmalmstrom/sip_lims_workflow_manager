@@ -14,6 +14,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   **Conditional workflow support** with Yes/No decision prompts for optional steps.
 -   **Intelligent project setup** with automatic file scenario detection.
 -   Interactive script support with real-time terminal output.
+-   **Auto-scroll to terminal** - automatically scrolls to the top when scripts are launched for immediate visibility.
 -   **Script termination capability** with automatic rollback to pre-execution state.
 -   **Localhost-only security** - application is only accessible from your computer, not from the network.
 -   Cross-platform support for macOS and Windows.
@@ -125,7 +126,7 @@ This localhost-only configuration ensures that your sensitive laboratory data an
 
 3.  **Run Steps**: The workflow steps will be displayed in the main area. The next available step will have an active "Run" button. Click it to execute the script.
 
-4.  **Interactive Scripts**: If a script requires your input, a prominent "🖥️ LIVE TERMINAL" section will appear at the top of the page with colored alert banners. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue. The enhanced visual indicators make it impossible to miss when a script needs your input.
+4.  **Interactive Scripts**: If a script requires your input, a prominent "🖥️ LIVE TERMINAL" section will appear at the top of the page with colored alert banners. **The page automatically scrolls to the top when you click "Run" or "Re-run"** to ensure the terminal is immediately visible, even when launching scripts from later workflow steps. You will see the script's output and any questions it asks. Type your response in the "Input" box and click "Send Input" to continue.
 
 5.  **Skip to Step Functionality**: For projects where some work was completed outside the workflow:
     -   Select "📋 Existing Work" during project setup
@@ -141,7 +142,7 @@ This localhost-only configuration ensures that your sensitive laboratory data an
     -   The system automatically manages dependent steps based on your decision
     -   You can undo conditional decisions using the undo button to return to the decision point
 
-8.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run.
+8.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run. **The page automatically scrolls to the top when you click "Re-run"** to show the terminal interface immediately.
 
 ## Creating a New Workflow
 

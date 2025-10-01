@@ -62,12 +62,12 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 27. **Terminal Output Cleanup**: Removed verbose debug messages from user-visible terminal output while preserving comprehensive debug logging in background files for professional user experience.
 28. **Repository Separation**: Separated workflow scripts into independent `sip_scripts_workflow_gui` repository for better version control, independent updates, and cleaner architecture.
 29. **Persistent Script Update Notifications**: Implemented comprehensive script update system with 30-minute automatic checking, sidebar notifications, one-click updates, and manual refresh capability, eliminating the need to restart the app to see script updates.
+30. **Auto-Scroll to Terminal Enhancement**: Implemented automatic page scrolling to the top when scripts are launched, ensuring users can immediately see the terminal interface even when running scripts from later workflow steps (like steps 12-14). Uses aggressive JavaScript methods to handle Streamlit's iframe structure with multiple retry attempts for cross-browser compatibility.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
-2. **Script Update Mechanism**: Enhance reliability and user experience of script updates.
-3. **Workflow Validation**: Implement validation for `workflow.yml` file syntax and structure.
-4. **Comprehensive Testing**: Perform full end-to-end testing on both macOS and Windows platforms.
+2. **Workflow Validation**: Implement validation for `workflow.yml` file syntax and structure.
+3. **Comprehensive Testing**: Perform full end-to-end testing on both macOS and Windows platforms.
 
 ## 6. Latest Features (Session 4)
 ### Enhanced Re-run File Input Behavior
@@ -262,3 +262,20 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Security Enhancements**: SSH key type validation, permission verification, repository access testing, and graceful error handling
 - **Documentation**: Complete technical documentation, user guide updates, and migration notes for seamless transition
 - **Universal Compatibility**: Maintains all existing functionality while providing cleaner, more consistent update experience
+
+## 18. Latest Features (Session 18)
+### Auto-Scroll to Terminal Enhancement
+- **Problem Solved**: Users running scripts from later workflow steps (12, 13, 14) couldn't see the terminal that opened at the top of the page
+- **Root Cause Addressed**: Terminal interface appears at top of page but users remain scrolled down to where they clicked the Run button
+- **Technical Implementation**: Enhanced JavaScript auto-scroll function with aggressive multi-method approach for Streamlit compatibility
+- **Key Features**:
+  - **Immediate Scroll**: Page automatically scrolls to top when Run or Re-run buttons are clicked
+  - **Aggressive Targeting**: Targets multiple Streamlit container selectors and scrollable elements
+  - **Cross-Browser Compatibility**: Multiple scroll methods with try-catch error handling
+  - **Retry Logic**: Multiple timeout intervals (10ms to 1000ms) ensure reliable scrolling
+  - **Universal Reset**: Finds and resets ALL scrollable elements on the page to position 0
+- **User Experience**: Users can immediately see the "🖥️ LIVE TERMINAL" section without manual scrolling
+- **Technical Details**: Uses `components.html()` to inject JavaScript targeting `stAppViewContainer`, `stApp`, `stMainBlockContainer`, and other Streamlit containers
+- **Test Coverage**: Comprehensive TDD approach with 7 test cases validating JavaScript generation, error handling, and integration points
+- **Manual Verification**: Confirmed working perfectly - scrolls all the way to the very top of the page
+- **Universal Compatibility**: Works with all workflow steps and maintains backward compatibility with existing functionality
