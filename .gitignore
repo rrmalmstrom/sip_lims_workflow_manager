@@ -85,8 +85,8 @@ project_database.db
 *~
 .#*
 
-# SSH keys
-.ssh/
+# SSH keys - Deploy keys are included for team distribution
+# .ssh/
 
 # Archives
 archived_files/
