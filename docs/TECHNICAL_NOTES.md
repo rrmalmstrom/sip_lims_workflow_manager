@@ -2406,7 +2406,7 @@ The Session 16 enhancements complete the update system by providing persistent s
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the persistent update notifications and seamless script management needed for complex SIP laboratory workflows where staying current with the latest analysis methods is critical for research success.
 
-## Feature 16: Auto-Scroll to Terminal Enhancement (Session 18)
+## Feature 16: Auto-Scroll Functionality Removal (Session 18)
 
 ### Problem Statement
 Users running scripts from later workflow steps (like steps 12, 13, 14) couldn't see the terminal interface that opened at the top of the page. When users clicked "Run" or "Re-run" buttons on steps positioned lower on the page, they remained scrolled down to where they clicked the button, missing the prominent "🖥️ LIVE TERMINAL" section that appeared at the top.
@@ -3294,7 +3294,7 @@ The Session 20 enhancements provide comprehensive fixes for both the variable sh
 
 1. **Complete Pseudo-Terminal Reliability**: Fixed both variable shadowing and input buffer contamination for seamless script interaction
 2. **Fixed Conditional Undo**: Proper undo functionality for conditional steps in "awaiting_decision" state with trigger step handling
-3. **Auto-Scroll to Terminal**: Automatic page scrolling to top when scripts are launched for immediate terminal visibility
+3. **Manual Terminal Navigation**: Users scroll manually to view terminal output, maintaining full control over page navigation
 4. **Persistent Script Update Notifications**: 30-minute automatic checking with sidebar notifications and one-click updates
 5. **Clean Terminal Interface**: Professional user experience with debug information moved to background logging
 6. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state

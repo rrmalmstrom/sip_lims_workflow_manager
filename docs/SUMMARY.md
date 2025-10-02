@@ -62,7 +62,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 27. **Terminal Output Cleanup**: Removed verbose debug messages from user-visible terminal output while preserving comprehensive debug logging in background files for professional user experience.
 28. **Repository Separation**: Separated workflow scripts into independent `sip_scripts_workflow_gui` repository for better version control, independent updates, and cleaner architecture.
 29. **Persistent Script Update Notifications**: Implemented comprehensive script update system with 30-minute automatic checking, sidebar notifications, one-click updates, and manual refresh capability, eliminating the need to restart the app to see script updates.
-30. **Auto-Scroll to Terminal Enhancement**: Implemented automatic page scrolling to the top when scripts are launched, ensuring users can immediately see the terminal interface even when running scripts from later workflow steps (like steps 12-14). Uses aggressive JavaScript methods to handle Streamlit's iframe structure with multiple retry attempts for cross-browser compatibility.
+30. **Auto-Scroll Functionality Removal**: Removed automatic page scrolling functionality after determining it caused usability issues and interfered with user control. Users now manually scroll to view terminal output, maintaining full control over page navigation while relying on prominent visual indicators to locate the terminal.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -264,21 +264,21 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Universal Compatibility**: Maintains all existing functionality while providing cleaner, more consistent update experience
 
 ## 18. Latest Features (Session 18)
-### Auto-Scroll to Terminal Enhancement
-- **Problem Solved**: Users running scripts from later workflow steps (12, 13, 14) couldn't see the terminal that opened at the top of the page
-- **Root Cause Addressed**: Terminal interface appears at top of page but users remain scrolled down to where they clicked the Run button
-- **Technical Implementation**: Enhanced JavaScript auto-scroll function with aggressive multi-method approach for Streamlit compatibility
-- **Key Features**:
-  - **Immediate Scroll**: Page automatically scrolls to top when Run or Re-run buttons are clicked
-  - **Aggressive Targeting**: Targets multiple Streamlit container selectors and scrollable elements
-  - **Cross-Browser Compatibility**: Multiple scroll methods with try-catch error handling
-  - **Retry Logic**: Multiple timeout intervals (10ms to 1000ms) ensure reliable scrolling
-  - **Universal Reset**: Finds and resets ALL scrollable elements on the page to position 0
-- **User Experience**: Users can immediately see the "🖥️ LIVE TERMINAL" section without manual scrolling
-- **Technical Details**: Uses `components.html()` to inject JavaScript targeting `stAppViewContainer`, `stApp`, `stMainBlockContainer`, and other Streamlit containers
-- **Test Coverage**: Comprehensive TDD approach with 7 test cases validating JavaScript generation, error handling, and integration points
-- **Manual Verification**: Confirmed working perfectly - scrolls all the way to the very top of the page
-- **Universal Compatibility**: Works with all workflow steps and maintains backward compatibility with existing functionality
+### Auto-Scroll Functionality Removal
+- **Problem Identified**: Users running scripts from later workflow steps (12, 13, 14) couldn't see the terminal that opened at the top of the page
+- **Initial Solution Attempted**: Implemented comprehensive JavaScript auto-scroll function with aggressive multi-method approach for Streamlit compatibility
+- **Issues Discovered**: Auto-scroll functionality caused "crazy scrolling" behavior that interfered with users' ability to manually scroll and control page navigation
+- **Final Decision**: Complete removal of auto-scroll functionality after determining it caused more usability problems than it solved
+- **Key Changes**:
+  - **Function Removal**: Completely removed `scroll_to_top()` function from [`app.py`](../app.py)
+  - **Call Site Cleanup**: Removed all auto-scroll function calls from Run and Re-run button handlers
+  - **Test Updates**: Modified tests to verify removal and serve as safeguards against re-introduction
+  - **User Control**: Users now maintain full control over page scrolling behavior
+- **User Experience**: Users manually scroll to view terminal output when needed, relying on prominent "🖥️ LIVE TERMINAL" visual indicators
+- **Technical Benefits**: Eliminated JavaScript execution overhead, timing conflicts, and cross-browser compatibility issues
+- **Test Coverage**: Updated TDD approach with 5 test cases validating complete removal of auto-scroll functionality
+- **Manual Verification**: Confirmed clean removal with no interference in user scrolling behavior
+- **Universal Compatibility**: Maintains all existing functionality while eliminating scrolling interference
 
 ## 19. Latest Features (Session 19)
 ### Conditional Undo Bug Fix

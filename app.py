@@ -177,99 +177,7 @@ def auto_scroll_terminal():
     """
     components.html(js_code, height=0)
 
-def scroll_to_top():
-    """
-    Injects JavaScript to scroll the page to the top when the terminal opens.
-    Uses multiple aggressive methods to ensure compatibility with Streamlit's iframe structure.
-    """
-    js_code = """
-    <script>
-    (function() {
-        // Multiple aggressive attempts to scroll to top
-        function scrollToTop() {
-            try {
-                // Method 1: Immediate scroll attempts on all windows
-                if (window.parent) {
-                    window.parent.scrollTo(0, 0);
-                    window.parent.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                    // Force scroll on parent window
-                    window.parent.document.documentElement.scrollTop = 0;
-                    window.parent.document.body.scrollTop = 0;
-                }
-                window.scrollTo(0, 0);
-                window.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                document.documentElement.scrollTop = 0;
-                document.body.scrollTop = 0;
-                
-                // Method 2: Target Streamlit containers aggressively
-                const streamlitDoc = window.parent.document;
-                if (streamlitDoc) {
-                    // Try multiple container selectors with more aggressive scrolling
-                    const containers = [
-                        streamlitDoc.querySelector('[data-testid="stAppViewContainer"]'),
-                        streamlitDoc.querySelector('.main'),
-                        streamlitDoc.querySelector('[data-testid="stApp"]'),
-                        streamlitDoc.querySelector('.stApp'),
-                        streamlitDoc.querySelector('[data-testid="stMainBlockContainer"]'),
-                        streamlitDoc.querySelector('.stMainBlockContainer'),
-                        streamlitDoc.querySelector('[data-testid="block-container"]'),
-                        streamlitDoc.querySelector('.block-container'),
-                        streamlitDoc.body,
-                        streamlitDoc.documentElement
-                    ];
-                    
-                    containers.forEach(container => {
-                        if (container) {
-                            container.scrollTop = 0;
-                            container.scrollLeft = 0;
-                            if (container.scrollTo) {
-                                container.scrollTo(0, 0);
-                                container.scrollTo({top: 0, left: 0, behavior: 'instant'});
-                            }
-                            // Force scroll properties
-                            if (container.style) {
-                                container.style.scrollBehavior = 'auto';
-                            }
-                        }
-                    });
-                    
-                    // Method 3: Force scroll on all scrollable elements
-                    const allScrollable = streamlitDoc.querySelectorAll('*');
-                    allScrollable.forEach(element => {
-                        if (element.scrollTop > 0 || element.scrollLeft > 0) {
-                            element.scrollTop = 0;
-                            element.scrollLeft = 0;
-                        }
-                    });
-                }
-                
-                // Method 4: Use window.location hash trick
-                if (window.parent) {
-                    const currentHash = window.parent.location.hash;
-                    window.parent.location.hash = '#top';
-                    window.parent.location.hash = currentHash || '';
-                }
-                
-            } catch (e) {
-                console.log('Scroll attempt failed:', e);
-            }
-        }
-        
-        // Try immediately
-        scrollToTop();
-        
-        // Try again after short delays with increasing frequency
-        setTimeout(scrollToTop, 10);
-        setTimeout(scrollToTop, 25);
-        setTimeout(scrollToTop, 50);
-        setTimeout(scrollToTop, 100);
-        setTimeout(scrollToTop, 200);
-        setTimeout(scrollToTop, 500);
-        setTimeout(scrollToTop, 1000);
-    })();
-    </script>
-    """
-    components.html(js_code, height=0)
+# Auto-scroll functionality removed - users can manually scroll to see terminal output
 
 def send_and_clear_input(project, user_input):
     """Callback to send input to the script and clear the input box."""
@@ -1460,8 +1368,6 @@ def main():
                             st.session_state.terminal_output = ""
                             step_user_inputs = st.session_state.user_inputs.get(step_id, {})
                             start_script_thread(project, step_id, step_user_inputs)
-                            # Auto-scroll to top when terminal opens
-                            scroll_to_top()
                             st.rerun()  # Force immediate rerun to show terminal
                     
                     # Show Run button for pending steps (or all steps if they're the next step)
@@ -1486,8 +1392,6 @@ def main():
                             st.session_state.terminal_output = ""
                             step_user_inputs = st.session_state.user_inputs.get(step_id, {})
                             start_script_thread(project, step_id, step_user_inputs)
-                            # Auto-scroll to top when terminal opens
-                            scroll_to_top()
                             st.rerun()  # Force immediate rerun to show terminal
             
             # ... (rest of the step display logic) ...
