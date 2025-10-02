@@ -274,9 +274,16 @@ def scroll_to_top():
 def send_and_clear_input(project, user_input):
     """Callback to send input to the script and clear the input box."""
     if project.script_runner.is_running():
-        project.script_runner.send_input(user_input)
-        st.session_state.terminal_input_box = ""
-        st.session_state.scroll_to_bottom = True
+        # Prevent double input by checking if we just sent input
+        current_time = time.time()
+        last_input_time = st.session_state.get('last_input_time', 0)
+        
+        # Only send if it's been more than 100ms since last input
+        if current_time - last_input_time > 0.1:
+            project.script_runner.send_input(user_input)
+            st.session_state.last_input_time = current_time
+            st.session_state.terminal_input_box = ""
+            st.session_state.scroll_to_bottom = True
 
 def handle_terminal_input_change():
     """Handle when terminal input changes - triggered by Enter key or other changes."""
@@ -285,9 +292,16 @@ def handle_terminal_input_change():
         # Send input regardless of whether it's empty (for default answers)
         project = st.session_state.project
         if project and project.script_runner.is_running():
-            project.script_runner.send_input(user_input)
-            st.session_state.terminal_input_box = ""
-            st.session_state.scroll_to_bottom = True
+            # Prevent double input by checking if we just sent input
+            current_time = time.time()
+            last_input_time = st.session_state.get('last_input_time', 0)
+            
+            # Only send if it's been more than 100ms since last input
+            if current_time - last_input_time > 0.1:
+                project.script_runner.send_input(user_input)
+                st.session_state.last_input_time = current_time
+                st.session_state.terminal_input_box = ""
+                st.session_state.scroll_to_bottom = True
 
 def select_file_via_subprocess():
     python_executable = sys.executable
@@ -787,7 +801,6 @@ def main():
                 import os
                 import signal
                 import threading
-                import time
                 import platform
                 
                 def delayed_shutdown():
@@ -1475,14 +1488,50 @@ def main():
         # This block handles both polling for terminal output and the final result
         if st.session_state.running_step_id:
             runner = st.session_state.project.script_runner
-            # Poll for terminal output
-            try:
-                output = runner.output_queue.get_nowait()
-                if output is not None:
-                    st.session_state.terminal_output += output
-                    st.rerun()
-            except queue.Empty:
-                pass # No new output
+            
+            # DEBUG: Add diagnostic logging to understand polling behavior
+            import datetime
+            current_time = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            
+            # Enhanced polling logic to retrieve all available output
+            # This fixes the pseudo-terminal buffering issue where prompts
+            # would remain invisible until user interaction
+            output_received = False
+            items_retrieved = 0
+            queue_size_before = runner.output_queue.qsize()
+            
+            for attempt in range(10):  # Increased from single attempt to 10
+                try:
+                    output = runner.output_queue.get_nowait()
+                    if output is not None:
+                        st.session_state.terminal_output += output
+                        output_received = True
+                        items_retrieved += 1
+                        # DEBUG: Log each item retrieved
+                        print(f"[{current_time}] POLLING DEBUG: Retrieved item {items_retrieved}: '{output[:50]}{'...' if len(output) > 50 else ''}'")
+                except queue.Empty:
+                    if output_received:
+                        # If we got some output, wait briefly and try again
+                        # This handles cases where output arrives in quick succession
+                        time.sleep(0.01)
+                        continue
+                    else:
+                        break  # No output available, stop polling
+            
+            queue_size_after = runner.output_queue.qsize()
+            
+            # DEBUG: Log polling results
+            if queue_size_before > 0 or items_retrieved > 0:
+                print(f"[{current_time}] POLLING DEBUG: Queue before={queue_size_before}, retrieved={items_retrieved}, queue after={queue_size_after}, will_rerun={output_received}")
+            
+            # Only trigger rerun if we actually received output
+            if output_received:
+                print(f"[{current_time}] POLLING DEBUG: Triggering st.rerun() due to output received")
+                st.rerun()
+            else:
+                # DEBUG: Check if there's actually content in the queue that we missed
+                if queue_size_before > 0:
+                    print(f"[{current_time}] POLLING DEBUG: WARNING - Queue had {queue_size_before} items but we retrieved {items_retrieved}")
 
             # Poll for the final result
             try:
@@ -1515,10 +1564,13 @@ def main():
             except queue.Empty:
                 pass # Not finished yet
 
-            # If still running, schedule another rerun
+            # If still running, schedule another rerun with shorter delay
+            # This ensures prompts appear immediately without waiting for user interaction
             if st.session_state.running_step_id:
                 auto_scroll_terminal()
-                time.sleep(0.1)
+                # Reduced delay to make polling more responsive
+                # This fixes the issue where users need to click "Send Input" twice
+                time.sleep(0.05)  # Reduced from 0.1s to 0.05s
                 st.rerun()
         
         if st.session_state.scroll_to_bottom:

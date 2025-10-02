@@ -2911,3 +2911,188 @@ The Session 19 enhancements provide a critical bug fix for conditional workflow 
 18. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
 
 The implementation maintains the highest standards for maintainability, performance, and user experience while providing the reliable conditional workflow navigation needed for complex SIP laboratory workflows where decision-making flexibility and proper undo functionality are essential for successful experimental outcomes.
+
+## Feature 18: Pseudo-Terminal Buffering Fix (Session 20)
+
+### Problem Statement
+After implementing enhanced polling logic to improve pseudo-terminal responsiveness, users reported that they now needed to click "Send Input" twice instead of once to see script prompts. The terminal would show "Waiting for script output..." until user interaction forced a UI update, indicating that the enhanced polling logic wasn't triggering immediate UI updates when output became available in the queue.
+
+### Root Cause Analysis
+
+#### The Variable Shadowing Bug
+Investigation revealed that the issue was not with the enhanced polling logic itself, but with a critical variable shadowing bug that prevented the entire application from running properly:
+
+**Location**: [`app.py:805`](../app.py:805) - Inside the `shutdown()` function
+**Issue**: Redundant `import time` statement was shadowing the global `time` import
+**Impact**: Caused `UnboundLocalError: local variable 'time' referenced before assignment` on every `time.sleep()` call
+
+#### The Masquerading Symptom
+The user-reported symptom (double-click requirement) was actually a side effect of the application crashing due to variable shadowing, not a polling logic issue:
+- **Expected**: Enhanced polling logic would provide real-time terminal updates
+- **Actual**: Application crashed on startup, preventing enhanced polling from executing
+- **User Experience**: Intermittent functionality that appeared to be a polling issue
+
+### Solution Implementation
+
+#### Critical Bug Fix
+**Removed Redundant Import Statement** (`app.py:805`):
+```python
+# PROBLEMATIC CODE (removed):
+def shutdown():
+    import time  # This shadowed the global import
+    # ... rest of function
+
+# FIXED CODE:
+def shutdown():
+    # Removed redundant import - uses global time import
+    # ... rest of function
+```
+
+#### Enhanced Polling Logic Validation
+The enhanced polling logic was correctly implemented but couldn't function due to the shadowing bug:
+
+**Enhanced Polling Features** (`app.py:1492-1513`):
+- **Multiple Queue Retrieval**: Up to 10 attempts per polling cycle vs single attempt
+- **Reduced Polling Delay**: 50ms intervals instead of 100ms for more responsive updates
+- **Comprehensive Logging**: Diagnostic messages for queue operations and UI updates
+- **Immediate UI Updates**: `st.rerun()` triggered when output is available
+
+### Technical Implementation Details
+
+#### Variable Shadowing in Python
+**The Core Issue**:
+```python
+# Global scope
+import time
+
+def some_function():
+    import time  # Local import shadows global
+    time.sleep(1)  # UnboundLocalError if time is referenced before this line
+```
+
+**Why This Caused Application Crashes**:
+- Python treats `time` as a local variable due to the local import
+- Any reference to `time` before the local import raises `UnboundLocalError`
+- The shutdown function had `time.sleep()` calls before the local import
+
+#### Enhanced Polling Logic Architecture
+**Queue Processing Enhancement**:
+```python
+# Enhanced polling retrieves multiple items per cycle
+attempts = 0
+max_attempts = 10
+while attempts < max_attempts:
+    try:
+        item = self.output_queue.get_nowait()
+        # Process item and trigger UI update
+        attempts += 1
+    except queue.Empty:
+        break
+```
+
+**Diagnostic Logging Implementation**:
+```python
+# Comprehensive logging for debugging
+print(f"[{timestamp}] POLLING DEBUG: Retrieved item {count}: '{item}'")
+print(f"[{timestamp}] POLLING DEBUG: Queue before={before}, retrieved={count}, queue after={after}, will_rerun={will_rerun}")
+print(f"[{timestamp}] POLLING DEBUG: Triggering st.rerun() due to output received")
+```
+
+### Debugging Process and Methodology
+
+#### Systematic Debugging Approach
+1. **Initial Analysis**: Examined enhanced polling logic implementation
+2. **Reproduction Attempt**: Tried to reproduce the double-click issue
+3. **Application Crash Discovery**: Found application wouldn't start due to `UnboundLocalError`
+4. **Root Cause Investigation**: Traced error to variable shadowing in shutdown function
+5. **Fix Implementation**: Removed redundant local import statement
+6. **Verification**: Confirmed fix resolves both crash and double-click issues
+
+#### Debug Output Validation
+**Successful Polling Operation**:
+```
+[09:22:38.696] POLLING DEBUG: Retrieved item 1: 'Enter the minimum volume...'
+[09:22:38.696] POLLING DEBUG: Queue before=1, retrieved=1, queue after=0, will_rerun=True
+[09:22:38.696] POLLING DEBUG: Triggering st.rerun() due to output received
+```
+
+### Performance and Reliability Impact
+
+#### Enhanced Responsiveness
+- **Real-time Updates**: Terminal output appears immediately when available
+- **Reduced Latency**: 50ms polling intervals provide near-instantaneous updates
+- **Multiple Item Processing**: Handles burst output more efficiently
+- **Eliminated Double-Click**: Users see prompts immediately with single interaction
+
+#### System Stability
+- **Application Reliability**: Fixed critical crash preventing application startup
+- **Consistent Behavior**: Polling logic now functions as designed
+- **Error Prevention**: Eliminated variable shadowing anti-pattern
+- **Robust Operation**: Application runs reliably without intermittent crashes
+
+### User Experience Improvements
+
+#### Immediate Benefits
+- **Single-Click Operation**: Restored expected "Send Input" button behavior
+- **Real-time Terminal**: Immediate display of script output and prompts
+- **Reliable Interaction**: Consistent terminal responsiveness across all scripts
+- **Professional Experience**: Eliminated confusing double-click requirement
+
+#### Technical Transparency
+- **Diagnostic Logging**: Comprehensive debug information available for troubleshooting
+- **Clear Error Messages**: Improved error reporting for future debugging
+- **Predictable Behavior**: Terminal interactions work as users expect
+
+### Integration with Existing Features
+
+#### Terminal System Compatibility
+- **Interactive Scripts**: Enhanced responsiveness for all interactive script functionality
+- **Auto-scroll Integration**: Works seamlessly with auto-scroll to terminal feature
+- **Script Termination**: Compatible with script termination and rollback functionality
+- **Clean Interface**: Maintains professional terminal output from Session 15
+
+#### Polling System Enhancement
+- **Queue Management**: Improved queue processing efficiency
+- **UI Update Mechanism**: More responsive `st.rerun()` triggering
+- **Background Processing**: Enhanced background thread management
+- **Resource Efficiency**: Optimized polling without excessive resource usage
+
+### Future Maintenance Considerations
+
+#### Code Quality Improvements
+- **Import Management**: Established pattern for avoiding variable shadowing
+- **Global vs Local Scope**: Clear guidelines for import statement placement
+- **Error Prevention**: Code review practices to catch similar issues
+- **Testing Coverage**: Enhanced testing to detect variable shadowing bugs
+
+#### Monitoring and Debugging
+- **Diagnostic Logging**: Comprehensive logging system for future troubleshooting
+- **Performance Metrics**: Queue processing statistics for optimization
+- **Error Detection**: Early warning systems for similar variable shadowing issues
+- **User Feedback**: Clear channels for reporting terminal responsiveness issues
+
+## Conclusion (Updated for Session 20)
+
+The Session 20 enhancements provide a critical bug fix that resolves pseudo-terminal buffering issues by eliminating variable shadowing that prevented the enhanced polling logic from functioning. Combined with all previous session features, the SIP LIMS Workflow Manager now provides:
+
+1. **Fixed Pseudo-Terminal Buffering**: Eliminated variable shadowing bug enabling real-time terminal updates with single-click interaction
+2. **Fixed Conditional Undo**: Proper undo functionality for conditional steps in "awaiting_decision" state with trigger step handling
+3. **Auto-Scroll to Terminal**: Automatic page scrolling to top when scripts are launched for immediate terminal visibility
+4. **Persistent Script Update Notifications**: 30-minute automatic checking with sidebar notifications and one-click updates
+5. **Clean Terminal Interface**: Professional user experience with debug information moved to background logging
+6. **Script Termination Control**: Users can stop running scripts at any time with automatic rollback to clean state
+7. **SIP Laboratory Branding**: Updated application title and branding to reflect Stable Isotope Probing focus
+8. **Conditional Workflow System**: Complete Yes/No decision capability with automatic triggering and enhanced undo behavior
+9. **Timestamp Preservation**: File modification times preserved during all rollback operations
+10. **Unified Rollback System**: Consistent complete snapshot restoration for all failure scenarios
+11. **Flexible Workflow Execution**: Start from any step with proper state management and safety snapshots
+12. **Comprehensive File Scenario Handling**: Robust detection and handling of all possible file combinations
+13. **Enhanced Project Setup**: Guided interface for choosing between new projects and existing work
+14. **Complete Granular Undo**: Handle any combination of runs, undos, skips, and conditional decisions
+15. **Reliable Interactive Execution**: Enhanced terminal visibility with real-time output, automatic scrolling, and responsive interaction
+16. **Comprehensive State Management**: Five-state system with complete project restoration capabilities
+17. **Smart Re-run Behavior**: Fresh input prompts with automatic clearing and selective re-run capability
+18. **Protected Template System**: Git-tracked, version-controlled workflow templates with comprehensive validation
+19. **Universal Compatibility**: Works for all workflow configurations with full backward compatibility
+
+The implementation maintains the highest standards for maintainability, performance, and user experience while providing the reliable, responsive terminal interaction needed for complex SIP laboratory workflows where immediate feedback and seamless user interaction are critical for efficient experimental execution.

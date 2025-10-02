@@ -467,26 +467,44 @@ class ScriptRunner:
             log_debug(f"Project path: {self.project_path}\n")
             
             # Read output from pseudo-terminal in real-time
+            # Give the process a moment to start and produce initial output
+            time.sleep(0.05)  # Small delay to let process start
+            
             while self.is_running_flag.is_set() and self.master_fd is not None:
                 try:
                     # Check if process is still running
                     if self.process:
                         poll_result = self.process.poll()
                         if poll_result is not None:
-                            # Process finished
+                            # Process finished - do one final read to get any remaining output
                             log_debug(f"=== PROCESS FINISHED WITH POLL RESULT: {poll_result} ===\n")
+                            # Try to read any remaining output before breaking
+                            try:
+                                ready, _, _ = select.select([self.master_fd], [], [], 0.1)
+                                if ready:
+                                    output = os.read(self.master_fd, 4096).decode('utf-8', errors='replace')
+                                    if output:
+                                        self.output_queue.put(output)
+                            except OSError:
+                                pass
                             break
                     
-                    # Use select to check if there's data to read
-                    ready, _, _ = select.select([self.master_fd], [], [], 0.1)
+                    # Use select to check if there's data to read with shorter timeout for responsiveness
+                    ready, _, _ = select.select([self.master_fd], [], [], 0.02)  # Reduced from 0.1 to 0.02
                     if ready:
                         try:
-                            output = os.read(self.master_fd, 1024).decode('utf-8', errors='replace')
+                            # Read available data - try to read more at once for better performance
+                            output = os.read(self.master_fd, 4096).decode('utf-8', errors='replace')
                             if output:
                                 self.output_queue.put(output)
+                                # Immediately check for more data without waiting
+                                continue
                         except OSError:
                             # PTY closed
                             break
+                    else:
+                        # No data ready, small sleep to prevent busy waiting
+                        time.sleep(0.01)
                     
                 except Exception as e:
                     log_debug(f"Error reading PTY output: {str(e)}\n")

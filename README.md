@@ -13,8 +13,9 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   **Skip to Step functionality** for starting workflows from any midway point.
 -   **Conditional workflow support** with Yes/No decision prompts for optional steps.
 -   **Intelligent project setup** with automatic file scenario detection.
--   Interactive script support with real-time terminal output.
+-   Interactive script support with real-time terminal output and responsive single-click interaction.
 -   **Auto-scroll to terminal** - automatically scrolls to the top when scripts are launched for immediate visibility.
+-   **Enhanced pseudo-terminal buffering** - real-time output updates with optimized polling for immediate script prompt visibility.
 -   **Script termination capability** with automatic rollback to pre-execution state.
 -   **Application shutdown button** - cleanly terminate the application from within the GUI.
 -   **Safe uninstall system** - complete removal of application while preserving user data.

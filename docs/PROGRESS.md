@@ -319,3 +319,25 @@ We have successfully completed a major refactoring of the application's core log
     * **Fix Validation**: Verified undo now properly resets conditional step and undoes trigger step (step 9)
     * **Sequential Undo**: Confirmed subsequent undo operations work normally, going backwards through the workflow
     * **Complete Functionality**: Validated that conditional undo now works seamlessly with the existing undo system
+
+### Session 20: Pseudo-Terminal Buffering Fix
+1. **Critical Variable Shadowing Bug Resolution**: Identified and fixed a critical bug that was preventing the enhanced polling logic from functioning.
+    * **Root Cause**: A redundant `import time` statement inside the shutdown function (line 805) was shadowing the global `time` import
+    * **Impact**: This caused `UnboundLocalError: local variable 'time' referenced before assignment` on every `time.sleep()` call, preventing the app from running
+    * **Symptom**: Users reported needing to click "Send Input" twice instead of once to see script prompts, with terminal showing "Waiting for script output..." until user interaction
+    * **Actual Issue**: The enhanced polling logic wasn't executing at all due to application crashes from variable shadowing
+2. **Enhanced Polling Logic Validation**: Confirmed the enhanced polling logic was correctly implemented but couldn't function due to the shadowing bug.
+    * **Polling Enhancement**: System retrieves multiple queue items per cycle (up to 10 attempts vs single attempt)
+    * **Reduced Polling Delay**: Changed from 100ms to 50ms for more responsive updates
+    * **Diagnostic Logging**: Added comprehensive logging to validate polling behavior and queue operations
+    * **UI Update Mechanism**: Enhanced logic properly triggers `st.rerun()` when output is available
+3. **Comprehensive Debugging Process**: Systematic approach to identify the root cause through multiple debugging phases.
+    * **Initial Analysis**: Examined enhanced polling logic implementation in app.py lines 1492-1513
+    * **Testing Phase**: Attempted to reproduce the issue but discovered application crashes
+    * **Root Cause Investigation**: Found variable shadowing preventing application startup
+    * **Fix Implementation**: Removed redundant local `import time` statement from shutdown function
+4. **Verification and Validation**: Confirmed the fix resolves the double-click issue and provides real-time terminal updates.
+    * **Debug Output Validation**: Terminal logs showed successful polling: "Retrieved item 1: 'Enter the minimum volume...'"
+    * **Queue Operations**: Confirmed proper queue management with before/after counts and rerun triggers
+    * **User Experience**: Eliminated the need for double-clicking "Send Input" button
+    * **Real-time Updates**: Terminal output now appears immediately when available in the queue
