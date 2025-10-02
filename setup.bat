@@ -1,5 +1,5 @@
 @echo off
-echo --- Setting up LIMS Workflow Manager ---
+echo --- Setting up SIP LIMS Workflow Manager ---
 
 REM Check for Python
 python --version 2>NUL
