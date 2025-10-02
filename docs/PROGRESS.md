@@ -341,3 +341,8 @@ We have successfully completed a major refactoring of the application's core log
     * **Queue Operations**: Confirmed proper queue management with before/after counts and rerun triggers
     * **User Experience**: Eliminated the need for double-clicking "Send Input" button
     * **Real-time Updates**: Terminal output now appears immediately when available in the queue
+5. **Additional Input Handling Fix**: Resolved secondary issue where input prompts were being skipped due to PTY buffer contamination.
+    * **Root Cause**: Pressing Enter in Streamlit text input was sending trailing whitespace/newlines to PTY buffer
+    * **Impact**: Subsequent `input()` calls in scripts would immediately consume stray characters and use default values
+    * **Solution**: Added `.strip()` to input handling functions to remove trailing whitespace before sending to PTY
+    * **Result**: All script input prompts now properly wait for user input instead of auto-using defaults
