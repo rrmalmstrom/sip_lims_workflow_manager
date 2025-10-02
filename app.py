@@ -775,6 +775,115 @@ def main():
             st.success("✅ Update cache cleared!")
             st.rerun()
         st.caption("Clears update cache and checks for new versions")
+        
+        # Shutdown functionality
+        st.subheader("Application")
+        if st.button("🛑 Shutdown App", key="shutdown_app", type="secondary"):
+            st.warning("⚠️ Shutting down the application...")
+            st.info("💡 Terminating Streamlit server...")
+            
+            # Try multiple methods to terminate the process
+            try:
+                import os
+                import signal
+                import threading
+                import time
+                import platform
+                
+                def delayed_shutdown():
+                    """Shutdown the process after a short delay to allow the response to be sent."""
+                    time.sleep(1)  # Give time for the response to be sent to browser
+                    
+                    # Try psutil first if available (most reliable cross-platform method)
+                    try:
+                        import psutil
+                        current_process = psutil.Process(os.getpid())
+                        
+                        # Find all streamlit processes
+                        streamlit_processes = []
+                        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                            try:
+                                if proc.info['cmdline'] and any('streamlit' in str(arg).lower() for arg in proc.info['cmdline']):
+                                    streamlit_processes.append(proc)
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                        # Terminate all streamlit processes gracefully
+                        for proc in streamlit_processes:
+                            try:
+                                proc.terminate()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                        # Wait for processes to terminate
+                        gone, alive = psutil.wait_procs(streamlit_processes, timeout=3)
+                        
+                        # Force kill any remaining processes
+                        for proc in alive:
+                            try:
+                                proc.kill()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                        return  # Success with psutil
+                        
+                    except ImportError:
+                        # psutil not available, fall back to platform-specific methods
+                        pass
+                    except Exception as e:
+                        # psutil failed, fall back to platform-specific methods
+                        pass
+                    
+                    # Fallback methods using standard library
+                    try:
+                        system = platform.system().lower()
+                        
+                        if system in ['linux', 'darwin']:  # macOS/Linux
+                            # Method 1: Try pkill first (Unix-like systems)
+                            subprocess.run(["pkill", "-f", "streamlit"], check=False)
+                            time.sleep(0.5)
+                            
+                            # Method 2: Kill current process with SIGTERM
+                            os.kill(os.getpid(), signal.SIGTERM)
+                            time.sleep(0.5)
+                            
+                            # Method 3: Force kill with SIGKILL
+                            os.kill(os.getpid(), signal.SIGKILL)
+                            
+                        elif system == 'windows':  # Windows
+                            # Method 1: Try taskkill for streamlit processes
+                            subprocess.run(["taskkill", "/f", "/im", "python.exe", "/fi", "COMMANDLINE eq *streamlit*"], check=False)
+                            time.sleep(0.5)
+                            
+                            # Method 2: Kill current process (Windows doesn't have SIGKILL)
+                            os.kill(os.getpid(), signal.SIGTERM)
+                        
+                    except:
+                        pass  # Ignore errors, try next method
+                    
+                    # Last resort: force exit (works on all platforms)
+                    try:
+                        os._exit(0)
+                    except:
+                        pass
+                
+                # Start shutdown in background thread
+                shutdown_thread = threading.Thread(target=delayed_shutdown, daemon=True)
+                shutdown_thread.start()
+                
+                st.success("✅ Server shutdown initiated! Browser connection will be lost shortly.")
+                st.info("You can close this browser tab.")
+                
+            except Exception as e:
+                st.error(f"❌ Could not terminate server automatically: {e}")
+                st.info("💡 **Manual shutdown required:**")
+                if platform.system().lower() == 'windows':
+                    st.info("Press **Ctrl+C** in the command prompt where you started the app")
+                else:
+                    st.info("Press **Ctrl+C** in the terminal where you started the app")
+            
+            # Stop the Streamlit script execution
+            st.stop()
 
     if st.session_state.project_path and not st.session_state.project:
         project_path = st.session_state.project_path

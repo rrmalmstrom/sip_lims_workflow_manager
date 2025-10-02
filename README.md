@@ -16,6 +16,8 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 -   Interactive script support with real-time terminal output.
 -   **Auto-scroll to terminal** - automatically scrolls to the top when scripts are launched for immediate visibility.
 -   **Script termination capability** with automatic rollback to pre-execution state.
+-   **Application shutdown button** - cleanly terminate the application from within the GUI.
+-   **Safe uninstall system** - complete removal of application while preserving user data.
 -   **Localhost-only security** - application is only accessible from your computer, not from the network.
 -   Cross-platform support for macOS and Windows.
 
@@ -143,6 +145,54 @@ This localhost-only configuration ensures that your sensitive laboratory data an
     -   You can undo conditional decisions using the undo button to return to the decision point
 
 8.  **Re-run Steps**: You can re-run any completed step by clicking its "Re-run" button. When re-running steps that require file inputs, the system will automatically clear previous selections and prompt you to choose new input files, ensuring fresh data for each re-run. **The page automatically scrolls to the top when you click "Re-run"** to show the terminal interface immediately.
+
+## Application Management
+
+### Shutting Down the Application
+
+The SIP LIMS Workflow Manager includes a built-in shutdown feature for clean application termination:
+
+1. **Shutdown Button**: Located in the sidebar under "Application" → "🛑 Shutdown App"
+2. **Clean Termination**: Uses cross-platform process management (psutil) to safely terminate all Streamlit processes
+3. **Immediate Effect**: The server shuts down completely and the browser connection is lost
+4. **No Manual Steps**: No need to manually press Ctrl+C in the terminal
+
+**To shut down the application:**
+- Click the "🛑 Shutdown App" button in the sidebar
+- The application will display shutdown messages and terminate automatically
+- You can then close the browser tab
+
+### Uninstalling the Application
+
+If you need to completely remove the SIP LIMS Workflow Manager from your computer, safe uninstall scripts are provided:
+
+#### **On macOS:**
+- Double-click the `uninstall.command` file in the application directory
+- Follow the confirmation prompts to proceed with uninstallation
+
+#### **On Windows:**
+- Double-click the `uninstall.bat` file in the application directory
+- Follow the confirmation prompts to proceed with uninstallation
+
+#### **What Gets Removed:**
+- Virtual environment (`.venv/` directory)
+- Downloaded scripts (`scripts/` directory)
+- SSH keys (`.ssh/` directory)
+- Application installation artifacts
+
+#### **What Gets Preserved:**
+- **All your project data** (databases, workflow files, outputs)
+- **User-created files** and folders
+- **Project directories** and their contents
+- **Any work you've done** with the application
+
+#### **Safety Features:**
+- **Multiple confirmation prompts** prevent accidental uninstallation
+- **Clear feedback** about what will be removed vs. preserved
+- **Error handling** for missing directories or permission issues
+- **Graceful fallback** if some cleanup steps fail
+
+The uninstall process is designed to be completely safe for your data while thoroughly removing the application installation.
 
 ## Creating a New Workflow
 
