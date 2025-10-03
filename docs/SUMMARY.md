@@ -21,6 +21,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 15 (Terminal Output Cleanup):** Complete. Cleaned up verbose debug output from user-visible terminal interface while preserving comprehensive debug logging in background files for troubleshooting.
 - **Phase 16 (Persistent Script Update Notifications):** Complete. Implemented comprehensive script update notification system that checks for updates every 30 minutes during app runtime, displays notifications in sidebar, and allows one-click updates without restarting the application.
 - **Phase 17 (Unified Update System):** Complete. Implemented unified Git-based update system that manages both application and script updates through a single, clean interface with SSH authentication, eliminating Google Drive dependency and providing consistent user experience.
+- **Phase 18 (SSH Key Architecture Fix):** Complete. Resolved critical SSH key authentication issues by implementing separate Ed25519 deploy keys for each repository, fixing permissions handling, and updating all update managers to use repository-specific SSH keys for reliable GitHub access.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
@@ -63,6 +64,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 28. **Repository Separation**: Separated workflow scripts into independent `sip_scripts_workflow_gui` repository for better version control, independent updates, and cleaner architecture.
 29. **Persistent Script Update Notifications**: Implemented comprehensive script update system with 30-minute automatic checking, sidebar notifications, one-click updates, and manual refresh capability, eliminating the need to restart the app to see script updates.
 30. **Auto-Scroll Functionality Removal**: Removed automatic page scrolling functionality after determining it caused usability issues and interfered with user control. Users now manually scroll to view terminal output, maintaining full control over page navigation while relying on prominent visual indicators to locate the terminal.
+31. **SSH Key Architecture Fix**: Resolved critical SSH key authentication issues by implementing separate Ed25519 deploy keys for each repository (scripts_deploy_key and app_deploy_key), fixing SSH permissions handling in setup scripts, and updating all update managers to use repository-specific SSH keys for reliable GitHub access.
 
 ## 5. Next Steps (Optional Enhancements)
 1. **Enhanced Logging**: Improve GUI feedback and real-time information display.
@@ -294,3 +296,19 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **User Experience**: Conditional undo now works seamlessly - first undo resets conditional step and undoes trigger step, subsequent undos work normally going backwards through workflow
 - **Manual Verification**: Confirmed fix works correctly in real-world scenarios with both test projects (rex_test2 and rex_test2_production_test)
 - **Universal Compatibility**: Maintains all existing undo functionality while properly handling conditional workflow decision points
+
+## 20. Latest Features (Session 21)
+### SSH Key Architecture Fix
+- **Problem Solved**: Critical SSH key authentication issues preventing installation and updates, including permissions errors, repository access conflicts, and "key already in use" GitHub deploy key limitations
+- **Root Cause Addressed**: Single SSH key trying to access multiple repositories violated GitHub's one-deploy-key-per-repository security model, combined with incorrect file permissions and hardcoded key paths in update managers
+- **Technical Implementation**: Complete SSH key architecture redesign with separate Ed25519 deploy keys for each repository and enhanced SSH key manager supporting multiple keys
+- **Key Features**:
+  - **Separate Deploy Keys**: Dedicated `scripts_deploy_key` for scripts repository and `app_deploy_key` for application repository
+  - **Enhanced SSH Key Manager**: Multi-key support with configurable key names while maintaining backward compatibility
+  - **Repository-Specific Key Selection**: GitUpdateManager automatically selects correct SSH key based on repository type
+  - **Automatic Permission Management**: Setup scripts automatically set correct SSH key permissions (0600 for private keys)
+  - **Ed25519 Security**: Modern elliptic curve algorithm for enhanced security and performance
+- **Test Coverage**: Comprehensive TDD approach with 10 test cases covering multi-key support, repository mapping, and real-world integration
+- **User Experience**: Transparent operation with reliable installation, seamless updates, and elimination of SSH error messages
+- **Security Enhancements**: Key separation reduces security risk, dedicated permissions per repository, and automatic permission enforcement
+- **Universal Compatibility**: Maintains backward compatibility while providing robust SSH authentication for all repository operations

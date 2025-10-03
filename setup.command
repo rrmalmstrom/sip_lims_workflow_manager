@@ -15,9 +15,17 @@ then
     exit 1
 fi
 
+echo "Setting up SSH key permissions..."
+# Ensure SSH keys have correct permissions (required by SSH/Git)
+chmod 600 .ssh/scripts_deploy_key
+chmod 644 .ssh/scripts_deploy_key.pub
+chmod 600 .ssh/app_deploy_key
+chmod 644 .ssh/app_deploy_key.pub
+chmod 700 .ssh
+
 echo "Cloning or updating the script repository..."
-# Set the command to use our specific deploy key
-export GIT_SSH_COMMAND="ssh -i .ssh/deploy_key -o IdentitiesOnly=yes"
+# Set the command to use our specific scripts deploy key (absolute path)
+export GIT_SSH_COMMAND="ssh -i $DIR/.ssh/scripts_deploy_key -o IdentitiesOnly=yes"
 
 if [ -d "scripts" ]; then
     cd scripts

@@ -11,14 +11,15 @@ import hashlib
 class SSHKeyManager:
     """Manages SSH deploy keys for secure GitHub repository access."""
     
-    def __init__(self, ssh_dir: Path = None):
+    def __init__(self, ssh_dir: Path = None, key_name: str = "deploy_key"):
         """Initialize SSH key manager."""
         if ssh_dir is None:
             ssh_dir = Path(__file__).parent.parent / ".ssh"
         
         self.ssh_dir = Path(ssh_dir)
-        self.private_key_path = self.ssh_dir / "deploy_key"
-        self.public_key_path = self.ssh_dir / "deploy_key.pub"
+        self.key_name = key_name
+        self.private_key_path = self.ssh_dir / key_name
+        self.public_key_path = self.ssh_dir / f"{key_name}.pub"
         
     def validate_key_security(self) -> Dict[str, Any]:
         """Validate SSH key security settings."""

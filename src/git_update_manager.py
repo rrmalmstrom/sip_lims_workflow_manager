@@ -30,8 +30,9 @@ class GitUpdateManager:
         self._cache = {}
         self._last_check_time = None
         
-        # Initialize SSH key manager
-        self.ssh_manager = SSHKeyManager()
+        # Initialize SSH key manager with appropriate key for repo type
+        key_name = "scripts_deploy_key" if repo_type == "scripts" else "app_deploy_key"
+        self.ssh_manager = SSHKeyManager(key_name=key_name)
         
         # Repository configuration - both use Git tags for unified approach
         self.repo_configs = {
