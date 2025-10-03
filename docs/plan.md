@@ -19,9 +19,9 @@ To create a simple, robust, and user-friendly desktop application that allows SI
 ### 2.1. Technology Stack
 - **GUI:** Streamlit
 - **Backend & Core Logic:** Python 3
-- **Configuration:** YAML (`workflow.yml`)
+- **Environment Management:** Conda
+- **Configuration:** YAML (`workflow.yml`, `environment.yml`)
 - **State Management:** JSON (`workflow_state.json`)
-- **Packaging:** PyInstaller
 
 ### 2.2. On-Disk Structure (Per Project)
 Each project will be a self-contained folder on the shared drive with the following structure:

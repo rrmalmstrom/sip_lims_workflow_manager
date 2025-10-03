@@ -346,3 +346,20 @@ We have successfully completed a major refactoring of the application's core log
     * **Impact**: Subsequent `input()` calls in scripts would immediately consume stray characters and use default values
     * **Solution**: Added `.strip()` to input handling functions to remove trailing whitespace before sending to PTY
     * **Result**: All script input prompts now properly wait for user input instead of auto-using defaults
+
+### Session 22: Robust Environment Replication with Conda
+1. **Problem Diagnosis**: Identified that the existing `pip` and `requirements.txt` based setup was fragile and led to inconsistent environments between users. The `setup.command` scripts also lacked robust error handling.
+2. **Strategic Pivot to Conda**: Collaboratively decided to replace the `pip/venv` system with a `Conda`-based environment management system to ensure perfect, bit-for-bit reproducibility of the development environment.
+3. **Environment "Laundering"**: Executed a multi-step "laundering" process to resolve deep-seated dependency conflicts in the original environment.
+    *   Generated a clean, minimal list of core dependencies using `pipreqs`.
+    *   Created a minimal `environment.yml` file specifying only these core dependencies.
+    *   Successfully built a new, clean `sip-lims` environment from this minimal file.
+    *   Manually validated that the application runs perfectly in the new environment.
+4. **Creation of a Reproducible Lock File**: Exported the exact state of the new, validated `sip-lims` environment to create a final, definitive `environment.yml` lock file.
+5. **Test-Driven Script Development**: Using a TDD workflow, created a new, robust `setup.command` script that:
+    *   Is parameterized to allow for testing without conflicts.
+    *   Checks for the existence of Conda.
+    *   Creates or updates the environment from the lock file.
+    *   Preserves the critical SSH and Git setup logic from the old script.
+6. **Windows Parity**: Updated the `setup.bat` and `run.bat` scripts to ensure full feature parity with their macOS counterparts.
+7. **Test Suite Correction**: Debugged and fixed multiple failures in the existing test suite that were exposed by the new environment, including deleting obsolete tests and configuring `pytest` to handle different test types correctly.

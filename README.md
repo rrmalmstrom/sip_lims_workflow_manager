@@ -24,7 +24,7 @@ A simple, lightweight workflow manager for running a series of Python scripts in
 
 ## Prerequisites
 
--   **Python 3.9** or higher must be installed on your system. You can download it from [python.org](https://www.python.org/downloads/).
+-   **Miniconda or Anaconda**: This application uses the Conda package manager to ensure a consistent and reproducible environment. Please install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) (recommended) or the full Anaconda distribution.
 
 ## Installation and First-Time Setup
 
@@ -38,7 +38,7 @@ The setup process needs to be performed only **once** per computer.
 
     This script will perform two key actions:
     a.  **Clone the Script Repository**: It will download the central repository of workflow scripts from `sip_scripts_workflow_gui` into a `scripts` folder inside the application directory.
-    b.  **Create the Environment**: It will create an isolated Python virtual environment and install all necessary dependencies. This will not affect any other Python installations on your system.
+    b.  **Create the Conda Environment**: It will create a dedicated Conda environment named `sip-lims` with the correct Python version, Git, and all necessary dependencies as defined in the `environment.yml` lock file. This will not affect any other Python or Conda installations on your system.
 
 ## Repository Architecture
 

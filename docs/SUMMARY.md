@@ -22,6 +22,7 @@ To create a simple, lightweight, cross-platform GUI application to manage and ex
 - **Phase 16 (Persistent Script Update Notifications):** Complete. Implemented comprehensive script update notification system that checks for updates every 30 minutes during app runtime, displays notifications in sidebar, and allows one-click updates without restarting the application.
 - **Phase 17 (Unified Update System):** Complete. Implemented unified Git-based update system that manages both application and script updates through a single, clean interface with SSH authentication, eliminating Google Drive dependency and providing consistent user experience.
 - **Phase 18 (SSH Key Architecture Fix):** Complete. Resolved critical SSH key authentication issues by implementing separate Ed25519 deploy keys for each repository, fixing permissions handling, and updating all update managers to use repository-specific SSH keys for reliable GitHub access.
+- **Phase 19 (Environment Replication):** Complete. Replaced the entire `pip/venv` based environment setup with a robust `Conda`-based system, ensuring perfect, bit-for-bit reproducibility of the development environment across all user machines.
 
 ## 3. Key Design Decisions
 - **Core Engine:** A generic engine that reads workflow definitions from a `workflow.yml` file.
