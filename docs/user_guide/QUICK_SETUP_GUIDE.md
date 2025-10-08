@@ -53,6 +53,19 @@ The application will open in your web browser. The terminal window will show whi
 
 ---
 
+## 4. Updating the Application
+
+When a new version of the application is released, follow these steps:
+
+1.  **Download the New Version**: The application will notify you when an update is available. Use the link provided to download the new `.zip` file from GitHub.
+2.  **Replace the Old Folder**: Close the running application, delete your old `sip_lims_workflow_manager` folder, and replace it with the new one you just extracted.
+3.  **Re-run the Setup Script (Recommended)**: After replacing the folder, it is a best practice to run the `setup.command` or `setup.bat` script **one more time**. This ensures that:
+    *   Any new dependencies are added to your Conda environment.
+    *   SSH key permissions are correctly set, which is required for the update-checking feature to work.
+4.  **Launch the New Version**: Run the application as usual with `run.command` or `run.bat`.
+
+---
+
 ## Troubleshooting
 
 -   **`conda: command not found`**: Miniconda was not installed correctly or was not added to your system's PATH. Please reinstall it, ensuring you follow the OS-specific instructions above.
