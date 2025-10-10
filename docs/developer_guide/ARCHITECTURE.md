@@ -17,6 +17,18 @@ This document provides a high-level overview of the architecture, design princip
 -   **Configuration**: YAML (`workflow.yml`)
 -   **State Management**: JSON (`workflow_state.json`)
 
+## Containerized Development and Testing
+
+To ensure maximum consistency and reproducibility, this application operates under a **Hybrid Docker Strategy**. All application and script execution occurs inside a standardized Docker container, never directly on the host machine.
+
+### Core Protocol for Agents and Developers
+
+**All execution MUST be containerized.** This is the most critical rule. Do not run Python scripts, `pytest`, or the Streamlit application directly on the host. The sole entry points for any execution are the `.command` and `.bat` scripts in the root directory.
+
+-   **Running the Application (`run.command` / `run.bat`):** Use these scripts to start the application. They launch the Docker container and mount the local source code, enabling a live-reload development workflow. Edits made locally are instantly reflected inside the container.
+-   **Running Tests (`test.command` / `test.bat`):** Use these scripts to run the `pytest` suite. They launch a **new, clean Docker container** for each test run, mount the local source code, and execute the tests. This guarantees a pristine, isolated environment that perfectly mirrors the application's runtime conditions.
+
+This approach ensures that all development and testing activities are validated against the exact same environment, eliminating "it works on my machine" issues.
 ## On-Disk Structure (Per Project)
 
 Each project is a self-contained folder with the following structure:

@@ -1,20 +1,31 @@
 @echo off
-echo --- Starting SIP LIMS Workflow Manager ---
+echo --- Starting SIP LIMS Workflow Manager in Docker ---
 
-REM NOTE: The old environment checks are removed. The new setup process is robust.
+set "IMAGE_NAME=ghcr.io/rrmalmstrom/sip_lims_workflow_manager"
+set "TAG=latest"
 
-REM Activate the conda environment
-call conda activate sip-lims
-if errorlevel 1 (
-    echo ERROR: Failed to activate conda environment 'sip-lims'.
-    echo Please ensure the setup script has been run successfully.
+rem Check if Docker is running
+docker info > nul 2>&1
+if %errorlevel% neq 0 (
+    echo "Error: Docker is not running."
+    echo "Please start Docker Desktop and try again."
     pause
     exit /b 1
 )
 
-echo --- Using Python from: ---
-where python
+rem Pull the latest image to ensure we are up to date
+echo "Pulling latest application image..."
+docker pull %IMAGE_NAME%:%TAG%
 
-REM Launch Streamlit with localhost-only configuration
-echo Launching application in 'sip-lims' environment...
-streamlit run app.py --server.headless=true --server.address=127.0.0.1
+rem Run the application in a new container
+echo "Launching application..."
+docker run --rm -it ^
+    -p 8501:8501 ^
+    -v "%~dp0app.py:/app/app.py" ^
+    -v "%~dp0src:/app/src" ^
+    -v "%~dp0templates:/app/templates" ^
+    -v "%~dp0utils:/app/utils" ^
+    -v "%~dp0scripts:/app/scripts" ^
+    -v "%~dp0.ssh:/root/.ssh" ^
+    %IMAGE_NAME%:%TAG% ^
+    /opt/conda/envs/sip-lims/bin/python -m streamlit run app.py --server.headless=true --server.address=0.0.0.0

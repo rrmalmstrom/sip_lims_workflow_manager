@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Documentation
+docs/
+
+# Local development artifacts
+.pytest_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment and project files
+.env
+*.db
+*.db-journal
+workflow_state.json
+.DS_Store
+
+# Local user data
+.ssh/
+scripts/
+
+# Test reports
+htmlcov/
+.coverage
+
+# VS Code
+.vscode/

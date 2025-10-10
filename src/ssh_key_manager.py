@@ -144,7 +144,7 @@ class SSHKeyManager:
             
             # Set up environment for SSH key
             env = os.environ.copy()
-            env['GIT_SSH_COMMAND'] = f'ssh -i {self.private_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+            env['GIT_SSH_COMMAND'] = f'ssh -i {self.private_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
             
             # Test with git ls-remote (lightweight operation)
             test_result = subprocess.run(
@@ -171,7 +171,7 @@ class SSHKeyManager:
     
     def get_ssh_command(self) -> str:
         """Get the SSH command string for Git operations."""
-        return f'ssh -i {self.private_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no'
+        return f'ssh -i {self.private_key_path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
     
     def create_git_env(self) -> Dict[str, str]:
         """Create environment variables for Git operations with SSH key."""

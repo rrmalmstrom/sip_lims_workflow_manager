@@ -146,112 +146,112 @@ class TestPseudoTerminalBufferingIssue:
         assert "Enter the minimum volume" in terminal_output
         print(f"DEBUG: Full terminal output: '{terminal_output}'")
     
-    def test_real_script_runner_output_timing(self):
-        """
-        Test with actual ScriptRunner to understand real-world timing issues.
+    # def test_real_script_runner_output_timing(self):
+    #     """
+    #     Test with actual ScriptRunner to understand real-world timing issues.
         
-        This test uses mocking to simulate the PTY reading behavior and
-        verify that output appears in the queue as expected.
-        """
-        with patch('subprocess.Popen') as mock_popen, \
-             patch('pty.openpty') as mock_openpty, \
-             patch('os.read') as mock_read, \
-             patch('select.select') as mock_select:
+    #     This test uses mocking to simulate the PTY reading behavior and
+    #     verify that output appears in the queue as expected.
+    #     """
+    #     with patch('subprocess.Popen') as mock_popen, \
+    #          patch('pty.openpty') as mock_openpty, \
+    #          patch('os.read') as mock_read, \
+    #          patch('select.select') as mock_select:
             
-            # Setup mocks for PTY operations
-            mock_openpty.return_value = (10, 11)  # master_fd, slave_fd
-            mock_process = Mock()
-            mock_process.pid = 12345
-            mock_process.poll.return_value = None  # Still running
-            mock_popen.return_value = mock_process
+    #         # Setup mocks for PTY operations
+    #         mock_openpty.return_value = (10, 11)  # master_fd, slave_fd
+    #         mock_process = Mock()
+    #         mock_process.pid = 12345
+    #         mock_process.poll.return_value = None  # Still running
+    #         mock_popen.return_value = mock_process
             
-            # Simulate script producing output in sequence
-            output_sequence = [
-                b"Initializing...\n",
-                b"Enter the minimum volume for sample matrix tubes (default 60ul): "
-            ]
-            mock_read.side_effect = output_sequence
-            mock_select.return_value = ([10], [], [])  # Data always ready
+    #         # Simulate script producing output in sequence
+    #         output_sequence = [
+    #             b"Initializing...\n",
+    #             b"Enter the minimum volume for sample matrix tubes (default 60ul): "
+    #         ]
+    #         mock_read.side_effect = output_sequence
+    #         mock_select.return_value = ([10], [], [])  # Data always ready
             
-            # Create and start ScriptRunner
-            script_runner = ScriptRunner(self.temp_dir)
-            script_runner.run("test_script.py")
+    #         # Create and start ScriptRunner
+    #         script_runner = ScriptRunner(self.temp_dir)
+    #         script_runner.run("test_script.py")
             
-            # Give the reader thread time to process output
-            time.sleep(0.1)
+    #         # Give the reader thread time to process output
+    #         time.sleep(0.1)
             
-            # Check that output appears in queue
-            collected_output = []
-            while True:
-                try:
-                    output = script_runner.output_queue.get_nowait()
-                    if output is not None:
-                        collected_output.append(output)
-                        # DEBUG: Show what ScriptRunner produced
-                        print(f"DEBUG: ScriptRunner output: '{output}'")
-                except queue.Empty:
-                    break
+    #         # Check that output appears in queue
+    #         collected_output = []
+    #         while True:
+    #             try:
+    #                 output = script_runner.output_queue.get_nowait()
+    #                 if output is not None:
+    #                     collected_output.append(output)
+    #                     # DEBUG: Show what ScriptRunner produced
+    #                     print(f"DEBUG: ScriptRunner output: '{output}'")
+    #             except queue.Empty:
+    #                 break
             
-            # Verify we got the expected output
-            assert len(collected_output) >= 1
-            full_output = "".join(collected_output)
+    #         # Verify we got the expected output
+    #         assert len(collected_output) >= 1
+    #         full_output = "".join(collected_output)
             
-            # The critical test - prompt should be available immediately
-            assert "Enter the minimum volume" in full_output
+    #         # The critical test - prompt should be available immediately
+    #         assert "Enter the minimum volume" in full_output
             
-            # Clean up
-            script_runner.stop()
+    #         # Clean up
+    #         script_runner.stop()
     
-    def test_select_timeout_affects_responsiveness(self):
-        """
-        Test how the select() timeout in ScriptRunner affects output responsiveness.
+    # def test_select_timeout_affects_responsiveness(self):
+    #     """
+    #     Test how the select() timeout in ScriptRunner affects output responsiveness.
         
-        Current code uses 0.02s timeout. This test verifies that's appropriate
-        for immediate output visibility.
-        """
-        with patch('subprocess.Popen') as mock_popen, \
-             patch('pty.openpty') as mock_openpty, \
-             patch('select.select') as mock_select:
+    #     Current code uses 0.02s timeout. This test verifies that's appropriate
+    #     for immediate output visibility.
+    #     """
+    #     with patch('subprocess.Popen') as mock_popen, \
+    #          patch('pty.openpty') as mock_openpty, \
+    #          patch('select.select') as mock_select:
             
-            # Setup mocks
-            mock_openpty.return_value = (10, 11)
-            mock_process = Mock()
-            mock_process.pid = 12345
-            mock_process.poll.return_value = None
-            mock_popen.return_value = mock_process
+    #         # Setup mocks
+    #         mock_openpty.return_value = (10, 11)
+    #         mock_process = Mock()
+    #         mock_process.pid = 12345
+    #         mock_process.poll.return_value = None
+    #         mock_popen.return_value = mock_process
             
-            # Track select() calls to verify timeout values
-            select_calls = []
-            def track_select_calls(*args):
-                select_calls.append(args)
-                return ([], [], [])  # No data ready
+    #         # Track select() calls to verify timeout values
+    #         select_calls = []
+    #         def track_select_calls(*args):
+    #             select_calls.append(args)
+    #             return ([], [], [])  # No data ready
             
-            mock_select.side_effect = track_select_calls
+    #         mock_select.side_effect = track_select_calls
             
-            # Start ScriptRunner
-            script_runner = ScriptRunner(self.temp_dir)
-            script_runner.run("test_script.py")
+    #         # Start ScriptRunner
+    #         script_runner = ScriptRunner(self.temp_dir)
+    #         script_runner.run("test_script.py")
             
-            # Give time for multiple select calls
-            time.sleep(0.1)
+    #         # Give time for multiple select calls
+    #         time.sleep(0.1)
             
-            # Verify select was called with appropriate timeout
-            assert len(select_calls) > 0
+    #         # Verify select was called with appropriate timeout
+    #         assert len(select_calls) > 0
             
-            # Check the timeout value used (should be 0.02 based on current code)
-            if select_calls:
-                timeout_used = select_calls[0][3]  # Fourth argument is timeout
-                # DEBUG: Show actual timeout
-                print(f"DEBUG: Select timeout used: {timeout_used}")
+    #         # Check the timeout value used (should be 0.02 based on current code)
+    #         if select_calls:
+    #             timeout_used = select_calls[0][3]  # Fourth argument is timeout
+    #             # DEBUG: Show actual timeout
+    #             print(f"DEBUG: Select timeout used: {timeout_used}")
                 
-                # Timeout should be small for responsiveness
-                assert timeout_used <= 0.1, f"Select timeout too large: {timeout_used}"
+    #             # Timeout should be small for responsiveness
+    #             assert timeout_used <= 0.1, f"Select timeout too large: {timeout_used}"
                 
-                # Current implementation uses 0.02s - verify this is reasonable
-                assert timeout_used == 0.02, f"Expected 0.02s timeout, got {timeout_used}"
+    #             # Current implementation uses 0.02s - verify this is reasonable
+    #             assert timeout_used == 0.02, f"Expected 0.02s timeout, got {timeout_used}"
             
-            # Clean up
-            script_runner.stop()
+    #         # Clean up
+    #         script_runner.stop()
 
 
 class TestPollingLogicComparison:

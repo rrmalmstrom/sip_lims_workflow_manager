@@ -62,6 +62,11 @@ This guide provides solutions to common issues you may encounter while using the
 
 ## SSH Key Issues
 
+### Host Key Verification Failed
+
+-   **Cause**: During the first-time setup, the script was unable to automatically verify the connection to GitHub. You may see an error like `The authenticity of host 'github.com' can't be established` or `Host key verification failed`.
+-   **Solution**: You must perform a simple, one-time manual authorization of GitHub. Please follow the instructions in the **[Quick Setup Guide](QUICK_SETUP_GUIDE.md)** under the section titled **"2. Important: Authorize GitHub"**.
+
 ### Permission Denied
 
 -   **Cause**: The SSH private key file has incorrect file permissions, making it too "open" for SSH to use securely.

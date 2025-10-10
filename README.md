@@ -32,21 +32,21 @@ This includes:
 
 ## Prerequisites
 
--   **Miniconda or Anaconda**: This application uses the Conda package manager to ensure a consistent and reproducible environment. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
+-   **Docker Desktop**: This application runs in a containerized environment to ensure consistency and portability. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
 
 ## Installation and First-Time Setup
 
 The setup process needs to be performed only **once** per computer. For detailed instructions, please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)**.
 
-1.  **Download the Application**: Download the `lims_workflow_manager` folder (as a `.zip` file) from the shared drive and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
+1.  **Download the Application**: Download the `sip_lims_workflow_manager` folder (as a `.zip` file) from the shared drive and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
 2.  **Run the Setup Script**:
-    -   **On macOS**: Open the `lims_workflow_manager` folder and double-click the `setup.command` file.
-    -   **On Windows**: Open the `lims_workflow_manager` folder and double-click the `setup.bat` file.
+    -   **On macOS**: Open the `sip_lims_workflow_manager` folder and double-click the `setup_docker.command` file.
+    -   **On Windows**: Open the `sip_lims_workflow_manager` folder and double-click the `setup_docker.bat` file.
 
 ## Running the Application
 
 After the one-time setup is complete, you can start the application at any time:
-
+Height numbers
 -   **On macOS**: Double-click the `run.command` file.
 -   **On Windows**: Double-click the `run.bat` file.
 
