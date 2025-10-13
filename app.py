@@ -1271,29 +1271,35 @@ def main():
                             st.session_state.user_inputs[step_id] = {}
                             st.session_state[f"rerun_inputs_cleared_{step_id}"] = True
                     
-                    for i, input_def in enumerate(step['inputs']):
-                        input_key = f"{step_id}_input_{i}"
-                        if input_def['type'] == 'file':
-                            current_value = st.session_state.user_inputs[step_id].get(input_key, "")
-                            st.text_input(
-                                label=input_def['name'],
-                                value=current_value,
-                                key=f"text_{input_key}",
-                                disabled=True
-                            )
-                            st.button("Browse", key=f"browse_{input_key}", on_click=select_file_in_app, args=(input_key,))
+                    # Conditionally render inputs based on step_id
+                    if step_id == 'step1_script':
+                        # For step 1, the new version of the script does not require any input files.
+                        # All necessary files are located automatically.
+                        pass
+                    else:
+                        for i, input_def in enumerate(step['inputs']):
+                            input_key = f"{step_id}_input_{i}"
+                            if input_def['type'] == 'file':
+                                current_value = st.session_state.user_inputs[step_id].get(input_key, "")
+                                st.text_input(
+                                    label=input_def['name'],
+                                    value=current_value,
+                                    key=f"text_{input_key}",
+                                    disabled=True
+                                )
+                                st.button("Browse", key=f"browse_{input_key}", on_click=select_file_in_app, args=(input_key,))
 
-                            if st.session_state.get(f"file_browser_visible_{input_key}", False):
-                                with st.expander("File Browser", expanded=True):
-                                    selected_file = st_file_browser(
-                                        project.path, key=f"browser_{input_key}"
-                                    )
-                                    if selected_file:
-                                        relative_path = str(selected_file.relative_to(project.path))
-                                        print(f"DEBUG: File selected: '{selected_file}'. Storing relative path: '{relative_path}' for input key '{input_key}'")
-                                        st.session_state.user_inputs[step_id][input_key] = relative_path
-                                        st.session_state[f"file_browser_visible_{input_key}"] = False
-                                        st.rerun()
+                                if st.session_state.get(f"file_browser_visible_{input_key}", False):
+                                    with st.expander("File Browser", expanded=True):
+                                        selected_file = st_file_browser(
+                                            project.path, key=f"browser_{input_key}"
+                                        )
+                                        if selected_file:
+                                            relative_path = str(selected_file.relative_to(project.path))
+                                            print(f"DEBUG: File selected: '{selected_file}'. Storing relative path: '{relative_path}' for input key '{input_key}'")
+                                            st.session_state.user_inputs[step_id][input_key] = relative_path
+                                            st.session_state[f"file_browser_visible_{input_key}"] = False
+                                            st.rerun()
 
             with col2:
                 # Check if this is a conditional step that should show Yes/No buttons
@@ -1356,7 +1362,7 @@ def main():
                             run_button_disabled = True
                         
                         # Check if all required inputs for this step are filled
-                        if 'inputs' in step:
+                        if step_id != 'step1_script' and 'inputs' in step:
                             step_inputs = st.session_state.user_inputs.get(step_id, {})
                             required_inputs = step['inputs']
                             if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
