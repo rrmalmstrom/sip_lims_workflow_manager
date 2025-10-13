@@ -32,22 +32,23 @@ This includes:
 
 ## Prerequisites
 
--   **Docker Desktop**: This application runs in a containerized environment to ensure consistency and portability. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
+-   **Docker Desktop**: The application runs in a container to ensure consistency.
+-   **Git**: Used to automatically download and update the scientific workflow scripts.
 
 ## Installation and First-Time Setup
 
-The setup process needs to be performed only **once** per computer. For detailed instructions, please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)**.
+The setup process needs to be performed only **once** per computer.
 
-1.  **Download the Application**: Download the `sip_lims_workflow_manager` folder (as a `.zip` file) from the shared drive and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
-2.  **Run the Setup Script**:
+1.  **Download the Application**: Download the `sip_lims_workflow_manager` folder (as a `.zip` file) from the latest GitHub release and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
+2.  **Run the Setup Script**: This script builds the application's Docker image on your computer.
     -   **On macOS**: Open the `sip_lims_workflow_manager` folder and double-click the `setup_docker.command` file.
     -   **On Windows**: Open the `sip_lims_workflow_manager` folder and double-click the `setup_docker.bat` file.
 
 ## Running the Application
 
 After the one-time setup is complete, you can start the application at any time:
-Height numbers
+
 -   **On macOS**: Double-click the `run.command` file.
 -   **On Windows**: Double-click the `run.bat` file.
 
-A terminal window will open, and after a few moments, the application's user interface will open in your default web browser at `http://127.0.0.1:8501`.
+The first time you run the application, it will automatically download the necessary scientific workflow scripts. On subsequent runs, it will check for and apply any available script updates. A terminal window will open, and the application's user interface will open in your default web browser.

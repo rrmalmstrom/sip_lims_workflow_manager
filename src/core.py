@@ -252,6 +252,7 @@ class Project:
                         args.append(input_def["arg"])
                     args.append(value)
 
+        print(f"DEBUG: [Project.run_step] Running script '{step['script']}' with args: {args}")
         # Start the script asynchronously
         self.script_runner.run(step["script"], args=args)
 

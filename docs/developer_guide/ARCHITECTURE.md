@@ -66,3 +66,11 @@ The system uses separate Git repositories for the application and the scientific
 -   **Scripts Repository (`sip_scripts_workflow_gui`)**: Contains all the Python workflow scripts used for laboratory analysis. Updates to this repository include improvements to the scientific workflows, new analysis methods, and bug fixes in the scripts.
 
 This separation allows for a flexible and robust update system, where critical script updates can be deployed without requiring a full application update.
+
+## Host-Managed Script Repository
+
+A critical architectural principle is that the host machine, not the container, is responsible for managing the `sip_scripts_workflow_gui` repository.
+
+-   **Cloning and Updating**: The `run.command` and `run.bat` scripts are responsible for cloning the script repository on the first run and running `git pull` on every subsequent run. This ensures the scripts are always present and up-to-date on the host machine *before* the container starts.
+-   **Container's Role**: The Docker container is completely unaware of Git. It receives the prepared scripts via a read-only volume mount from the host (`~/.sip_lims_workflow_manager/scripts`) to the container (`/workflow-scripts`).
+-   **Rationale**: This design correctly separates concerns. The host manages the stateful, dynamic environment (the scripts), while the container provides a stateless, consistent, and isolated execution environment for the application itself. Attempting to run `git clone` from within the container leads to errors, as the container's home directory is isolated and not the intended destination for the persistent script cache.

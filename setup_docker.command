@@ -5,14 +5,32 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
-# Define the image name and tag
-IMAGE_NAME="ghcr.io/rrmalmstrom/sip_lims_workflow_manager"
-TAG="latest"
+# --- Configuration ---
+# This is the name of the Docker image we will build and run.
+IMAGE_NAME="sip-lims-workflow-manager"
 
 echo "--- Docker Setup for SIP LIMS Workflow Manager ---"
 
-# 1. Check if Docker is running
-echo "Step 1: Checking for Docker..."
+# --- Dynamic Versioning ---
+# Attempt to get the version from the latest Git tag.
+echo "Step 1: Determining application version..."
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null)
+    if [ -n "$LATEST_TAG" ]; then
+        APP_VERSION=${LATEST_TAG//v/} # Remove 'v' prefix if it exists
+        echo "✅ Found Git tag: Using version ${APP_VERSION}"
+    else
+        APP_VERSION="0.1.0-local"
+        echo "⚠️ No Git tags found. Using default development version: ${APP_VERSION}"
+    fi
+else
+    APP_VERSION="0.1.0-detached"
+    echo "⚠️ Not a Git repository. Using default detached version: ${APP_VERSION}"
+fi
+# --- End Dynamic Versioning ---
+
+# 2. Check if Docker is running
+echo -e "\nStep 2: Checking for Docker..."
 if ! docker info > /dev/null 2>&1; then
     echo "Error: Docker is not running."
     echo "Please install and start Docker Desktop, then run this script again."
@@ -21,33 +39,23 @@ if ! docker info > /dev/null 2>&1; then
 fi
 echo "✅ Docker is running."
 
-# 2. Check if user is logged into GitHub Container Registry
-echo -e "\nStep 2: Checking GitHub Container Registry access..."
-if docker pull ${IMAGE_NAME}:${TAG} > /dev/null 2>&1; then
-    echo "✅ Successfully pulled image. You are already logged in."
-else
-    echo "⚠️ You are not logged into the GitHub Container Registry (ghcr.io)."
-    echo "To pull the private application image, you need to authenticate."
-    echo -e "\nPlease follow these steps:"
-    echo "  1. Create a GitHub Personal Access Token (PAT) with the 'read:packages' scope."
-    echo "     - Go to: https://github.com/settings/tokens/new"
-    echo "     - Add a note (e.g., 'Docker Login')."
-    echo "     - Under 'Select scopes', check the box for 'read:packages'."
-    echo "     - Click 'Generate token' and copy the token."
-    echo "  2. Run the following command in your terminal, replacing <TOKEN> with your copied token:"
-    echo -e "\n     echo <TOKEN> | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin\n"
-    
-    read -p "Press [Enter] after you have successfully run the login command."
-    
-    # Verify login by trying to pull again
-    echo "Verifying access..."
-    if ! docker pull ${IMAGE_NAME}:${TAG}; then
-        echo "Error: Still unable to pull the Docker image."
-        echo "Please ensure you have generated the PAT with the correct scope and run the login command successfully."
-        exit 1
-    fi
-    echo "✅ Successfully authenticated and pulled the application image."
+# 3. Build the Docker image from the local Dockerfile
+echo -e "\nStep 3: Building the application Docker image..."
+echo "This may take several minutes on the first run."
+
+docker build \
+    --build-arg "APP_VERSION=${APP_VERSION}" \
+    -t "${IMAGE_NAME}:latest" \
+    .
+
+# Check if the build was successful
+if [ $? -ne 0 ]; then
+    echo "Error: Docker build failed."
+    echo "Please check the output above for errors."
+    exit 1
 fi
+
+echo "✅ Docker image '${IMAGE_NAME}:latest' built successfully with version ${APP_VERSION}."
 
 echo -e "\n--- Docker Setup Complete! ---"
 echo "You can now run the application using the 'run.command' script."

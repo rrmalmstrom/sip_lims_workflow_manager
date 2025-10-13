@@ -106,3 +106,6 @@ dist/
 
 # Scripts directory - managed in separate repository
 scripts/
+
+# Environment file for local development
+.env

@@ -12,7 +12,10 @@ import webbrowser
 from src.core import Project
 from src.logic import RunResult
 from src.git_update_manager import create_update_manager
-from src.ssh_key_manager import SSHKeyManager
+# SSHKeyManager is no longer used with the public repository model
+# from src.ssh_key_manager import SSHKeyManager
+from utils.streamlit_file_browser import st_file_browser
+import os
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -59,16 +62,6 @@ def check_for_script_updates():
             'error': f"Failed to check for script updates: {str(e)}"
         }
 
-def update_scripts():
-    """Update scripts to latest version."""
-    try:
-        script_manager = create_update_manager("scripts")
-        return script_manager.update_to_latest()
-    except Exception as e:
-        return {
-            'success': False,
-            'error': f"Failed to update scripts: {str(e)}"
-        }
 
 def format_last_check_time(last_check):
     """Format the last check time for display."""
@@ -221,17 +214,8 @@ def handle_terminal_input_change():
                 st.session_state.terminal_input_box = ""
                 st.session_state.scroll_to_bottom = True
 
-def select_file_via_subprocess():
-    python_executable = sys.executable
-    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
-    process = subprocess.run([python_executable, str(script_path), 'file'], capture_output=True, text=True)
-    return process.stdout.strip()
-
-def select_folder_via_subprocess():
-    python_executable = sys.executable
-    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
-    process = subprocess.run([python_executable, str(script_path)], capture_output=True, text=True)
-    return process.stdout.strip()
+def select_file_in_app(key):
+    st.session_state[f"file_browser_visible_{key}"] = not st.session_state.get(f"file_browser_visible_{key}", False)
 
 def perform_undo(project):
     """
@@ -592,12 +576,6 @@ def main():
         st.header("Controls")
         
         st.subheader("Project")
-        if st.button("Browse for Project Folder", key="browse_button"):
-            folder = select_folder_via_subprocess()
-            if folder:
-                st.session_state.project_path = Path(folder)
-                st.session_state.project = None
-                st.rerun()
         
         # Quick Start functionality - only show for projects without workflow state
         if st.session_state.project and not st.session_state.project.has_workflow_state():
@@ -716,7 +694,6 @@ def main():
             
             # Try multiple methods to terminate the process
             try:
-                import os
                 import signal
                 import threading
                 import platform
@@ -816,8 +793,10 @@ def main():
             # Stop the Streamlit script execution
             st.stop()
 
-    if st.session_state.project_path and not st.session_state.project:
-        project_path = st.session_state.project_path
+    # --- Auto-load Project from Current Directory ---
+    if not st.session_state.project:
+        project_path = Path(".") # Use current directory
+        st.session_state.project_path = project_path
         workflow_file = project_path / "workflow.yml"
 
         # Check for missing workflow files
@@ -1113,53 +1092,47 @@ def main():
 
     # --- Main Content Area ---
     
-    # Check for updates and show notifications at top of main area (only when updates available)
-    app_update_info = check_for_app_updates()
+    # Check for updates only if in production mode
+    # Always ensure scripts are cloned on first run, even in dev mode.
+    # The function is cached, so this is efficient.
     script_update_info = check_for_script_updates()
-    
-    # Show update notifications only when updates are available
-    updates_available = (
-        app_update_info.get('update_available', False) or
-        script_update_info.get('update_available', False)
-    )
-    
-    if updates_available:
-        st.info("🔔 **Updates Available** - Check the expandable section below for details")
+
+    if os.getenv('APP_ENV', 'production') == 'production':
+        app_update_info = check_for_app_updates()
         
-        with st.expander("📦 Available Updates", expanded=False):
-            col1, col2 = st.columns(2)
+        updates_available = (
+            app_update_info.get('update_available', False) or
+            script_update_info.get('update_available', False)
+        )
+        
+        if updates_available:
+            st.info("🔔 **Updates Available** - Check the expandable section below for details")
             
-            with col1:
-                st.markdown("**🏠 Application**")
-                if app_update_info.get('update_available'):
-                    st.warning(f"Update: `{app_update_info['current_version']}` → `{app_update_info['latest_version']}`")
-                    if st.button("📥 Download App Update", key="app_update_btn"):
-                        webbrowser.open("https://github.com/RRMalmstrom/sip_lims_workflow_manager/releases/latest")
-                        st.success("🌐 Opening GitHub releases...")
-                else:
-                    st.success("✅ Up to date")
-            
-            with col2:
-                st.markdown("**🔧 Scripts**")
-                if script_update_info.get('update_available'):
-                    st.warning(f"Update: `{script_update_info['current_version']}` → `{script_update_info['latest_version']}`")
-                    if st.button("📥 Update Scripts", key="script_update_btn"):
-                        with st.spinner("Updating scripts..."):
-                            result = update_scripts()
-                            if result['success']:
-                                st.success("✅ Scripts updated!")
-                                check_for_script_updates.clear()
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Update failed: {result['error']}")
-                else:
-                    st.success("✅ Up to date")
-            
-            # Manual refresh option in expander
-            if st.button("🔄 Force Check Updates", key="manual_check"):
-                check_for_app_updates.clear()
-                check_for_script_updates.clear()
-                st.rerun()
+            with st.expander("📦 Available Updates", expanded=False):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**🏠 Application**")
+                    if app_update_info.get('update_available'):
+                        st.warning(f"Update: `{app_update_info.get('current_version', 'N/A')}` → `{app_update_info.get('latest_version', 'N/A')}`")
+                        st.info("To update, please shut down the application and pull the latest Docker image.")
+                    else:
+                        st.success("✅ Up to date")
+                
+                with col2:
+                    st.markdown("**🔧 Scripts**")
+                    if script_update_info.get('update_available'):
+                        st.warning(f"Update: `{script_update_info.get('current_version', 'N/A')}` → `{script_update_info.get('latest_version', 'N/A')}`")
+                        st.info("Scripts are updated automatically when the application starts.")
+                    else:
+                        st.success("✅ Up to date")
+                
+                if st.button("🔄 Force Check Updates", key="manual_check"):
+                    check_for_app_updates.clear()
+                    check_for_script_updates.clear()
+                    st.rerun()
+    else:
+        st.info("DEV MODE: Update checks are disabled.", icon="🛠️")
     
     if not st.session_state.project:
         st.info("Select a project folder using the 'Browse' button in the sidebar.")
@@ -1301,20 +1274,25 @@ def main():
                     for i, input_def in enumerate(step['inputs']):
                         input_key = f"{step_id}_input_{i}"
                         if input_def['type'] == 'file':
-                            col_a, col_b = st.columns([3, 1])
-                            with col_a:
-                                current_value = st.session_state.user_inputs[step_id].get(input_key, "")
-                                
-                                file_path = st.text_input(
-                                    label=input_def['name'],
-                                    value=current_value,
-                                    key=f"text_{input_key}_{current_value}"  # Force widget recreation when value changes
-                                )
-                            with col_b:
-                                if st.button("Browse", key=f"browse_{input_key}"):
-                                    selected_file = select_file_via_subprocess()
+                            current_value = st.session_state.user_inputs[step_id].get(input_key, "")
+                            st.text_input(
+                                label=input_def['name'],
+                                value=current_value,
+                                key=f"text_{input_key}",
+                                disabled=True
+                            )
+                            st.button("Browse", key=f"browse_{input_key}", on_click=select_file_in_app, args=(input_key,))
+
+                            if st.session_state.get(f"file_browser_visible_{input_key}", False):
+                                with st.expander("File Browser", expanded=True):
+                                    selected_file = st_file_browser(
+                                        project.path, key=f"browser_{input_key}"
+                                    )
                                     if selected_file:
-                                        st.session_state.user_inputs[step_id][input_key] = selected_file
+                                        relative_path = str(selected_file.relative_to(project.path))
+                                        print(f"DEBUG: File selected: '{selected_file}'. Storing relative path: '{relative_path}' for input key '{input_key}'")
+                                        st.session_state.user_inputs[step_id][input_key] = relative_path
+                                        st.session_state[f"file_browser_visible_{input_key}"] = False
                                         st.rerun()
 
             with col2:
@@ -1367,6 +1345,7 @@ def main():
                             st.session_state.running_step_id = step_id
                             st.session_state.terminal_output = ""
                             step_user_inputs = st.session_state.user_inputs.get(step_id, {})
+                            print(f"DEBUG: Re-running step '{step_id}' with user_inputs: {step_user_inputs}")
                             start_script_thread(project, step_id, step_user_inputs)
                             st.rerun()  # Force immediate rerun to show terminal
                     
@@ -1391,6 +1370,7 @@ def main():
                             st.session_state.running_step_id = step_id
                             st.session_state.terminal_output = ""
                             step_user_inputs = st.session_state.user_inputs.get(step_id, {})
+                            print(f"DEBUG: Starting step '{step_id}' with user_inputs: {step_user_inputs}")
                             start_script_thread(project, step_id, step_user_inputs)
                             st.rerun()  # Force immediate rerun to show terminal
             

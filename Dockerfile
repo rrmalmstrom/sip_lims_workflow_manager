@@ -1,19 +1,35 @@
 # Base Image: Use Miniconda3 to leverage Conda for environment management
 FROM continuumio/miniconda3:latest
 
-# Set the working directory inside the container
-WORKDIR /app
+# --- Build Arguments and Environment Variables ---
+# Define build-time argument for the application version
+ARG APP_VERSION=0.0.0-local
+# Set the application version as an environment variable
+ENV APP_VERSION=${APP_VERSION}
+
+# Set the application directory inside the container
+WORKDIR /opt/app
 
 # Copy the environment file first to leverage Docker's layer caching.
-# This step will only be re-run if the environment.yml file changes.
 COPY environment.yml .
 
 # Create the Conda environment from the environment.yml file
-# This installs all necessary dependencies into an environment named 'sip-lims'
 RUN conda env create -f environment.yml
 
-# Copy the rest of the application source code into the working directory
-COPY . .
+# Copy the application source code and all supporting files
+COPY app.py .
+COPY src/ ./src/
+COPY templates/ ./templates/
+COPY utils/ ./utils/
 
-# No entrypoint or command is specified by default.
-# The command will be provided by the run/test scripts.
+# Copy and set up the entrypoint script
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
+ENTRYPOINT ["/opt/app/entrypoint.sh"]
+
+# Expose the port Streamlit runs on
+EXPOSE 8501
+
+# Set the default command to run the Streamlit app
+# This will be executed by the entrypoint script
+CMD ["streamlit", "run", "/opt/app/app.py"]

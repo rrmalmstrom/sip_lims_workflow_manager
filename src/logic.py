@@ -584,32 +584,50 @@ Return Code Type: {type(return_code)}
         if args is None:
             args = []
 
-        if getattr(sys, 'frozen', False):
-            app_dir = Path(sys._MEIPASS).parent
-        else:
-            app_dir = Path(__file__).parent.parent
+        # The new architecture uses a static, mounted path for scripts.
+        # The application code inside the container should ALWAYS look here.
+        scripts_dir = Path("/workflow-scripts")
 
         script_filename = Path(script_path_str).name
-        script_path = app_dir / "scripts" / script_filename
+        script_path = scripts_dir / script_filename
         
         if not script_path.exists():
-            raise FileNotFoundError(f"Script '{script_filename}' not found in '{app_dir / 'scripts'}'")
+            # Provide a more informative error message for debugging.
+            error_msg = (
+                f"Script '{script_filename}' not found in the container at '{scripts_dir}'.\n"
+                f"Please check:\n"
+                f"1. The script exists in the 'sip_scripts_workflow_gui' repository.\n"
+                f"2. The volume mount from the host ('~/.sip_lims_workflow_manager/scripts') to the container ('/workflow-scripts') is correct."
+            )
+            raise FileNotFoundError(error_msg)
 
         python_executable = sys.executable
         command = [python_executable, "-u", str(script_path)] + args
+        print(f"DEBUG: [ScriptRunner.run] Preparing to execute command:")
+        print(f"  - Command: {' '.join(command)}")
+        print(f"  - CWD: {self.project_path}")
+        print(f"  - Python Executable: {python_executable}")
 
         # Create pseudo-terminal
         self.master_fd, self.slave_fd = pty.openpty()
 
         # Start the subprocess with PTY
-        self.process = subprocess.Popen(
-            command,
-            stdin=self.slave_fd,
-            stdout=self.slave_fd,
-            stderr=self.slave_fd,
-            cwd=self.project_path,
-            preexec_fn=os.setsid  # Create new session
-        )
+        try:
+            self.process = subprocess.Popen(
+                command,
+                stdin=self.slave_fd,
+                stdout=self.slave_fd,
+                stderr=self.slave_fd,
+                cwd=self.project_path,
+                preexec_fn=os.setsid  # Create new session
+            )
+            print(f"DEBUG: [ScriptRunner.run] Subprocess started successfully. PID: {self.process.pid}")
+        except Exception as e:
+            print(f"CRITICAL: [ScriptRunner.run] Failed to start subprocess. Error: {e}")
+            self.output_queue.put(f"FATAL ERROR: Could not start script process: {e}\n")
+            self.result_queue.put(RunResult(success=False, stdout="", stderr=str(e), return_code=-1))
+            self.is_running_flag.clear()
+            return
 
         # Start the output reading thread
         self.is_running_flag.set()

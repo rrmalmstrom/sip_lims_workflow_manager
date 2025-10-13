@@ -1,13 +1,20 @@
 @echo off
 rem This script handles the one-time setup for the Docker-based workflow.
 
-set "IMAGE_NAME=ghcr.io/rrmalmstrom/sip_lims_workflow_manager"
-set "TAG=latest"
+rem --- Configuration ---
+set "IMAGE_NAME=sip-lims-workflow-manager"
+rem This version will be baked into the image. For a release, this should be updated to match the Git tag.
+set "APP_VERSION=1.0.0"
 
 echo --- Docker Setup for SIP LIMS Workflow Manager ---
 
-rem 1. Check if Docker is running
-echo Step 1: Checking for Docker...
+rem 1. Determine Version
+echo Step 1: Determining application version...
+echo ✅ Using version %APP_VERSION% defined in this script.
+
+rem 2. Check if Docker is running
+echo.
+echo Step 2: Checking for Docker...
 docker info > nul 2>&1
 if %errorlevel% neq 0 (
     echo Error: Docker is not running.
@@ -18,40 +25,25 @@ if %errorlevel% neq 0 (
 )
 echo ✅ Docker is running.
 
-rem 2. Check if user is logged into GitHub Container Registry
+rem 3. Build the Docker image from the local Dockerfile
 echo.
-echo Step 2: Checking GitHub Container Registry access...
-docker pull %IMAGE_NAME%:%TAG% > nul 2>&1
-if %errorlevel% equ 0 (
-    echo ✅ Successfully pulled image. You are already logged in.
-) else (
-    echo ⚠️ You are not logged into the GitHub Container Registry (ghcr.io).
-    echo To pull the private application image, you need to authenticate.
-    echo.
-    echo Please follow these steps:
-    echo   1. Create a GitHub Personal Access Token (PAT) with the 'read:packages' scope.
-    echo      - Go to: https://github.com/settings/tokens/new
-    echo      - Add a note (e.g., 'Docker Login').
-    echo      - Under 'Select scopes', check the box for 'read:packages'.
-    echo      - Click 'Generate token' and copy the token.
-    echo   2. Run the following command in your terminal, replacing ^<TOKEN^> with your copied token:
-    echo.
-    echo      echo ^<TOKEN^> | docker login ghcr.io -u ^<YOUR_GITHUB_USERNAME^> --password-stdin
-    echo.
-    
+echo Step 3: Building the application Docker image...
+echo This may take several minutes on the first run.
+
+docker build ^
+    --build-arg "APP_VERSION=%APP_VERSION%" ^
+    -t "%IMAGE_NAME%:latest" ^
+    .
+
+rem Check if the build was successful
+if %errorlevel% neq 0 (
+    echo Error: Docker build failed.
+    echo Please check the output above for errors.
     pause
-    
-    rem Verify login by trying to pull again
-    echo Verifying access...
-    docker pull %IMAGE_NAME%:%TAG%
-    if %errorlevel% neq 0 (
-        echo Error: Still unable to pull the Docker image.
-        echo Please ensure you have generated the PAT with the correct scope and run the login command successfully.
-        pause
-        exit /b 1
-    )
-    echo ✅ Successfully authenticated and pulled the application image.
+    exit /b 1
 )
+
+echo ✅ Docker image '%IMAGE_NAME%:latest' built successfully with version %APP_VERSION%.
 
 echo.
 echo --- Docker Setup Complete! ---

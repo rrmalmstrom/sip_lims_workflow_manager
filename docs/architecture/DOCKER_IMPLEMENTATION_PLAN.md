@@ -1,84 +1,73 @@
-# Hybrid Docker Strategy: Implementation Plan
+# Plan: Docker-Based Distribution Strategy
 
-## 1. Objective
+This document outlines the technical plan to package the SIP LIMS Workflow Manager into a Docker container for robust, cross-platform distribution.
 
-This document outlines the implementation plan for transitioning the SIP LIMS Workflow Manager to a "Hybrid Docker Strategy." The goal is to containerize the application environment for consistency and portability while retaining a seamless, local-like development and user experience.
+## 1. Core Principles
 
-This strategy will package the application and its Conda environment into a Docker image hosted on GitHub Packages. At runtime, the user's local `scripts` and `.ssh` folders, as well as the application source code, will be mounted into the container. This preserves the ability to dynamically update scripts and develop the application locally while ensuring the runtime environment is identical for all users and agents.
+-   **Environment Consistency:** The application and all its dependencies will run inside a single, controlled Docker container, eliminating platform-specific issues.
+-   **Dynamic Project Mounting:** The user will select their project folder on their local machine *before* the application starts. This folder will be mounted as a volume into the container.
+-   **Simplified User Interaction:** The initial project selection will be handled by a native OS dialog, and all subsequent file operations will occur safely within the mounted project folder.
 
-## 2. Core Components
+## 2. Implementation Steps
 
-### 2.1. The `Dockerfile`
+This plan involves changes to four key areas: the `Dockerfile`, the run scripts, the application code, and the user documentation.
 
-A new `Dockerfile` will be created in the project root. It will define the build process for the application image.
+### Step 1: `Dockerfile` Enhancement
 
-**Build Sequence:**
-1.  **Base Image:** The image will be based on `continuumio/miniconda3` to leverage the existing Conda-based environment management.
-2.  **Working Directory:** A working directory `/app` will be created inside the image.
-3.  **Dependency Installation (Cached Layer):**
-    *   Copy the `environment.yml` file into the image.
-    *   Run `conda env create -f environment.yml` to install all Conda and Pip dependencies. This creates a `sip-lims` environment inside the container. This step is intentionally performed *before* copying source code to leverage Docker's layer caching, speeding up subsequent builds.
-4.  **Source Code:** Copy the application source code (e.g., `app.py`, `src/`, `templates/`) into the `/app` directory. This copy is primarily for the "production" version of the image; for development, this code will be overridden by live mounts.
-5.  **Entrypoint:** The default command for the container will be configured to activate the `sip-lims` Conda environment and run the Streamlit application.
+The `Dockerfile` will be updated to create a self-contained environment for the application.
 
-### 2.2. Image Hosting
+-   **Base Image:** Continue using `continuumio/miniconda3` for Conda support.
+-   **Dependencies:** Copy `environment.yml` and run `conda env create` to install all Python and system dependencies.
+-   **Application Code:** Copy the entire `src` directory into the container at `/app/src`.
+-   **Working Directory:** Set the default working directory to a neutral location like `/app`. The actual project directory will be mounted over this at runtime.
+-   **Entrypoint:** Define an `entrypoint.sh` script that activates the Conda environment and executes the Streamlit application. This ensures the environment is correctly configured on container start.
+-   **Port Exposure:** Expose port `8501` for the Streamlit application.
 
--   The Docker image will be hosted in a **private GitHub Packages container registry** associated with the `RRMalmstrom/sip_lims_workflow_manager` repository.
--   Images will be tagged with semantic version numbers (e.g., `v1.1.0`) and a floating `latest` tag for easy access.
+### Step 2: Dynamic Run Scripts (`run.command` & `run.bat`)
 
-### 2.3. User-Facing Scripts
+These scripts are the primary user entrypoint and will be responsible for dynamically mounting the project folder.
 
-The existing `.command` (macOS) and `.bat` (Windows) scripts will be modified to be the sole entry points for interacting with the application. This provides a user-friendly abstraction over Docker commands.
+-   **`run.command` (macOS):**
+    1.  Use an AppleScript command (`osascript`) to display a native "Choose Folder" dialog.
+    2.  Capture the selected folder path.
+    3.  Execute a `docker run` command, using the `-v` flag to mount the selected path to `/app/project` and the `-w` flag to set `/app/project` as the working directory.
+-   **`run.bat` (Windows):**
+    1.  Use a PowerShell script snippet to display a native "Browse For Folder" dialog.
+    2.  Capture the selected folder path.
+    3.  Execute a `docker run` command with the same `-v` and `-w` flags, ensuring correct path syntax for Windows.
 
--   **`run.command` / `run.bat`:**
-    *   **Function:** Starts the application for regular use or development.
-    *   **Action:** Will execute a `docker run` command that:
-        *   Pulls the `latest` image if not present locally.
-        *   Maps port `8501` from the container to the host (`-p 8501:8501`).
-        *   **Mounts** the local source code (`app.py`, `src`, `templates`, `utils`) into the container's `/app` directory.
-        *   **Mounts** the local `scripts` folder into the container.
-        *   **Mounts** the local `.ssh` folder into the container's `/root/.ssh` directory to preserve Git functionality.
-        *   Removes the container on exit (`--rm`).
+### Step 3: Application Refactoring (`app.py`)
 
--   **`test.command` / `test.bat`:**
-    *   **Function:** Runs the `pytest` test suite for TDD.
-    *   **Action:** Will execute a `docker run` command that is nearly identical to the `run` script, but with the final command overridden to be `pytest`. This ensures tests run against the exact same containerized environment.
+The main application file will be simplified to remove the initial project selection logic.
 
--   **`update.command` / `update.bat`:**
-    *   **Function:** Allows users to update the application to the latest version.
-    *   **Action:** Will execute a `docker pull` command to fetch the `latest` image from the GitHub Packages registry.
+1.  **Remove Initial File Browser:** Delete the UI elements and associated logic (e.g., calls to `file_browser_agent`) that ask the user to select a project folder at the start.
+2.  **Assume Project Context:** Modify the application to assume that its current working directory *is* the project directory. The `Project` class should be initialized with the current directory (`.`) as its path.
+3.  **Preserve In-Workflow Browsing:** The file browsing functionality used *within* workflow steps will remain. It will now be naturally "jailed" to the mounted project directory, improving safety and usability.
 
--   **`setup.command` / `setup.bat`:**
-    *   **Function:** The one-time setup for a new user.
-    *   **Action:** Will be modified to check for Docker Desktop installation. It will no longer create a local Conda environment. Its primary role will be to ensure the user is logged into the GitHub container registry (`ghcr.io`) so they can pull the private image.
+### Step 4: Documentation Update (`QUICK_SETUP_GUIDE.md`)
 
-## 3. User & Developer Workflow
+The user guide must be updated to reflect the new workflow.
 
-### 3.1. First-Time Setup
-1.  User installs Docker Desktop.
-2.  User runs the `setup` script, which guides them to log into GitHub's container registry via the command line.
-3.  The script performs an initial `docker pull` to download the application image.
+1.  **Docker as Prerequisite:** Clearly state that Docker Desktop is the only required dependency.
+2.  **New Setup Process:** Detail the one-time `setup_docker` script.
+3.  **New Run Process:** Explain the new application launch process:
+    -   User double-clicks `run.command` or `run.bat`.
+    -   A folder selection dialog appears.
+    -   User selects their project folder.
+    -   The application opens in their web browser.
 
-### 3.2. Running the Application
-1.  User double-clicks `run.command` or `run.bat`.
-2.  The script starts the Docker container, which launches the Streamlit app.
-3.  The app opens in the user's browser, served from the container.
+## 3. Mermaid Diagram: New Workflow
 
-### 3.3. Developing & Testing (TDD)
-1.  The developer starts the application once by running `run.command`.
-2.  The developer edits any source code file (`.py`, `.yml`, etc.) on their local machine using VS Code.
-3.  Streamlit, running inside the container, detects the file change via the mounted volume and automatically reloads.
-4.  To run tests, the developer executes `test.command` or `test.bat`. `pytest` runs inside a new, clean container against the latest local code.
+```mermaid
+sequenceDiagram
+    participant User
+    participant Run Script
+    participant Docker
+    participant App
 
-### 3.4. Updating the Application
-1.  The app UI notifies the user an update is available.
-2.  The user runs `update.command` or `update.bat`.
-3.  Docker pulls the new `latest` image.
-4.  The user runs `run.command` as usual, which now starts the new version.
-
-## 4. Guardrails and Compliance
-
-To ensure this new workflow is always followed by all users and agents:
--   The `run`, `test`, and `update` scripts will be the **only** supported methods for interacting with the application.
--   The `README.md` and `QUICK_SETUP_GUIDE.md` will be updated to reflect this Docker-centric workflow, removing instructions related to local Conda environment setup for running the app.
--   This `DOCKER_IMPLEMENTATION_PLAN.md` document will serve as the canonical source of truth for the architecture.
+    User->>Run Script: Double-clicks run.command/run.bat
+    Run Script->>User: Shows native "Choose Folder" dialog
+    User->>Run Script: Selects Project Folder
+    Run Script->>Docker: Executes `docker run` with volume mount
+    Docker->>App: Starts Streamlit App
+    App->>User: Displays GUI in browser
