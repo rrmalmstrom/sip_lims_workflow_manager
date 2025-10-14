@@ -9,9 +9,6 @@ from typing import Dict, Any, Optional, List
 import re
 import requests
 
-from .ssh_key_manager import SSHKeyManager
-
-
 class GitUpdateManager:
     """Unified update manager using Git repositories and GitHub releases."""
     
@@ -30,21 +27,17 @@ class GitUpdateManager:
         self._cache = {}
         self._last_check_time = None
         
-        # Initialize SSH key manager with appropriate key for repo type
-        key_name = "scripts_deploy_key" if repo_type == "scripts" else "app_deploy_key"
-        self.ssh_manager = SSHKeyManager(key_name=key_name)
-        
         # Repository configuration - both use Git tags for unified approach
         self.repo_configs = {
             "scripts": {
-                "repo_url": "git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git",
+                "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git",
                 "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
                 "update_method": "releases",  # Use GitHub releases
                 "current_version_source": "git_tags",  # Get current version from Git tags
                 "fallback_version_source": "commit_hash"  # Fallback if no tags exist
             },
             "application": {
-                "repo_url": "git@github.com:rrmalmstrom/sip_lims_workflow_manager.git",
+                "repo_url": "https://github.com/rrmalmstrom/sip_lims_workflow_manager.git",
                 "api_url": "https://api.github.com/repos/rrmalmstrom/sip_lims_workflow_manager",
                 "update_method": "releases",  # Use GitHub releases
                 "current_version_source": "git_tags",  # Get current version from Git tags
@@ -86,14 +79,12 @@ class GitUpdateManager:
         try:
             # Primary method: Get current version from Git tags
             if self.config["current_version_source"] == "git_tags":
-                env = self.ssh_manager.create_git_env()
                 result = subprocess.run(
                     ['git', 'describe', '--tags', '--abbrev=0'],
                     cwd=self.repo_path,
                     capture_output=True,
                     text=True,
-                    timeout=10,
-                    env=env
+                    timeout=10
                 )
                 
                 if result.returncode == 0:
@@ -161,33 +152,62 @@ class GitUpdateManager:
             return None
     
     def get_latest_tag_via_git(self, timeout: int = 10) -> Optional[str]:
-        """Get latest tag using Git (fallback for private repos)."""
+        """
+        Get the latest tag from the current branch's remote tracking branch.
+        This is branch-aware to prevent feature branches from detecting newer
+        tags from the main branch.
+        """
         try:
-            env = self.ssh_manager.create_git_env()
-            
-            # Fetch latest tags
-            subprocess.run(
-                ['git', 'fetch', '--tags'],
-                cwd=self.repo_path,
-                capture_output=True,
-                timeout=timeout,
-                env=env
-            )
-            
-            # Get latest tag
-            result = subprocess.run(
-                ['git', 'tag', '--sort=-version:refname'],
+            # 1. Get the remote tracking branch for the current branch
+            get_remote_branch_result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True,
                 timeout=timeout
             )
-            
+
+            if get_remote_branch_result.returncode != 0:
+                print("Could not determine remote tracking branch. Falling back to fetching all tags.")
+                remote_branch = None
+            else:
+                remote_branch = get_remote_branch_result.stdout.strip()
+
+            # 2. Fetch tags from the specific remote branch if possible, otherwise all tags
+            if remote_branch:
+                # e.g., 'origin/sip_mac_solution_no_docker'
+                remote_name, branch_name = remote_branch.split('/', 1)
+                subprocess.run(
+                    ['git', 'fetch', remote_name, f'refs/tags/*:refs/tags/*'],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    timeout=timeout
+                )
+            else:
+                subprocess.run(
+                    ['git', 'fetch', '--tags'],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    timeout=timeout
+                )
+
+            # 3. Get the latest tag associated with the remote tracking branch
+            # This lists all tags reachable from the tip of the remote branch
+            cmd = ['git', 'describe', '--tags', '--abbrev=0']
+            if remote_branch:
+                cmd.append(remote_branch)
+
+            result = subprocess.run(
+                cmd,
+                cwd=self.repo_path,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+
             if result.returncode == 0:
-                tags = result.stdout.strip().split('\n')
-                if tags and tags[0]:
-                    return tags[0].strip()
-            
+                return result.stdout.strip()
+
             return None
         except Exception as e:
             print(f"Error getting latest tag via Git: {e}")
@@ -308,8 +328,6 @@ class GitUpdateManager:
                 result['error'] = f"Not a Git repository: {self.repo_path}"
                 return result
             
-            env = self.ssh_manager.create_git_env()
-            
             if self.repo_type == "scripts":
                 # For scripts: fetch latest tags and checkout latest
                 # Fetch all tags
@@ -318,8 +336,7 @@ class GitUpdateManager:
                     cwd=self.repo_path,
                     capture_output=True,
                     text=True,
-                    timeout=timeout,
-                    env=env
+                    timeout=timeout
                 )
                 
                 if fetch_result.returncode != 0:
@@ -356,8 +373,7 @@ class GitUpdateManager:
                     cwd=self.repo_path,
                     capture_output=True,
                     text=True,
-                    timeout=timeout,
-                    env=env
+                    timeout=timeout
                 )
                 
                 if pull_result.returncode == 0:
@@ -410,16 +426,13 @@ class GitUpdateManager:
             latest_version = update_check['latest_version']
             
             if current_version and latest_version:
-                env = self.ssh_manager.create_git_env()
-                
                 # Get commit log between versions
                 log_result = subprocess.run(
                     ['git', 'log', '--oneline', f'v{current_version}..v{latest_version}'],
                     cwd=self.repo_path,
                     capture_output=True,
                     text=True,
-                    timeout=timeout,
-                    env=env
+                    timeout=timeout
                 )
                 
                 if log_result.returncode == 0:
@@ -441,45 +454,6 @@ class GitUpdateManager:
         """Clear all cached results."""
         self._cache.clear()
     
-    def validate_setup(self) -> Dict[str, Any]:
-        """Validate that the update system is properly configured."""
-        result = {
-            'valid': True,
-            'issues': [],
-            'warnings': []
-        }
-        
-        # Validate SSH key setup
-        ssh_validation = self.ssh_manager.validate_key_security()
-        if not ssh_validation['valid']:
-            result['valid'] = False
-            result['issues'].extend([f"SSH: {issue}" for issue in ssh_validation['issues']])
-        
-        result['warnings'].extend([f"SSH: {warning}" for warning in ssh_validation['warnings']])
-        
-        # Validate repository setup
-        if not self.repo_path.exists():
-            result['valid'] = False
-            result['issues'].append(f"Repository path does not exist: {self.repo_path}")
-        elif not (self.repo_path / ".git").exists():
-            result['valid'] = False
-            result['issues'].append(f"Not a Git repository: {self.repo_path}")
-        
-        # Test repository access
-        repo_url = self.config['repo_url']
-        access_test = self.ssh_manager.test_key_access(repo_url)
-        if not access_test['success']:
-            result['valid'] = False
-            result['issues'].append(f"Cannot access repository: {access_test['error']}")
-        
-        # Validate version source
-        current_version = self.get_current_version()
-        if not current_version:
-            result['warnings'].append("Could not determine current version")
-        
-        return result
-
-
 # Factory function for easy instantiation
 def create_update_manager(repo_type: str, base_path: Path = None) -> GitUpdateManager:
     """
@@ -511,18 +485,6 @@ if __name__ == "__main__":
     print("=== Testing Script Update Manager ===")
     script_manager = create_update_manager("scripts")
     
-    validation = script_manager.validate_setup()
-    print(f"Setup valid: {validation['valid']}")
-    
-    if validation['issues']:
-        print("Issues:")
-        for issue in validation['issues']:
-            print(f"  ❌ {issue}")
-    
-    if validation['warnings']:
-        print("Warnings:")
-        for warning in validation['warnings']:
-            print(f"  ⚠️ {warning}")
     
     # Check for updates
     update_check = script_manager.check_for_updates()

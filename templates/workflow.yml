@@ -4,19 +4,6 @@ steps:
     name: "1. Setup Plates & DB"
     script: "setup.isotope.and.FA.plates.py"
     snapshot_items: ["Project_Database.db", "outputs/"]
-    inputs:
-      - type: file
-        name: "Aliquot Sheet"
-        arg: ""
-      - type: file
-        name: "SampleScan"
-        arg: ""
-      - type: file
-        name: "Metabolomics Sheet"
-        arg: ""
-      - type: file
-        name: "DW Summary"
-        arg: ""
 
   - id: ultracentrifuge_transfer
     name: "2. Create Ultracentrifuge Tubes"

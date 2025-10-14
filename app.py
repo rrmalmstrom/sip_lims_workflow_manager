@@ -12,7 +12,6 @@ import webbrowser
 from src.core import Project
 from src.logic import RunResult
 from src.git_update_manager import create_update_manager
-from src.ssh_key_manager import SSHKeyManager
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -1377,11 +1376,14 @@ def main():
                             run_button_disabled = True
                         
                         # Check if all required inputs for this step are filled
-                        if 'inputs' in step:
+                        # Check if all required inputs for this step are filled
+                        # The button is disabled if the step has inputs and they are not all filled
+                        if 'inputs' in step and step['inputs']:
                             step_inputs = st.session_state.user_inputs.get(step_id, {})
                             required_inputs = step['inputs']
                             if len(step_inputs) < len(required_inputs) or not all(step_inputs.values()):
                                 run_button_disabled = True
+                        # If 'inputs' is not in step or is empty, the button should be enabled by default
                         
                         # Additional check: disable if project setup is not complete
                         if not project.has_workflow_state():
