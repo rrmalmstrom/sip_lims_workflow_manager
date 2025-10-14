@@ -20,21 +20,21 @@ Git is used to automatically download and update the scientific workflow scripts
 
 ---
 
-## 2. Application Setup
+## 2. One-Time Application Setup
 
-Once Docker Desktop is installed and running, you can set up the application.
+Once Docker Desktop is installed and running, you need to build the application's local environment. This is a one-time process.
 
 ### Download and Extract
 -   Download the latest `sip_lims_workflow_manager` .zip file from the latest release on GitHub.
 -   Extract it to a permanent location on your computer (e.g., your Desktop or Documents folder).
 
-### Run the Docker Setup Script (One-time only)
-This script builds the application's Docker image on your computer from the included source code. This process happens entirely offline and does not require logging into any external services.
+### Build the Docker Image (One-time only)
+This step uses the included source code to build the application's Docker image on your computer. This process happens entirely on your machine.
 
 -   **On macOS:** Double-click `setup_docker.command`.
 -   **On Windows:** Double-click `setup_docker.bat`.
 
-The script will show its progress in a terminal window. Once it is complete, the application is ready to use.
+A terminal window will open and show the progress. Once it is complete, the application is ready to use.
 
 ---
 

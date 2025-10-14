@@ -1,5 +1,5 @@
 @echo off
-echo --- Starting SIP LIMS Workflow Manager ---
+echo --- Starting SIP LIMS Workflow Manager (DEV MODE) ---
 
 set "IMAGE_NAME=sip-lims-workflow-manager:latest"
 
@@ -28,16 +28,25 @@ set "PROJECT_PATH=%PROJECT_PATH:"=%"
 
 echo "Selected project folder: %PROJECT_PATH%"
 
-rem Set environment to production by default for the user-facing script.
+rem --- Environment Mode Selection ---
 set "ENV_FLAG=-e APP_ENV=production"
+if exist ".env" (
+    echo.
+    echo Development environment detected (.env file found).
+    echo Please choose a run mode:
+    echo   1. Development (Default - Update checks disabled)
+    echo   2. Production (Update checks enabled)
+    set /p "mode_choice=Enter choice [1]: "
 
-rem Define the central scripts directory on the host
-set "SCRIPTS_DIR=%USERPROFILE%\.sip_lims_workflow_manager\scripts"
-
-rem Create the directory if it doesn't exist
-if not exist "%SCRIPTS_DIR%" (
-    mkdir "%SCRIPTS_DIR%"
+    if "%mode_choice%"=="2" (
+        echo Running in PRODUCTION mode.
+        set "ENV_FLAG=-e APP_ENV=production"
+    ) else (
+        echo Running in DEVELOPMENT mode.
+        set "ENV_FLAG=--env-file .env"
+    )
 )
+rem --- End Environment Mode Selection ---
 
 rem --- Script Repository Management ---
 set "SCRIPT_REPO_URL=https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git"
@@ -56,6 +65,14 @@ if exist "%SCRIPTS_DIR%\.git" (
 )
 echo "--- End Script Repository Management ---"
 echo.
+
+rem Define the central scripts directory on the host
+set "SCRIPTS_DIR=%USERPROFILE%\.sip_lims_workflow_manager\scripts"
+
+rem Create the directory if it doesn't exist
+if not exist "%SCRIPTS_DIR%" (
+    mkdir "%SCRIPTS_DIR%"
+)
 
 rem Run the application in a new container, mounting the correct volumes
 echo "Launching application..."
