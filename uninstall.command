@@ -12,7 +12,6 @@ echo ""
 echo "This will remove:"
 echo "  - Python virtual environment (.venv/)"
 echo "  - Cloned workflow scripts (scripts/)"
-echo "  - SSH deploy key (.ssh/)"
 echo ""
 echo "This will PRESERVE:"
 echo "  - Your project folders and data"
@@ -59,8 +58,6 @@ safe_remove ".venv" "virtual environment"
 # Remove cloned scripts
 safe_remove "scripts" "workflow scripts"
 
-# Remove SSH deploy key directory
-safe_remove ".ssh" "SSH deploy key"
 
 # Remove any cached Python files
 if [ -d "__pycache__" ]; then

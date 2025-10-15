@@ -8,7 +8,6 @@ echo.
 echo This will remove:
 echo   - Python virtual environment (.venv\)
 echo   - Cloned workflow scripts (scripts\)
-echo   - SSH deploy key (.ssh\)
 echo.
 echo This will PRESERVE:
 echo   - Your project folders and data
@@ -53,8 +52,6 @@ call :safe_remove ".venv" "virtual environment"
 REM Remove cloned scripts
 call :safe_remove "scripts" "workflow scripts"
 
-REM Remove SSH deploy key directory
-call :safe_remove ".ssh" "SSH deploy key"
 
 REM Remove any cached Python files
 echo Removing Python cache files...

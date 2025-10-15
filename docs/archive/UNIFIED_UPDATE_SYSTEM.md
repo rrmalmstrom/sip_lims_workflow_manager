@@ -14,10 +14,9 @@ The system uses a single `GitUpdateManager` class that handles both repository t
 - **Scripts Repository**: `sip_scripts_workflow_gui`
 
 Both repositories use:
-- SSH deploy key authentication
 - Git tag versioning (semantic versioning)
 - GitHub API for update detection
-- SSH Git fallback for reliability
+- HTTPS for repository access
 
 ### Key Components
 
@@ -70,38 +69,21 @@ update_available = compare_versions(latest_version, current_version)
 
 ### Security Features
 
-- **SSH Key Validation**: Ed25519 key type verification
-- **Permission Checks**: Ensures proper SSH key file permissions (600)
-- **Repository Access**: Validates SSH key can access both repositories
-- **Error Handling**: Graceful fallback when SSH/network issues occur
+- **Error Handling**: Graceful fallback when network issues occur
 
 ## Configuration
 
-### SSH Setup
-
-The system requires an SSH deploy key with access to both repositories:
-
-```bash
-# Key location
-~/.ssh/sip_workflow_key
-
-# Required permissions
-chmod 600 ~/.ssh/sip_workflow_key
-
-# Key type (recommended)
-Ed25519 (excellent security rating)
-```
 
 ### Repository Configuration
 
 ```python
 REPOSITORIES = {
     "application": {
-        "ssh_url": "git@github.com:rrmalmstrom/sip_lims_workflow_manager.git",
+        "url": "https://github.com/rrmalmstrom/sip_lims_workflow_manager.git",
         "github_api": "https://api.github.com/repos/rrmalmstrom/sip_lims_workflow_manager"
     },
     "scripts": {
-        "ssh_url": "git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git", 
+        "url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git",
         "github_api": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui"
     }
 }
@@ -118,7 +100,7 @@ REPOSITORIES = {
 
 ### Script Updates
 
-- **Source**: Git repository via SSH
+- **Source**: Git repository via HTTPS
 - **Process**: One-click in-app update
 - **Restart**: Not required
 - **Content**: Scientific workflows, analysis methods, script fixes
@@ -128,14 +110,10 @@ REPOSITORIES = {
 The system includes comprehensive error handling:
 
 ### SSH Key Issues
-- Missing key file
-- Incorrect permissions
-- Wrong key type
-- Repository access denied
 
 ### Network Issues
 - GitHub API timeouts
-- SSH connection failures
+- Git connection failures
 - DNS resolution problems
 
 ### Git Issues
@@ -171,7 +149,7 @@ All errors are logged and displayed to users with clear guidance for resolution.
 
 ### For Developers
 - **Unified Architecture**: Single codebase for all update logic
-- **Consistent Authentication**: Same SSH key for both repositories
+- **Consistent Authentication**: HTTPS for both repositories
 - **Reliable Versioning**: Git tags provide robust version management
 - **Comprehensive Testing**: Automated and manual testing ensures reliability
 
@@ -187,12 +165,11 @@ All errors are logged and displayed to users with clear guidance for resolution.
 
 The unified system replaces:
 - **Old App Updates**: Google Drive-based distribution
-- **Old Script Updates**: Separate SSH-based system
+- **Old Script Updates**: Separate script-based system
 - **Dual UI**: Two different update interfaces
 
 ### Backward Compatibility
 
-- **SSH Keys**: Existing SSH keys continue to work
 - **Update Scripts**: Legacy `update_scripts.*` files still functional
 - **Configuration**: No user configuration changes required
 

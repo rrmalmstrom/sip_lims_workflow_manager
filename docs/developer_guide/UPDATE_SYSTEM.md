@@ -13,7 +13,6 @@ The unified update system replaces the previous dual-architecture approach (Goog
 ### Core Components
 
 -   **`GitUpdateManager` (`src/git_update_manager.py`)**: A unified class for managing updates for both the application and script repositories. It handles version checking, comparison, and updating.
--   **`SSHKeyManager` (`src/ssh_key_manager.py`)**: A security-focused class that manages the validation and use of SSH keys for secure repository access.
 -   **Clean UI Integration (`app.py`)**: The Streamlit application features a smart notification system that only displays update information when updates are available, ensuring a clean and uncluttered user interface.
 
 ## Version Management

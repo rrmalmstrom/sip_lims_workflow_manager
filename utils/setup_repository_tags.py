@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 from src.git_update_manager import create_update_manager
-from src.ssh_key_manager import SSHKeyManager
 
 
 def run_git_command(command, cwd=None, env=None):
@@ -80,10 +79,6 @@ def create_initial_script_tag():
         print("❌ Scripts directory not found")
         return False
     
-    # Check if we have SSH access
-    ssh_manager = SSHKeyManager()
-    env = ssh_manager.create_git_env()
-    
     # Check current status
     status_result = run_git_command(['git', 'status', '--porcelain'], cwd=scripts_path)
     if status_result and status_result.stdout.strip():
@@ -109,7 +104,7 @@ def create_initial_script_tag():
         # Push tag to remote
         push_result = run_git_command([
             'git', 'push', 'origin', initial_version
-        ], cwd=scripts_path, env=env)
+        ], cwd=scripts_path)
         
         if push_result and push_result.returncode == 0:
             print(f"✅ Pushed tag to remote: {initial_version}")
@@ -120,76 +115,6 @@ def create_initial_script_tag():
     else:
         print(f"❌ Failed to create tag: {tag_result.stderr if tag_result else 'Unknown error'}")
         return False
-
-
-def test_unified_update_system():
-    """Test the unified update system with both repositories."""
-    print("\n=== Testing Unified Update System ===")
-    
-    # Test SSH key validation
-    print("\n🔑 SSH Key Validation:")
-    ssh_manager = SSHKeyManager()
-    validation = ssh_manager.validate_key_security()
-    
-    if validation['valid']:
-        print("✅ SSH key validation passed")
-        if validation['key_info']:
-            print(f"  Key type: {validation['key_info'].get('type', 'unknown')}")
-            print(f"  Security: {validation['key_info'].get('strength', 'unknown')}")
-    else:
-        print("❌ SSH key validation failed:")
-        for issue in validation['issues']:
-            print(f"  - {issue}")
-    
-    # Test script update manager
-    print("\n📜 Scripts Update Manager:")
-    try:
-        script_manager = create_update_manager("scripts")
-        script_validation = script_manager.validate_setup()
-        
-        if script_validation['valid']:
-            print("✅ Scripts update manager setup valid")
-            
-            # Check for updates
-            update_check = script_manager.check_for_updates()
-            print(f"  Current version: {update_check.get('current_version', 'unknown')}")
-            print(f"  Latest version: {update_check.get('latest_version', 'unknown')}")
-            print(f"  Update available: {update_check.get('update_available', False)}")
-            
-            if update_check.get('error'):
-                print(f"  ⚠️  Error: {update_check['error']}")
-        else:
-            print("❌ Scripts update manager setup invalid:")
-            for issue in script_validation['issues']:
-                print(f"  - {issue}")
-    
-    except Exception as e:
-        print(f"❌ Error testing scripts update manager: {e}")
-    
-    # Test app update manager
-    print("\n📱 Application Update Manager:")
-    try:
-        app_manager = create_update_manager("application")
-        app_validation = app_manager.validate_setup()
-        
-        if app_validation['valid']:
-            print("✅ Application update manager setup valid")
-            
-            # Check for updates
-            update_check = app_manager.check_for_updates()
-            print(f"  Current version: {update_check.get('current_version', 'unknown')}")
-            print(f"  Latest version: {update_check.get('latest_version', 'unknown')}")
-            print(f"  Update available: {update_check.get('update_available', False)}")
-            
-            if update_check.get('error'):
-                print(f"  ⚠️  Error: {update_check['error']}")
-        else:
-            print("❌ Application update manager setup invalid:")
-            for issue in app_validation['issues']:
-                print(f"  - {issue}")
-    
-    except Exception as e:
-        print(f"❌ Error testing application update manager: {e}")
 
 
 def main():
@@ -203,21 +128,13 @@ def main():
     # Ask user what they want to do
     print("\n📋 Available Actions:")
     print("1. Create initial tag for scripts repository")
-    print("2. Test unified update system")
-    print("3. Both (create tag + test)")
-    print("4. Exit")
+    print("2. Exit")
     
-    choice = input("\nSelect an action (1-4): ").strip()
+    choice = input("\nSelect an action (1-2): ").strip()
     
     if choice == "1":
         create_initial_script_tag()
     elif choice == "2":
-        test_unified_update_system()
-    elif choice == "3":
-        if create_initial_script_tag():
-            print("\n" + "="*50)
-            test_unified_update_system()
-    elif choice == "4":
         print("👋 Goodbye!")
         return
     else:
@@ -225,10 +142,6 @@ def main():
         return
     
     print("\n✅ Setup complete!")
-    print("\n💡 Next steps:")
-    print("  1. Create GitHub releases for both repositories")
-    print("  2. Update the GUI to use the unified update system")
-    print("  3. Test the complete update workflow")
 
 
 if __name__ == "__main__":

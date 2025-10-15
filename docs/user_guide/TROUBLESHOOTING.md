@@ -49,40 +49,12 @@ This guide provides solutions to common issues you may encounter while using the
 
 ### Update Check Fails
 
--   **Cause**: The application cannot connect to GitHub to check for updates. This is usually due to network issues or problems with the SSH key configuration.
+-   **Cause**: The application cannot connect to GitHub to check for updates. This is usually due to network issues.
 -   **Solution**:
     1.  Ensure you have a stable internet connection.
-    2.  If the problem persists, it may be related to the SSH key. See the `SSH Key Issues` section below.
-    3.  You can force a new update check by clicking the "🔄 Manual Check for Updates" button in the sidebar.
+    2.  You can force a new update check by clicking the "🔄 Manual Check for Updates" button in the sidebar.
 
 ### Script Update Fails
 
--   **Cause**: The application was unable to pull the latest scripts from the Git repository.
--   **Solution**: This is almost always an SSH key issue. Please refer to the `SSH Key Issues` section for detailed troubleshooting steps.
-
-## SSH Key Issues
-
-### Permission Denied
-
--   **Cause**: The SSH private key file has incorrect file permissions, making it too "open" for SSH to use securely.
--   **Solution**: The application's setup script should handle this automatically. However, if you encounter this issue, you can manually fix the permissions. Open a terminal and run the following commands:
-    ```bash
-    chmod 600 .ssh/scripts_deploy_key
-    chmod 600 .ssh/app_deploy_key
-    ```
-
-### Repository Not Found or Key Already in Use
-
--   **Cause**: The SSH key is not correctly configured in your GitHub account, or the key is associated with another repository.
--   **Solution**:
-    1.  Ensure that the public keys (`.ssh/scripts_deploy_key.pub` and `.ssh/app_deploy_key.pub`) have been added as deploy keys to the correct GitHub repositories.
-    2.  If you see a "key already in use" error, you may need to remove the old deploy key from any other repositories in your GitHub account.
-    3.  You can test your SSH key access by running the following command in a terminal from the application's root directory:
-        ```bash
-        # Test scripts repository access
-        ssh -T -i .ssh/scripts_deploy_key git@github.com
-
-        # Test application repository access
-        ssh -T -i .ssh/app_deploy_key git@github.com
-        ```
-    You should see a success message from GitHub for both commands.
+-   **Cause**: The application was unable to pull the latest scripts from the Git repository, likely due to a network issue.
+-   **Solution**: Ensure you have a stable internet connection and try the update again.

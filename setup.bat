@@ -13,26 +13,14 @@ REM Check Python version (basic check)
 for /f "tokens=2" %%i in ('python --version 2^>^&1') do set PYTHON_VERSION=%%i
 echo Found Python version: %PYTHON_VERSION%
 
-echo Setting up SSH key permissions...
-REM Ensure SSH keys have correct permissions (required by SSH/Git)
-REM Note: Windows permissions are handled differently, but we ensure the files exist
-if exist .ssh\scripts_deploy_key (
-    echo Scripts SSH key found.
-)
-if exist .ssh\app_deploy_key (
-    echo App SSH key found.
-)
-
 echo Cloning or updating the script repository...
-set "GIT_SSH_COMMAND=ssh -i .ssh/scripts_deploy_key -o IdentitiesOnly=yes"
 IF EXIST scripts (
     cd scripts
     git pull
     cd ..
 ) ELSE (
-    git clone git@github.com:rrmalmstrom/sip_scripts_workflow_gui.git scripts
+    git clone https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git scripts
 )
-set "GIT_SSH_COMMAND="
 
 echo --- Conda Environment Setup ---
 

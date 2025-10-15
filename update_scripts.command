@@ -7,9 +7,7 @@ cd "$DIR/scripts"
 
 echo "--- Updating Workflow Scripts ---"
 
-export GIT_SSH_COMMAND="ssh -i ../.ssh/deploy_key -o IdentitiesOnly=yes"
 git pull
-unset GIT_SSH_COMMAND
 
 echo "\nScripts are now up to date."
 read -p "Press [Enter] to close this window."

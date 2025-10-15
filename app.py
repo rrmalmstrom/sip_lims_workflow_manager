@@ -133,50 +133,6 @@ def validate_workflow_yaml(file_path):
     except Exception as e:
         return False, f"Error reading workflow file: {e}"
 
-def auto_scroll_terminal():
-    """
-    Injects a JavaScript snippet to persistently poll the terminal textarea
-    and scroll it to the bottom whenever its content grows.
-    """
-    js_code = """
-    <script>
-    (function() {
-        // Find the textarea element for the terminal output
-        const terminal = window.parent.document.querySelector('textarea[data-testid="stTextarea"]');
-        if (!terminal) {
-            return; // Exit if terminal not found
-        }
-
-        // Use a MutationObserver to detect when the content of the terminal changes
-        const observer = new MutationObserver((mutations) => {
-            // We only need to know that it changed, not what the change was
-            terminal.scrollTop = terminal.scrollHeight;
-        });
-
-        // Start observing the terminal for changes in its child nodes (the text)
-        observer.observe(terminal, { childList: true, subtree: true });
-
-        // Also, scroll to bottom one time on initial load
-        terminal.scrollTop = terminal.scrollHeight;
-
-        // Clean up the observer when the component is unmounted
-        const streamlitDoc = window.parent.document;
-        const observerCleanup = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.removedNodes.forEach((removedNode) => {
-                    if (removedNode.contains && removedNode.contains(terminal)) {
-                        observer.disconnect();
-                    }
-                });
-            });
-        });
-        observerCleanup.observe(streamlitDoc.body, { childList: true, subtree: true });
-    })();
-    </script>
-    """
-    components.html(js_code, height=0)
-
-# Auto-scroll functionality removed - users can manually scroll to see terminal output
 
 def send_and_clear_input(project, user_input):
     """Callback to send input to the script and clear the input box."""
@@ -1483,19 +1439,11 @@ def main():
             # If still running, schedule another rerun with shorter delay
             # This ensures prompts appear immediately without waiting for user interaction
             if st.session_state.running_step_id:
-                auto_scroll_terminal()
                 # Reduced delay to make polling more responsive
                 # This fixes the issue where users need to click "Send Input" twice
                 time.sleep(0.05)  # Reduced from 0.1s to 0.05s
                 st.rerun()
         
-        if st.session_state.scroll_to_bottom:
-            auto_scroll_terminal()
-            st.session_state.scroll_to_bottom = False
-        
-        if st.session_state.scroll_to_bottom:
-            auto_scroll_terminal()
-            st.session_state.scroll_to_bottom = False
 
 if __name__ == "__main__":
     main()
