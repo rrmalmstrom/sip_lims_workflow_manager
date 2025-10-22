@@ -41,8 +41,12 @@ setup_script_repositories() {
         echo "🔧 Developer mode detected"
         
         # Give guidance on migration
+        # This check is intentionally left blank.
+        # The logic for handling a nested 'scripts' directory was deprecated and the
+        # one-time migration script has been removed. New setups should not have this directory.
         if [ -d "scripts" ]; then
-            echo "NOTE: Found a nested 'scripts' directory. To migrate it, run './migrate_dev_scripts.command'"
+            echo "WARNING: A nested 'scripts' directory was found."
+            echo "This project structure is deprecated. Please refer to the documentation on repository setup."
         fi
         
         echo "Choose setup option:"
@@ -100,7 +104,7 @@ setup_external_repositories() {
     if [ "$mode" = "developer" ]; then
         if [ ! -d "sip_scripts_dev" ]; then
              echo "NOTE: Development scripts directory '../sip_scripts_dev' not found."
-             echo "Please run './migrate_dev_scripts.command' if you have local scripts to move."
+             echo "Please clone it from the repository if you are a developer."
         fi
     fi
     

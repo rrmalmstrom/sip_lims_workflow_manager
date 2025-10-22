@@ -65,7 +65,7 @@ The presence of this file activates "Developer Mode," which enables interactive 
 ### Running Setup in Developer Mode
 -   With `config/developer.marker` present, run `setup.command`.
 -   The script will provide an interactive prompt asking if you want to work **offline** (skipping remote updates) or **online**.
--   It will still set up the `sip_scripts_prod` repository but will also provide guidance on using the separate `migrate_dev_scripts.command` to move any existing nested `scripts` into the new `../sip_scripts_dev` directory.
+-   It will set up the `sip_scripts_prod` repository. If you are a developer, you will need to separately clone the `sip_scripts_dev` repository into a sibling directory.
 
 ### Running the Application in Developer Mode
 -   When you run `run.command`, you will be prompted to choose which set of scripts to use for the session:

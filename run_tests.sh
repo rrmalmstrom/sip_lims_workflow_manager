@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script runs the test suite, assuming the environment is already set up.
-# Run ./setup_test_env.sh once first to create/update the environment.
+# Run ./setup.command once first to create/update the environment.
 
 # Exit on any error
 set -e
