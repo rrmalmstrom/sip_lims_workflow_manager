@@ -15,8 +15,7 @@ For users of the application, this section provides everything you need to get s
 This section is for developers who are contributing to the project. It contains detailed technical information about the application's architecture and implementation.
 
 -   **[System Architecture](developer_guide/ARCHITECTURE.md)**: A high-level overview of the application's architecture, design principles, and technology stack.
--   **[Unified Update System](developer_guide/UPDATE_SYSTEM.md)**: An explanation of the unified, Git-based system for managing both application and script updates.
--   **[SSH Key Management](developer_guide/SSH_KEY_MANAGEMENT.md)**: A guide to the SSH key management system used for secure repository access.
+-   **[Update System](developer_guide/ARCHITECTURE.md#decoupled-repository-architecture)**: An explanation of the Git-based system for managing both application and script updates.
 
 ## 🗄️ Archive
 

@@ -1,0 +1,1 @@
+# This file will contain tests for the shell scripts (setup.command, run.command).

@@ -2,15 +2,7 @@
 
 ## 1. Prerequisites: Install Miniconda
 
-This application requires **Miniconda** (a minimal version of Anaconda) to manage its Python environment and all dependencies.
-
-### On Windows:
-1.  **Download the installer:** Go to the [Miniconda for Windows documentation](https://docs.conda.io/en/latest/miniconda.html#windows-installers) and download the latest **64-bit (exe)** installer.
-2.  **Run the installer:**
-    *   When prompted, choose to install for **"Just Me"**.
-    *   Accept the default installation location.
-    *   **Crucially**, on the "Advanced Installation Options" screen, ensure the box for **"Add Miniconda3 to my PATH environment variable"** is **checked**. While not recommended by the installer, it is the most reliable way to ensure the setup scripts can find Conda.
-3.  **Restart your computer** after installation to ensure the PATH changes take effect.
+This application requires **Miniconda** to manage its Python environment and all dependencies.
 
 ### On macOS:
 1.  **Download the installer:** Go to the [Miniconda for macOS documentation](https://docs.conda.io/en/latest/miniconda.html#macos-installers) and download the installer that matches your Mac's processor:
@@ -20,7 +12,7 @@ This application requires **Miniconda** (a minimal version of Anaconda) to manag
 3.  **Close and reopen your Terminal** application for the changes to take effect.
 
 ### Verify Installation
-Open a new terminal (Terminal on macOS, or "Anaconda Prompt" from the Start Menu on Windows) and type:
+Open a new terminal and type:
 ```bash
 conda --version
 ```
@@ -28,46 +20,74 @@ You should see output like `conda 24.x.x`. If you see an error, the installation
 
 ---
 
-## 2. Application Setup
+## 2. Application and Scripts Setup
 
-Once Miniconda is installed and verified, you can set up the application.
+This project uses a decoupled structure where the application (`sip_lims_workflow_manager`) and the scientific scripts (`sip_scripts_prod` or `sip_scripts_dev`) reside in **sibling directories**.
 
-### Download and Extract
--   Download the latest `sip_lims_workflow_manager` .zip file from GitHub.
--   Extract to a permanent location (e.g., your Desktop or Documents folder).
+```
+/some/path/
+├── sip_lims_workflow_manager/  (The application you downloaded)
+└── sip_scripts_prod/           (The scripts, automatically created by the setup script)
+```
 
-### Run the Setup Script (One-time only)
-This step will create a self-contained Conda environment named `sip-lims` with all the necessary dependencies. It may take several minutes.
+### Standard User Setup (Production Mode)
 
--   **On macOS:** Double-click `setup.command`.
--   **On Windows:** Double-click `setup.bat`.
+This is the default, non-interactive setup for all standard users.
+
+1.  **Download and Extract**:
+    *   Download the latest `sip_lims_workflow_manager` .zip file from GitHub.
+    *   Extract it to a permanent location (e.g., your Desktop or Documents folder).
+
+2.  **Run the Setup Script (One-time only)**:
+    *   Double-click `setup.command`.
+    *   This script will create the `sip-lims` Conda environment and automatically clone or update the production scripts into a **sibling directory** named `sip_scripts_prod`.
 
 ---
 
-## 3. Launch the Application
+## 3. Launching the Application
 
--   **On macOS:** Double-click `run.command`.
--   **On Windows:** Double-click `run.bat`.
+-   Double-click `run.command`.
 
-The application will open in your web browser. The terminal window will show which Python environment is being used and provide the URL.
+The application will automatically use the scripts from the `sip_scripts_prod` directory and will open in your web browser.
 
 ---
 
-## 4. Updating the Application
+## 4. Developer Setup (Optional)
 
-When a new version of the application is released, follow these steps:
+Developers can use a local, mutable set of scripts for testing and development.
 
-1.  **Download the New Version**: The application will notify you when an update is available. Use the link provided to download the new `.zip` file from GitHub.
-2.  **Replace the Old Folder**: Close the running application, delete your old `sip_lims_workflow_manager` folder, and replace it with the new one you just extracted.
-3.  **Re-run the Setup Script (Recommended)**: After replacing the folder, it is a best practice to run the `setup.command` or `setup.bat` script **one more time**. This ensures that:
-    *   Any new dependencies are added to your Conda environment.
-    *   SSH key permissions are correctly set, which is required for the update-checking feature to work.
-4.  **Launch the New Version**: Run the application as usual with `run.command` or `run.bat`.
+### Activating Developer Mode
+1.  Inside the `sip_lims_workflow_manager` directory, create a new folder named `config`.
+2.  Inside the `config` folder, create an empty file named `developer.marker`.
+
+The presence of this file activates "Developer Mode," which enables interactive prompts during setup and runtime.
+
+### Running Setup in Developer Mode
+-   With `config/developer.marker` present, run `setup.command`.
+-   The script will provide an interactive prompt asking if you want to work **offline** (skipping remote updates) or **online**.
+-   It will still set up the `sip_scripts_prod` repository but will also provide guidance on using the separate `migrate_dev_scripts.command` to move any existing nested `scripts` into the new `../sip_scripts_dev` directory.
+
+### Running the Application in Developer Mode
+-   When you run `run.command`, you will be prompted to choose which set of scripts to use for the session:
+    *   **Development Scripts** (`../sip_scripts_dev`)
+    *   **Production Scripts** (`../sip_scripts_prod`)
+
+---
+
+## 5. Updating the Application
+
+The update process for the core application remains the same.
+
+1.  **Download the New Version**: When notified of an update, download the new `sip_lims_workflow_manager` .zip file.
+2.  **Replace the Old Folder**: Close the application, delete your old `sip_lims_workflow_manager` folder, and replace it with the new one.
+3.  **Re-run Setup**: Run `setup.command` again to ensure all dependencies are up-to-date.
+
+The production scripts in `../sip_scripts_prod` are updated automatically each time you run the setup script.
 
 ---
 
 ## Troubleshooting
 
--   **`conda: command not found`**: Miniconda was not installed correctly or was not added to your system's PATH. Please reinstall it, ensuring you follow the OS-specific instructions above.
+-   **`conda: command not found`**: Miniconda was not installed correctly. Please reinstall it, ensuring you follow the instructions above.
 -   **Setup Fails**: If the setup script fails, try running it again. If it fails because the `sip-lims` environment already exists, you can manually remove it by running `conda env remove --name sip-lims` in a terminal and then re-running the setup script.
--   **Application Won't Start**: Run the `setup.command` or `setup.bat` script again. It is safe to run multiple times and will ensure your environment is up to date.
+-   **Application Won't Start**: Run the `setup.command` script again. It is safe to run multiple times and will ensure your environment is up to date.

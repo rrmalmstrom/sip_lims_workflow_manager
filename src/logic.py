@@ -421,8 +421,9 @@ class SnapshotManager:
 
 class ScriptRunner:
     """Executes workflow scripts using pseudo-terminal for interactive execution."""
-    def __init__(self, project_path: Path):
+    def __init__(self, project_path: Path, script_path: Path = None):
         self.project_path = project_path
+        self.script_path = script_path or (project_path / "scripts")
         self.master_fd = None
         self.slave_fd = None
         self.process = None
@@ -590,10 +591,10 @@ Return Code Type: {type(return_code)}
             app_dir = Path(__file__).parent.parent
 
         script_filename = Path(script_path_str).name
-        script_path = app_dir / "scripts" / script_filename
+        script_path = self.script_path / script_filename
         
         if not script_path.exists():
-            raise FileNotFoundError(f"Script '{script_filename}' not found in '{app_dir / 'scripts'}'")
+            raise FileNotFoundError(f"Script '{script_filename}' not found in '{self.script_path}'")
 
         python_executable = sys.executable
         command = [python_executable, "-u", str(script_path)] + args

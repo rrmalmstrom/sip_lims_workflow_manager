@@ -28,26 +28,40 @@ This includes:
 -   **Application shutdown button** - cleanly terminate the application from within the GUI.
 -   **Safe uninstall system** - complete removal of application while preserving user data.
 -   **Localhost-only security** - application is only accessible from your computer, not from the network.
--   Cross-platform support for macOS and Windows.
+-   Support for macOS.
 
 ## Prerequisites
 
 -   **Miniconda or Anaconda**: This application uses the Conda package manager to ensure a consistent and reproducible environment. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
 
-## Installation and First-Time Setup
+## Repository Structure
 
-The setup process needs to be performed only **once** per computer. For detailed instructions, please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)**.
+This project uses a decoupled, two-repository structure to separate the core application from the scientific scripts:
 
-1.  **Download the Application**: Download the `lims_workflow_manager` folder (as a `.zip` file) from the shared drive and unzip it to a permanent location on your computer (e.g., your Desktop or Documents folder).
-2.  **Run the Setup Script**:
-    -   **On macOS**: Open the `lims_workflow_manager` folder and double-click the `setup.command` file.
-    -   **On Windows**: Open the `lims_workflow_manager` folder and double-click the `setup.bat` file.
+-   `sip_lims_workflow_manager/` (This repository): Contains the core application, GUI, and documentation.
+-   `sip_scripts_prod/` or `sip_scripts_dev/`: Sibling directories containing the Python workflow scripts.
+    -   `sip_scripts_prod/`: For production users, containing stable, version-controlled scripts.
+    -   `sip_scripts_dev/`: For developers, containing local, mutable scripts for testing and development.
+
+This structure allows the application and scripts to be updated independently, providing greater stability for production users and flexibility for developers.
+
+## Installation and Setup
+
+The setup process is performed only **once** per computer. For detailed instructions, see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)**.
+
+1.  **Download the Application**: Download and unzip the `sip_lims_workflow_manager` repository.
+2.  **Run the Setup Script**: Double-click `setup.command`.
+
+The setup script automatically detects the mode:
+-   **Production Mode (Default)**: Clones or updates the production scripts into a sibling directory named `../sip_scripts_prod`.
+-   **Developer Mode**: If a `config/developer.marker` file is present, the script provides interactive prompts for developers, including options for offline work and guidance on setting up a local `../sip_scripts_dev` repository.
 
 ## Running the Application
 
-After the one-time setup is complete, you can start the application at any time:
+-   Double-click `run.command`.
 
--   **On macOS**: Double-click the `run.command` file.
--   **On Windows**: Double-click the `run.bat` file.
+The `run.command` script also adapts to the execution mode:
+-   **Production Mode**: Automatically uses the scripts from `../sip_scripts_prod`.
+-   **Developer Mode**: Prompts the developer to choose between using the development (`../sip_scripts_dev`) or production (`../sip_scripts_prod`) scripts for the session.
 
-A terminal window will open, and after a few moments, the application's user interface will open in your default web browser at `http://127.0.0.1:8501`.
+The application will open in your default web browser at `http://127.0.0.1:8501`.

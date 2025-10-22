@@ -46,11 +46,23 @@ The backend is composed of several key classes that work together to manage the 
 -   **`SnapshotManager`**: Manages the creation and restoration of complete project snapshots in the `.snapshots` directory.
 -   **`ScriptRunner`**: Responsible for executing the individual Python workflow scripts in a pseudo-terminal, allowing for real-time, interactive execution.
 
-## Two-Repository Architecture
+## Decoupled Repository Architecture
 
-The system uses separate Git repositories for the application and the scientific scripts, allowing for independent updates:
+The system uses a decoupled architecture to separate the core application from the scientific scripts, allowing for independent management and versioning. The application and scripts are stored in **sibling directories**.
 
--   **Main Application Repository (`sip_lims_workflow_manager`)**: Contains the GUI application, workflow engine, setup scripts, and documentation. Updates to this repository include new features, bug fixes, and UI improvements.
--   **Scripts Repository (`sip_scripts_workflow_gui`)**: Contains all the Python workflow scripts used for laboratory analysis. Updates to this repository include improvements to the scientific workflows, new analysis methods, and bug fixes in the scripts.
+-   **`sip_lims_workflow_manager/`**: The main application repository. It contains the GUI, workflow engine, setup scripts, and documentation. It is agnostic to the script location.
+-   **`sip_scripts_prod/`**: A sibling directory containing the stable, version-controlled production scripts. This repository is automatically cloned and managed by the `setup.command` script for standard users.
+-   **`sip_scripts_dev/`**: An optional, local-only sibling directory for developers. It is not managed by Git, allowing developers to maintain a local, mutable set of scripts for testing and development.
 
-This separation allows for a flexible and robust update system, where critical script updates can be deployed without requiring a full application update.
+This structure provides stability for production users while offering flexibility for developers. The path to the active script repository is passed to the Python application at runtime via the `--script-path` command-line argument.
+
+## Execution Modes: Production vs. Developer
+
+The application operates in one of two modes, determined by the presence of a marker file.
+
+-   **Production Mode (Default)**: The standard mode for end-users. The application automatically uses the scripts located in the `../sip_scripts_prod` directory.
+-   **Developer Mode**: Activated by the presence of a `config/developer.marker` file. In this mode, the `setup.command` and `run.command` scripts become interactive:
+    -   `setup.command` offers options for online/offline work.
+    -   `run.command` prompts the developer to choose between using the `../sip_scripts_dev` or `../sip_scripts_prod` directory for the current session.
+
+This dual-mode system ensures a standardized, stable environment for production use while providing a flexible and controlled workflow for development and testing.

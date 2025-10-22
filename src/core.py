@@ -32,13 +32,14 @@ class Project:
     and all associated data. It coordinates the StateManager, SnapshotManager,
     and ScriptRunner.
     """
-    def __init__(self, project_path: Path, load_workflow: bool = True):
+    def __init__(self, project_path: Path, script_path: Path = None, load_workflow: bool = True):
         self.path = project_path
+        self.script_path = script_path or (project_path / "scripts")  # Default to nested
         self.workflow_file_path = self.path / "workflow.yml"
         
         self.state_manager = StateManager(self.path / "workflow_state.json")
         self.snapshot_manager = SnapshotManager(self.path, self.path / ".snapshots")
-        self.script_runner = ScriptRunner(self.path)
+        self.script_runner = ScriptRunner(self.path, script_path=self.script_path)
         
         if load_workflow:
             if not self.workflow_file_path.is_file():

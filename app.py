@@ -11,7 +11,38 @@ import yaml
 import webbrowser
 from src.core import Project
 from src.logic import RunResult
-from src.git_update_manager import create_update_manager
+from src.git_update_manager import create_update_managers
+import argparse
+
+def parse_script_path_argument():
+    """
+    Parse command line arguments to get script path.
+    Uses argparse to handle Streamlit's argument passing format.
+    """
+    parser = argparse.ArgumentParser(add_help=False)  # Disable help to avoid conflicts
+    parser.add_argument('--script-path', 
+                       default='scripts', 
+                       help='Path to scripts directory')
+    
+    # Parse only known args to avoid conflicts with Streamlit args
+    try:
+        args, unknown = parser.parse_known_args()
+        script_path = Path(args.script_path)
+        
+        # Validate that script path exists
+        if not script_path.exists():
+            print(f"Warning: Script path does not exist: {script_path}")
+            print("Falling back to default 'scripts' directory")
+            script_path = Path("scripts")
+            
+        return script_path
+    except Exception as e:
+        print(f"Error parsing script path argument: {e}")
+        print("Using default 'scripts' directory")
+        return Path("scripts")
+
+# Initialize script path globally and resolve to an absolute path
+SCRIPT_PATH = parse_script_path_argument().resolve()
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -22,47 +53,31 @@ import streamlit.components.v1 as components
 TERMINAL_HEIGHT = 450  # Reduced height for better screen utilization
 
 # --- Helper Functions ---
-@st.cache_data(ttl=3600)  # Cache for 60 minutes - checks automatically + on page refresh
-def check_for_app_updates():
+@st.cache_data(ttl=3600)  # Cache for 60 minutes
+def check_for_updates(script_path: Path):
     """
-    Check for application updates using the unified Git system.
-    Automatically checks every 60 minutes + when page is refreshed.
-    User must click button to actually update.
+    Check for updates for both the application and the scripts.
+    Uses a single factory to get both managers and returns a consolidated result.
     """
+    results = {
+        'app': {'error': 'Check not performed'},
+        'scripts': {'error': 'Check not performed'}
+    }
     try:
-        app_manager = create_update_manager("application")
-        return app_manager.check_for_updates()
+        managers = create_update_managers(script_path=script_path)
+        results['app'] = managers['app'].check_for_updates()
+        results['scripts'] = managers['scripts'].check_for_updates()
     except Exception as e:
-        return {
-            'update_available': False,
-            'current_version': None,
-            'latest_version': None,
-            'error': f"Failed to check for app updates: {str(e)}"
-        }
+        results['app']['error'] = f"Failed to create update managers: {str(e)}"
+        results['scripts']['error'] = f"Failed to create update managers: {str(e)}"
+    return results
 
-@st.cache_data(ttl=3600)  # Cache for 60 minutes - checks automatically + on page refresh
-def check_for_script_updates():
-    """
-    Check for script updates using the unified Git system.
-    Automatically checks every 60 minutes + when page is refreshed.
-    User must click button to actually update.
-    """
+def update_scripts(script_path: Path):
+    """Update scripts to the latest version."""
     try:
-        script_manager = create_update_manager("scripts")
-        return script_manager.check_for_updates()
-    except Exception as e:
-        return {
-            'update_available': False,
-            'current_version': None,
-            'latest_version': None,
-            'error': f"Failed to check for script updates: {str(e)}"
-        }
-
-def update_scripts():
-    """Update scripts to latest version."""
-    try:
-        script_manager = create_update_manager("scripts")
-        return script_manager.update_to_latest()
+        # We only need the script manager for this operation
+        managers = create_update_managers(script_path=script_path)
+        return managers['scripts'].update_to_latest()
     except Exception as e:
         return {
             'success': False,
@@ -657,8 +672,7 @@ def main():
         # Add permanent update cache clearing option in sidebar
         st.subheader("Updates")
         if st.button("🔄 Manual Check for Updates", key="sidebar_check_updates"):
-            check_for_app_updates.clear()
-            check_for_script_updates.clear()
+            check_for_updates.clear()
             st.success("✅ Update cache cleared!")
             st.rerun()
         st.caption("Clears update cache and checks for new versions")
@@ -1068,53 +1082,59 @@ def main():
 
     # --- Main Content Area ---
     
-    # Check for updates and show notifications at top of main area (only when updates available)
-    app_update_info = check_for_app_updates()
-    script_update_info = check_for_script_updates()
-    
-    # Show update notifications only when updates are available
+    # Check for updates and show notifications at top of main area
+    update_info = check_for_updates(SCRIPT_PATH)
+    app_update_info = update_info.get('app', {})
+    script_update_info = update_info.get('scripts', {})
+
     updates_available = (
         app_update_info.get('update_available', False) or
         script_update_info.get('update_available', False)
     )
-    
-    if updates_available:
-        st.info("🔔 **Updates Available** - Check the expandable section below for details")
-        
-        with st.expander("📦 Available Updates", expanded=False):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**🏠 Application**")
-                if app_update_info.get('update_available'):
-                    st.warning(f"Update: `{app_update_info['current_version']}` → `{app_update_info['latest_version']}`")
-                    if st.button("📥 Download App Update", key="app_update_btn"):
-                        webbrowser.open("https://github.com/RRMalmstrom/sip_lims_workflow_manager/releases/latest")
-                        st.success("🌐 Opening GitHub releases...")
-                else:
-                    st.success("✅ Up to date")
-            
-            with col2:
-                st.markdown("**🔧 Scripts**")
-                if script_update_info.get('update_available'):
-                    st.warning(f"Update: `{script_update_info['current_version']}` → `{script_update_info['latest_version']}`")
-                    if st.button("📥 Update Scripts", key="script_update_btn"):
-                        with st.spinner("Updating scripts..."):
-                            result = update_scripts()
-                            if result['success']:
-                                st.success("✅ Scripts updated!")
-                                check_for_script_updates.clear()
-                                st.rerun()
-                            else:
-                                st.error(f"❌ Update failed: {result['error']}")
-                else:
-                    st.success("✅ Up to date")
-            
-            # Manual refresh option in expander
-            if st.button("🔄 Force Check Updates", key="manual_check"):
-                check_for_app_updates.clear()
-                check_for_script_updates.clear()
-                st.rerun()
+
+    # Always show the update status expander for persistent visibility.
+    # The title and expanded state will change based on whether updates are available.
+    expander_title = "📦 Updates Available" if updates_available else "✅ System is Up-to-Date"
+    expander_expanded = True if updates_available else False
+
+    with st.expander(expander_title, expanded=expander_expanded):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**🏠 Application**")
+            if app_update_info.get('error'):
+                st.error(f"Error: {app_update_info['error']}")
+            elif app_update_info.get('update_available'):
+                st.warning(f"Update: `{app_update_info.get('current_version', 'N/A')}` → `{app_update_info.get('latest_version', 'N/A')}`")
+                if st.button("📥 Download App Update", key="app_update_btn"):
+                    webbrowser.open("https://github.com/RRMalmstrom/sip_lims_workflow_manager/releases/latest")
+                    st.success("🌐 Opening GitHub releases...")
+            else:
+                st.success(f"✅ Up to date (v{app_update_info.get('current_version', 'N/A')})")
+
+        with col2:
+            st.markdown("**🔧 Scripts**")
+            if script_update_info.get('error'):
+                st.error(f"Error: {script_update_info['error']}")
+            elif script_update_info.get('update_available'):
+                st.warning(f"Update: `{script_update_info.get('current_version', 'N/A')}` → `{script_update_info.get('latest_version', 'N/A')}`")
+                if st.button("📥 Update Scripts", key="script_update_btn"):
+                    with st.spinner("Updating scripts..."):
+                        result = update_scripts(SCRIPT_PATH)
+                        if result.get('success'):
+                            st.success("✅ Scripts updated!")
+                            check_for_updates.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Update failed: {result.get('error', 'Unknown error')}")
+            else:
+                st.success(f"✅ Up to date (v{script_update_info.get('current_version', 'N/A')})")
+
+        # Manual refresh option in expander
+        st.markdown("---")
+        if st.button("🔄 Force Check Updates", key="manual_check"):
+            check_for_updates.clear()
+            st.rerun()
     
     if not st.session_state.project:
         st.info("Select a project folder using the 'Browse' button in the sidebar.")

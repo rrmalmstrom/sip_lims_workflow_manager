@@ -106,3 +106,5 @@ dist/
 
 # Scripts directory - managed in separate repository
 scripts/
+# Developer Environment Configuration
+config/developer.marker

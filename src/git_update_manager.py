@@ -9,6 +9,38 @@ from typing import Dict, Any, Optional, List
 import re
 import requests
 
+def detect_script_repository_config(script_path: Path) -> dict:
+    """
+    Detect which script repository configuration to use based on script path.
+    
+    Args:
+        script_path: Path to the script directory
+        
+    Returns:
+        Repository configuration dictionary
+    """
+    script_path_str = str(script_path).lower()
+    
+    # Check if this is the development repository
+    if "sip_scripts_dev" in script_path_str:
+        # This is the development repository
+        return {
+            "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git", # This should point to the dev remote
+            "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
+            "update_method": "releases",
+            "current_version_source": "git_tags",
+            "fallback_version_source": "commit_hash"
+        }
+    
+    # Default to production repository
+    return {
+        "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git", # This is the production remote
+        "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
+        "update_method": "releases",
+        "current_version_source": "git_tags",
+        "fallback_version_source": "commit_hash"
+    }
+
 class GitUpdateManager:
     """Unified update manager using Git repositories and GitHub releases."""
     
@@ -28,27 +60,16 @@ class GitUpdateManager:
         self._last_check_time = None
         
         # Repository configuration - both use Git tags for unified approach
-        self.repo_configs = {
-            "scripts": {
-                "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git",
-                "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
-                "update_method": "releases",  # Use GitHub releases
-                "current_version_source": "git_tags",  # Get current version from Git tags
-                "fallback_version_source": "commit_hash"  # Fallback if no tags exist
-            },
-            "application": {
+        if repo_type == "scripts":
+            self.config = detect_script_repository_config(self.repo_path)
+        else:
+            self.config = {
                 "repo_url": "https://github.com/rrmalmstrom/sip_lims_workflow_manager.git",
                 "api_url": "https://api.github.com/repos/rrmalmstrom/sip_lims_workflow_manager",
                 "update_method": "releases",  # Use GitHub releases
                 "current_version_source": "git_tags",  # Get current version from Git tags
                 "fallback_version_source": "version_file"  # Fallback to config/version.json if needed
             }
-        }
-        
-        if repo_type not in self.repo_configs:
-            raise ValueError(f"Unknown repo_type: {repo_type}. Must be 'scripts' or 'application'")
-        
-        self.config = self.repo_configs[repo_type]
     
     def _is_cache_valid(self, cache_key: str) -> bool:
         """Check if cached result is still valid."""
@@ -455,28 +476,37 @@ class GitUpdateManager:
         self._cache.clear()
     
 # Factory function for easy instantiation
-def create_update_manager(repo_type: str, base_path: Path = None) -> GitUpdateManager:
+def create_update_managers(base_path: Path = None, script_path: Path = None) -> Dict[str, GitUpdateManager]:
     """
-    Create an appropriate update manager instance.
+    Create update manager instances for both the application and scripts.
     
     Args:
-        repo_type: Either "scripts" or "application"
-        base_path: Base path for the application (defaults to parent of this file)
-    
+        base_path: Base path for the application (defaults to parent of this file).
+        script_path: Path to the active scripts directory.
+        
     Returns:
-        GitUpdateManager instance
+        A dictionary containing 'app' and 'scripts' GitUpdateManager instances.
     """
     if base_path is None:
         base_path = Path(__file__).parent.parent
+        
+    # 1. Create manager for the application
+    app_repo_path = base_path
+    app_manager = GitUpdateManager("application", app_repo_path.resolve())
     
-    if repo_type == "scripts":
-        repo_path = base_path / "scripts"
-    elif repo_type == "application":
-        repo_path = base_path
+    # 2. Create manager for the scripts
+    if script_path:
+        script_repo_path = script_path
     else:
-        raise ValueError(f"Unknown repo_type: {repo_type}")
+        # Default to the external production scripts directory if not provided
+        script_repo_path = base_path.parent / "sip_scripts_production"
+        
+    script_manager = GitUpdateManager("scripts", script_repo_path.resolve())
     
-    return GitUpdateManager(repo_type, repo_path)
+    return {
+        "app": app_manager,
+        "scripts": script_manager
+    }
 
 
 # Example usage
