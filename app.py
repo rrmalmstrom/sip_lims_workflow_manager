@@ -815,7 +815,7 @@ def main():
                         
                         # Load the project immediately
                         try:
-                            st.session_state.project = Project(project_path)
+                            st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                             st.success("🎉 New project loaded! Ready to start from Step 1.")
                             st.rerun()
                         except Exception as e:
@@ -836,7 +836,7 @@ def main():
                     return
                 
                 # Load the project directly
-                st.session_state.project = Project(project_path)
+                st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                 st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                 st.rerun()
             except Exception as e:
@@ -877,7 +877,7 @@ def main():
                             return
                         
                         # Load the project directly
-                        st.session_state.project = Project(project_path)
+                        st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                         st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                         st.rerun()
                     except Exception as e:
@@ -913,7 +913,7 @@ def main():
             with col1:
                 if st.button("🔧 Try Restore from Snapshots", key="try_restore"):
                     try:
-                        project_for_restore = Project(project_path, load_workflow=False)
+                        project_for_restore = Project(project_path, script_path=SCRIPT_PATH, load_workflow=False)
                         restored_any = False
                         
                         if missing_workflow_yml:
@@ -978,7 +978,7 @@ def main():
                                 return
                             
                             # Load the project and set flag for existing work pre-selection
-                            st.session_state.project = Project(project_path)
+                            st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                             st.session_state.setup_with_existing_preselected = True
                             st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
                             st.rerun()
@@ -1017,7 +1017,7 @@ def main():
                                         return
                                     
                                     # Load the project and set flag for existing work pre-selection
-                                    st.session_state.project = Project(project_path)
+                                    st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                                     st.session_state.setup_with_existing_preselected = True
                                     st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
                                     st.rerun()
@@ -1040,7 +1040,7 @@ def main():
                 with col1:
                     if st.button("🔧 Try to Restore from Snapshot"):
                         try:
-                            project_for_restore = Project(project_path, load_workflow=False)
+                            project_for_restore = Project(project_path, script_path=SCRIPT_PATH, load_workflow=False)
                             restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow.yml")
                             if restored:
                                 st.success("✅ Restored workflow.yml from snapshot!")
@@ -1066,7 +1066,7 @@ def main():
                             st.error(f"Template replacement failed: {e}")
             else:
                 try:
-                    st.session_state.project = Project(project_path)
+                    st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
                     
                     # Check for conditional steps that need user decision after loading project
                     conditional_steps = st.session_state.project.check_for_conditional_triggers()
