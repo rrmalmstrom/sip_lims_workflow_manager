@@ -77,34 +77,29 @@ steps:
     script: "make.clarity.summary.py"
     snapshot_items: ["outputs/clarity_upload.csv"]
 
-  - id: fill_clarity_lib_creation
-    name: "14. Fill Clarity Lib Creation Sheet"
-    script: "fill.clarity.lib.creation.sheet.py"
-    snapshot_items: ["clarity_files/"]
-
   - id: generate_pool_tool
-    name: "15. Generate Pool Assignment Tool"
+    name: "14. Generate Pool Assignment Tool"
     script: "generate_pool_assignment_tool.py"
     snapshot_items: ["outputs/pool_assignment_tool.xlsx"]
 
-  - id: complete_pool_prep
-    name: "16. Complete Clarity Pool Prep Sheet"
-    script: "complete.clarity.pool.prep.sheet.py"
-    snapshot_items: ["clarity_files/"]
-
-  - id: finish_pooling
-    name: "17. Pool Libraries"
-    script: "finish.pooling.libs.py"
-    snapshot_items: ["outputs/pooling/"]
+  - id: run_pooling_preparation
+    name: "15. Prepare Pools"
+    script: "run.pooling.preparation.py"
+    snapshot_items: ["clarity_files/", "outputs/pooling/"]
 
   - id: pool_fa12_analysis
-    name: "18. Analyze Pool QC"
+    name: "16. Analyze Pool QC Results"
     script: "pool.FA12.analysis.py"
     snapshot_items: ["outputs/pool_summary.csv"]
     allow_rerun: true
 
   - id: rework_pooling
-    name: "19. Rework Pools & Finalize"
+    name: "17. Rework Pools & Finalize"
     script: "rework.pooling.steps.py"
     snapshot_items: ["outputs/"]
     allow_rerun: true
+  
+  - id: transfer_pools
+    name: "18. Transfer Pools to Final Tubes"
+    script: "transfer.pools.to.final.tubes.py"
+    snapshot_items: ["outputs/"]
