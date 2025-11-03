@@ -56,3 +56,31 @@ The application features a unified update system that manages both application a
 -   **Non-Intrusive Notifications**: When updates are available, a discreet notification will appear at the top of the main content area.
 -   **Expandable Details**: You can click on the notification to expand a section with details about the available updates for both the application and the scripts.
 -   **User-Controlled Updates**: All updates require explicit user approval. Application updates are downloaded manually from GitHub, while script updates can be applied with a single click from within the application.
+
+## Fragment Analyzer (FA) Results Archiving
+
+The workflow manager includes an intelligent archiving system for Fragment Analyzer results that preserves valuable data while maintaining workflow flexibility.
+
+-   **Automatic Archiving**: When FA analysis scripts complete successfully, they automatically move FA result directories to a permanent archive location (`archived_files/`).
+-   **Persistent Archives**: Archived FA results are excluded from the undo system, ensuring that valuable experimental data is never lost during workflow operations.
+-   **Smart Directory Management**:
+    -   FA result directories are moved to organized archive folders (`first_lib_attempt_fa_results/`, `second_lib_attempt_fa_results/`, `third_lib_attempt_fa_results/`)
+    -   Empty parent directories are automatically cleaned up after archiving
+    -   Existing archives are replaced when scripts are re-run, preventing duplicate data accumulation
+-   **Undo-Safe Operation**: While the workflow can be undone to previous states, archived FA results remain safely preserved and accessible in the archive folders.
+-   **Transparent Process**: The archiving process provides clear console output showing which directories are being archived and cleaned up.
+
+### Archive Structure
+```
+archived_files/
+├── first_lib_attempt_fa_results/
+│   ├── PLATE1F 10-05-53/
+│   └── PLATE2F 12-34-56/
+├── second_lib_attempt_fa_results/
+│   ├── PLATE1F 14-22-11/
+│   └── PLATE2F 15-45-33/
+└── third_lib_attempt_fa_results/
+    └── PLATE1F 16-12-45/
+```
+
+This feature ensures that your Fragment Analyzer data is always preserved, even when using the workflow manager's powerful undo capabilities to iterate on your analysis parameters.

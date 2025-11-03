@@ -218,6 +218,13 @@ class SnapshotManager:
             '.DS_Store'
         }
         
+        # FA result archive directories to exclude (preserve during undo)
+        fa_archive_patterns = {
+            'first_lib_attempt_fa_results',
+            'second_lib_attempt_fa_results',
+            'third_lib_attempt_fa_results'
+        }
+        
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             # Collect all directories first to preserve their timestamps
             directories_to_add = []
@@ -230,6 +237,10 @@ class SnapshotManager:
                 
                 # Skip if it's a file/directory we want to exclude
                 if file_path.name in exclude_patterns:
+                    continue
+                
+                # Skip FA result archive directories to preserve them during undo
+                if any(part in fa_archive_patterns for part in file_path.parts):
                     continue
                 
                 if file_path.is_file():
@@ -287,6 +298,13 @@ class SnapshotManager:
             '__pycache__'
         }
         
+        # FA result archive directories to preserve (never delete during restore)
+        fa_archive_patterns = {
+            'first_lib_attempt_fa_results',
+            'second_lib_attempt_fa_results',
+            'third_lib_attempt_fa_results'
+        }
+        
         # Get list of files currently in project
         current_files = set()
         for file_path in self.project_path.rglob('*'):
@@ -295,6 +313,9 @@ class SnapshotManager:
                 if any(part in preserve_patterns for part in file_path.parts):
                     continue
                 if file_path.name in preserve_patterns:
+                    continue
+                # Skip FA result archive files to preserve them during restore
+                if any(part in fa_archive_patterns for part in file_path.parts):
                     continue
                 current_files.add(file_path.relative_to(self.project_path))
         
@@ -326,6 +347,10 @@ class SnapshotManager:
                 if any(part in preserve_patterns for part in dir_path.parts):
                     continue
                 if dir_path.name in preserve_patterns:
+                    continue
+                
+                # Skip FA result archive directories to preserve them during restore
+                if any(part in fa_archive_patterns for part in dir_path.parts):
                     continue
                 
                 # Skip directories that should be preserved from snapshot

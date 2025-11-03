@@ -16,6 +16,7 @@ This section is for developers who are contributing to the project. It contains 
 
 -   **[System Architecture](developer_guide/ARCHITECTURE.md)**: A high-level overview of the application's architecture, design principles, and technology stack.
 -   **[Update System](developer_guide/ARCHITECTURE.md#decoupled-repository-architecture)**: An explanation of the Git-based system for managing both application and script updates.
+-   **[FA Results Archiving](developer_guide/fa_results_archiving.md)**: Technical documentation for the Fragment Analyzer results archiving system that preserves experimental data during workflow operations.
 
 ## 🗄️ Archive
 
