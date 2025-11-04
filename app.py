@@ -136,10 +136,15 @@ def validate_workflow_yaml(file_path):
             if not isinstance(step, dict):
                 return False, f"Step {i+1} must be a dictionary"
             
-            required_fields = ['id', 'name', 'script']
+            required_fields = ['id', 'name']
             for field in required_fields:
                 if field not in step:
                     return False, f"Step {i+1} missing required field '{field}'"
+            
+            # Script field is optional for decision steps
+            step_type = step.get('type', 'script')
+            if step_type != 'decision' and 'script' not in step:
+                return False, f"Step {i+1} missing required field 'script' (required for non-decision steps)"
         
         return True, "Workflow file is valid"
         
@@ -328,8 +333,6 @@ def main():
         st.session_state.completed_script_step = None
     if 'completed_script_success' not in st.session_state:
         st.session_state.completed_script_success = None
-    if 'conditional_steps_awaiting' not in st.session_state:
-        st.session_state.conditional_steps_awaiting = []
 
 
     # --- Sidebar ---
@@ -841,12 +844,6 @@ def main():
             else:
                 try:
                     st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
-                    
-                    # Check for conditional steps that need user decision after loading project
-                    conditional_steps = st.session_state.project.check_for_conditional_triggers()
-                    if conditional_steps:
-                        st.session_state.conditional_steps_awaiting = conditional_steps
-                    
                     st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                     # Trigger rerun so sidebar re-renders with undo button if there are completed steps
                     st.rerun()
@@ -1021,10 +1018,6 @@ def main():
                     st.success(f"✅ {step_name}")
                 elif status == "skipped":
                     st.info(f"⏩ {step_name} - Completed outside workflow")
-                elif status == "skipped_conditional":
-                    st.info(f"⏭️ {step_name} - Skipped (conditional)")
-                elif status == "awaiting_decision":
-                    st.warning(f"❓ {step_name} - Awaiting decision")
                 else:
                     st.info(f"⚪ {step_name}")
 
@@ -1067,31 +1060,7 @@ def main():
                                         st.rerun()
 
             with col2:
-                # Check if this is a conditional step that should show Yes/No buttons
-                is_conditional = 'conditional' in step
-                should_show_conditional_prompt = False
-                
-                if is_conditional and project.should_show_conditional_prompt(step_id):
-                    should_show_conditional_prompt = True
-                
-                if should_show_conditional_prompt:
-                    # Show conditional prompt and Yes/No buttons
-                    conditional_config = step['conditional']
-                    prompt = conditional_config.get('prompt', 'Do you want to run this step?')
-                    
-                    st.info(f"💭 {prompt}")
-                    
-                    col_yes, col_no = st.columns(2)
-                    with col_yes:
-                        if st.button("✅ Yes", key=f"conditional_yes_{step_id}"):
-                            project.handle_conditional_decision(step_id, True)
-                            st.rerun()
-                    with col_no:
-                        if st.button("❌ No", key=f"conditional_no_{step_id}"):
-                            project.handle_conditional_decision(step_id, False)
-                            st.rerun()
-                else:
-                    # Regular Run/Re-run buttons logic
+                # Regular Run/Re-run buttons logic
                     run_button_disabled = st.session_state.running_step_id is not None
                     
                     # Show Re-run button for completed steps that allow re-runs
@@ -1120,7 +1089,7 @@ def main():
                             st.rerun()  # Force immediate rerun to show terminal
                     
                     # Show Run button for pending steps (or all steps if they're the next step)
-                    if status not in ["completed", "skipped_conditional", "awaiting_decision"]:
+                    if status not in ["completed"]:
                         is_next_step = (step_id == first_pending_step['id']) if first_pending_step else False
                         if not is_next_step:
                             run_button_disabled = True
@@ -1210,12 +1179,6 @@ def main():
                 # Use the new handle_step_result method which includes rollback logic
                 st.session_state.project.handle_step_result(step_id, result)
 
-                # Check for conditional triggers after step completion
-                if result.success:
-                    conditional_steps = st.session_state.project.check_for_conditional_triggers()
-                    if conditional_steps:
-                        # Store conditional steps that need user decision
-                        st.session_state.conditional_steps_awaiting = conditional_steps
 
                 # Preserve the terminal output for completed script display
                 st.session_state.completed_script_output = st.session_state.terminal_output
