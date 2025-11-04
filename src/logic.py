@@ -10,6 +10,7 @@ import select
 import threading
 import queue
 import time
+import re
 from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
@@ -27,14 +28,14 @@ class StateManager:
     def __init__(self, state_file_path: Path):
         self.path = state_file_path
 
-    def load(self) -> Dict[str, str]:
+    def load(self) -> Dict[str, Any]:
         """Loads the current state from the state file."""
         if not self.path.exists():
             return {}
         with self.path.open('r') as f:
             return json.load(f)
 
-    def save(self, state: Dict[str, str]):
+    def save(self, state: Dict[str, Any]):
         """Saves the given state to the state file."""
         with self.path.open('w') as f:
             json.dump(state, f, indent=2)
@@ -44,11 +45,44 @@ class StateManager:
         state = self.load()
         return state.get(step_id, "pending")
 
+    def get_completion_order(self) -> List[str]:
+        """Gets the chronological completion order of steps."""
+        state = self.load()
+        return state.get("_completion_order", [])
+
     def update_step_state(self, step_id: str, status: str):
         """Updates the status of a specific step and saves it."""
         state = self.load()
+        old_status = state.get(step_id, "pending")
         state[step_id] = status
+        
+        # Ensure completion order array exists
+        if "_completion_order" not in state:
+            state["_completion_order"] = []
+        
+        # Track completion order for chronological undo
+        if status == "completed":
+            # Always add to completion order when step becomes completed
+            # This handles both first-time completions and re-runs
+            state["_completion_order"].append(step_id)
+        elif status == "pending" and old_status == "completed":
+            # Step undone - remove from completion order (from the end, most recent first)
+            completion_order = state["_completion_order"]
+            # Remove the most recent occurrence of this step_id
+            for i in range(len(completion_order) - 1, -1, -1):
+                if completion_order[i] == step_id:
+                    completion_order.pop(i)
+                    break
+        
         self.save(state)
+
+    def get_last_completed_step_chronological(self) -> str:
+        """
+        Gets the most recently completed step based on chronological order.
+        Returns None if no steps have been completed.
+        """
+        completion_order = self.get_completion_order()
+        return completion_order[-1] if completion_order else None
 
 class SnapshotManager:
     """Manages project snapshots."""
@@ -57,30 +91,45 @@ class SnapshotManager:
         self.snapshots_dir = snapshots_dir
         self.snapshots_dir.mkdir(exist_ok=True)
 
-    def get_next_run_number(self, step_id: str) -> int:
+    def get_next_run_number(self, step_id: str, allow_rerun: bool = False) -> int:
         """
         Gets the next run number for a step by checking existing run snapshots.
-        Returns 1 for first run, 2 for second run, etc.
+        
+        Args:
+            step_id: The step identifier
+            allow_rerun: True if this step allows re-runs, False for regular steps
+            
+        For normal steps: Returns 1 if no snapshots exist, or reuses the highest
+                         existing run number if step is pending (after undo)
+        For re-run allowed steps: Always increments based on existing snapshots
         """
         existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
         if not existing_runs:
             return 1
         
-        # Extract run numbers from existing snapshots
+        # Extract run numbers from existing snapshots using regex
         run_numbers = []
+        pattern = re.compile(r'_run_(\d+)_complete$')
         for snapshot in existing_runs:
             try:
-                # Parse filename like "step_id_run_2_complete.zip"
-                parts = snapshot.stem.split('_')
-                # Find 'run' and get the number after it
-                for i, part in enumerate(parts):
-                    if part == 'run' and i + 1 < len(parts):
-                        run_numbers.append(int(parts[i + 1]))
-                        break
-            except (ValueError, IndexError):
+                match = pattern.search(snapshot.stem)
+                if match:
+                    run_numbers.append(int(match.group(1)))
+            except ValueError:
                 continue
         
-        return max(run_numbers, default=0) + 1
+        if not run_numbers:
+            return 1
+            
+        max_run = max(run_numbers)
+        
+        if allow_rerun:
+            # For re-run allowed steps, always increment
+            return max_run + 1
+        else:
+            # For regular steps, reuse the highest run number if step is pending
+            # This handles the case where a step was undone and is being run again
+            return max_run
 
     def get_latest_run_snapshot(self, step_id: str) -> str:
         """
@@ -91,19 +140,17 @@ class SnapshotManager:
         if not existing_runs:
             return None
         
-        # Find the highest run number
+        # Find the highest run number using regex
         latest_run = 0
+        pattern = re.compile(r'_run_(\d+)_complete$')
         for snapshot in existing_runs:
             try:
-                parts = snapshot.stem.split('_')
-                # Find 'run' and get the number after it
-                for i, part in enumerate(parts):
-                    if part == 'run' and i + 1 < len(parts):
-                        run_num = int(parts[i + 1])
-                        if run_num > latest_run:
-                            latest_run = run_num
-                        break
-            except (ValueError, IndexError):
+                match = pattern.search(snapshot.stem)
+                if match:
+                    run_num = int(match.group(1))
+                    if run_num > latest_run:
+                        latest_run = run_num
+            except ValueError:
                 continue
         
         return f"{step_id}_run_{latest_run}" if latest_run > 0 else None
@@ -117,18 +164,17 @@ class SnapshotManager:
         if not existing_runs:
             return 0
         
-        # Find the highest run number
+        # Find the highest run number using regex
         latest_run = 0
+        pattern = re.compile(r'_run_(\d+)_complete$')
         for snapshot in existing_runs:
             try:
-                parts = snapshot.stem.split('_')
-                for i, part in enumerate(parts):
-                    if part == 'run' and i + 1 < len(parts):
-                        run_num = int(parts[i + 1])
-                        if run_num > latest_run:
-                            latest_run = run_num
-                        break
-            except (ValueError, IndexError):
+                match = pattern.search(snapshot.stem)
+                if match:
+                    run_num = int(match.group(1))
+                    if run_num > latest_run:
+                        latest_run = run_num
+            except ValueError:
                 continue
         
         return latest_run
@@ -136,30 +182,34 @@ class SnapshotManager:
     def snapshot_exists(self, snapshot_name: str) -> bool:
         """Check if a snapshot exists."""
         zip_path = self.snapshots_dir / f"{snapshot_name}_complete.zip"
-        return zip_path.exists()
+        exists = zip_path.exists()
+        # DEBUG: Log what we're checking for step 15 issue
+        if "run_pooling_preparation" in snapshot_name:
+            print(f"DEBUG snapshot_exists: Looking for '{zip_path}', exists={exists}")
+            print(f"DEBUG snapshot_exists: snapshots_dir='{self.snapshots_dir}'")
+        return exists
 
     def get_effective_run_number(self, step_id: str) -> int:
         """
-        Gets the effective current run number by checking which 'after' snapshots exist
-        and finding the highest one that represents the current state.
+        Gets the effective current run number by checking which 'before' snapshots exist.
+        This represents how many times the step has been successfully completed.
         """
-        # Check which 'after' snapshots exist
-        after_snapshots = list(self.snapshots_dir.glob(f"{step_id}_run_*_after_complete.zip"))
-        if not after_snapshots:
+        # Check which 'before' snapshots exist
+        before_snapshots = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
+        if not before_snapshots:
             return 0
         
-        # Find the highest run number with an 'after' snapshot
+        # Find the highest run number with a 'before' snapshot using regex
         highest_run = 0
-        for snapshot in after_snapshots:
+        pattern = re.compile(r'_run_(\d+)_complete$')
+        for snapshot in before_snapshots:
             try:
-                parts = snapshot.stem.split('_')
-                for i, part in enumerate(parts):
-                    if part == 'run' and i + 1 < len(parts):
-                        run_num = int(parts[i + 1])
-                        if run_num > highest_run:
-                            highest_run = run_num
-                        break
-            except (ValueError, IndexError):
+                match = pattern.search(snapshot.stem)
+                if match:
+                    run_num = int(match.group(1))
+                    if run_num > highest_run:
+                        highest_run = run_num
+            except ValueError:
                 continue
         
         return highest_run
@@ -169,20 +219,34 @@ class SnapshotManager:
         Remove all run snapshots from the specified run number onwards.
         This is used to track which runs have been undone.
         """
-        # Remove 'after' snapshots from this run onwards
-        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_after_complete.zip"))
+        # Remove 'before' snapshots from this run onwards
+        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
+        
+        pattern = re.compile(r'_run_(\d+)_complete$')
+        for snapshot in snapshots_to_remove:
+            try:
+                match = pattern.search(snapshot.stem)
+                if match:
+                    run_num = int(match.group(1))
+                    if run_num >= run_number:
+                        snapshot.unlink()
+                        print(f"UNDO: Removed snapshot {snapshot.name}")
+            except ValueError:
+                continue
+
+    def remove_all_run_snapshots(self, step_id: str):
+        """
+        Remove all run snapshots for a step.
+        This is used when completely undoing a step.
+        """
+        # Remove all 'before' snapshots for this step
+        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
         
         for snapshot in snapshots_to_remove:
             try:
-                parts = snapshot.stem.split('_')
-                for i, part in enumerate(parts):
-                    if part == 'run' and i + 1 < len(parts):
-                        run_num = int(parts[i + 1])
-                        if run_num >= run_number:
-                            snapshot.unlink()
-                            print(f"UNDO: Removed snapshot {snapshot.name}")
-                        break
-            except (ValueError, IndexError):
+                snapshot.unlink()
+                print(f"UNDO: Removed snapshot {snapshot.name}")
+            except OSError:
                 continue
 
     def take(self, step_id: str, items: List[str]):

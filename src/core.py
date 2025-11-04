@@ -234,7 +234,8 @@ class Project:
         snapshot_items = step.get("snapshot_items", [])
 
         # Get the next run number for this step
-        run_number = self.snapshot_manager.get_next_run_number(step_id)
+        allow_rerun = step.get('allow_rerun', False)
+        run_number = self.snapshot_manager.get_next_run_number(step_id, allow_rerun)
         
         # Always take a snapshot before running (for both first runs and re-runs)
         if is_first_run:
@@ -298,10 +299,8 @@ class Project:
         if actual_success:
             self.update_state(step_id, "completed")
             
-            # Take an "after" snapshot when step completes successfully for granular undo
-            run_number = self.snapshot_manager.get_current_run_number(step_id)
-            if run_number > 0:
-                self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}_after")
+            # Note: "after" snapshots removed for simplified undo system
+            # Only "before" snapshots are now used for undo functionality
         else:
             # If this was the first run and it failed, restore the snapshot
             if is_first_run:
@@ -328,7 +327,10 @@ class Project:
                     before_snapshot = f"{step_id}_run_{run_number}"
                     if self.snapshot_manager.snapshot_exists(before_snapshot):
                         self.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) for step '{step_id}'"
+                        # CRITICAL FIX: Remove the "before" snapshot after automatic rollback
+                        # This prevents corrupting the run counter for future runs
+                        self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
+                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) for step '{step_id}' and cleaned up snapshot"
                     else:
                         # Fallback to legacy complete snapshot if granular doesn't exist
                         if self.snapshot_manager.snapshot_exists(step_id):
@@ -388,7 +390,10 @@ class Project:
         try:
             if self.snapshot_manager.snapshot_exists(before_snapshot):
                 self.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                print(f"TERMINATE: Restored project to state before step {step_id} (run {run_number})")
+                # CRITICAL FIX: Remove the "before" snapshot after termination rollback
+                # This prevents corrupting the run counter for future runs
+                self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
+                print(f"TERMINATE: Restored project to state before step {step_id} (run {run_number}) and cleaned up snapshot")
             else:
                 # Fallback to legacy snapshot if granular doesn't exist
                 if self.snapshot_manager.snapshot_exists(step_id):
