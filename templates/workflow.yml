@@ -3,12 +3,10 @@ steps:
   - id: setup_plates
     name: "1. Setup Plates & DB"
     script: "setup.isotope.and.FA.plates.py"
-    snapshot_items: ["Project_Database.db", "outputs/"]
 
   - id: ultracentrifuge_transfer
     name: "2. Create Ultracentrifuge Tubes"
     script: "ultracentrifuge.transfer.py"
-    snapshot_items: ["Project_Database.db", "outputs/"]
     allow_rerun: true
     inputs:
       - type: file
@@ -18,87 +16,82 @@ steps:
   - id: plot_dna_conc
     name: "3. Plot DNA/Density (QC)"
     script: "plot_DNAconc_vs_Density.py"
-    snapshot_items: ["outputs/plots/", "outputs/summary.csv"]
     allow_rerun: true
 
-  - id: calc_sequin_addition
-    name: "4. Calculate Sequin Addition"
-    script: "calcSequinAddition.py"
-    snapshot_items: ["outputs/hamilton_sequin_transfers.csv"]
+  - id: create_db_sequins
+    name: "4. Create DB and Add Sequins"
+    script: "create.db.and.add.sequins.py"
+    allow_rerun: true
 
-  - id: merge_sip_fractions
-    name: "5. Merge Fraction Files"
-    script: "merge.SIP.fraction.files.loop.py"
-    snapshot_items: ["outputs/merged_fractions.csv"]
+  - id: select_fractions_cleanup
+    name: "5. Select Fractions for Cleanup"
+    script: "select.fractions.for.clean.up.py"
+    allow_rerun: true
 
-  - id: make_library_creation_files
-    name: "6. Create Library Files"
-    script: "make.library.creation.files.96.py"
-    snapshot_items: ["outputs/FA_upload.txt", "outputs/Echo_transfer.csv", "outputs/Echo_barcode.txt", "outputs/Lib.info.csv"]
+  - id: generate_cscl_cleanup
+    name: "6. Generate CsCl Cleanup Files"
+    script: "generate.CsCl.cleanup.files.py"
+    allow_rerun: true
+
+  - id: process_post_dna_quant
+    name: "7. Process Post-DNA Quantification"
+    script: "process.post.DNA.quantification.py"
+    allow_rerun: true
+
+  - id: make_library_condensed
+    name: "8. Create Library Files (Condensed Plates)"
+    script: "make.library.creation.files.condensed.plates.py"
 
   - id: first_fa_analysis
-    name: "7. Analyze Library QC (1st)"
+    name: "9. Analyze Library QC (1st)"
     script: "first.FA.output.analysis.py"
-    snapshot_items: ["outputs/Lib.info.csv"]
 
   - id: rework_first_attempt
-    name: "8. Second Attempt Library Creation"
+    name: "10. Second Attempt Library Creation"
     script: "rework.first.attempt.py"
-    snapshot_items: ["outputs/"]
 
   - id: second_fa_analysis
-    name: "9. Analyze Library QC (2nd)"
+    name: "11. Analyze Library QC (2nd)"
     script: "second.FA.output.analysis.py"
-    snapshot_items: ["outputs/Lib.info.csv"]
 
   - id: third_attempt_decision
     name: "Decision: Third Library Creation Attempt"
     script: "decision_third_attempt.py"
-    snapshot_items: ["workflow_state.json"]
 
   - id: rework_second_attempt
-    name: "10. Third Attempt Library Creation"
+    name: "12. Third Attempt Library Creation"
     script: "emergency.third.attempt.rework.py"
-    snapshot_items: ["outputs/"]
 
   - id: third_fa_analysis
-    name: "11. Analyze Library QC (3rd)"
+    name: "13. Analyze Library QC (3rd)"
     script: "emergency.third.FA.output.analysis.py"
-    snapshot_items: ["outputs/Lib.info.csv"]
 
   - id: conclude_fa_analysis
-    name: "12. Conclude FA analysis"
+    name: "14. Conclude FA analysis"
     script: "conclude.all.fa.analysis.py"
-    snapshot_items: ["outputs/Lib.info.csv"]
 
   - id: make_clarity_summary
-    name: "13. Make Clarity Summary"
+    name: "15. Make Clarity Summary"
     script: "make.clarity.summary.py"
-    snapshot_items: ["outputs/clarity_upload.csv"]
 
   - id: generate_pool_tool
-    name: "14. Generate Pool Assignment Tool"
+    name: "16. Generate Pool Assignment Tool"
     script: "generate_pool_assignment_tool.py"
-    snapshot_items: ["outputs/pool_assignment_tool.xlsx"]
 
   - id: run_pooling_preparation
-    name: "15. Prepare Pools"
+    name: "17. Prepare Pools"
     script: "run.pooling.preparation.py"
-    snapshot_items: ["clarity_files/", "outputs/pooling/"]
 
   - id: pool_fa12_analysis
-    name: "16. Analyze Pool QC Results"
+    name: "18. Analyze Pool QC Results"
     script: "pool.FA12.analysis.py"
-    snapshot_items: ["outputs/pool_summary.csv"]
     allow_rerun: true
 
   - id: rework_pooling
-    name: "17. Rework Pools & Finalize"
+    name: "19. Rework Pools & Finalize"
     script: "rework.pooling.steps.py"
-    snapshot_items: ["outputs/"]
     allow_rerun: true
   
   - id: transfer_pools
-    name: "18. Transfer Pools to Final Tubes"
+    name: "20. Transfer Pools to Final Tubes"
     script: "transfer.pools.to.final.tubes.py"
-    snapshot_items: ["outputs/"]

@@ -34,8 +34,11 @@ class Project:
     """
     def __init__(self, project_path: Path, script_path: Path = None, load_workflow: bool = True):
         self.path = project_path
-        # Roo-Fix: The script_path is now correctly passed from the app, not defaulted here.
-        self.script_path = script_path
+        # If no script_path provided, default to project_path/scripts
+        if script_path is None:
+            self.script_path = self.path / "scripts"
+        else:
+            self.script_path = script_path
         self.workflow_file_path = self.path / "workflow.yml"
         
         self.state_manager = StateManager(self.path / "workflow_state.json")

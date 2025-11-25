@@ -109,6 +109,15 @@ def format_last_check_time(last_check):
         days = int(diff / 86400)
         return f"{days} day{'s' if days != 1 else ''} ago"
 
+def get_script_run_count(project, step_id):
+    """
+    Count how many times a script has been completed.
+    This count automatically adjusts when steps are undone since it reads
+    from the current _completion_order array in workflow_state.json.
+    """
+    completion_order = project.state_manager.get_completion_order()
+    return completion_order.count(step_id)
+
 def validate_workflow_yaml(file_path):
     """
     Validates a workflow.yml file for basic syntax and structure.
@@ -1013,11 +1022,25 @@ def main():
 
             with col1:
                 if is_running_this_step:
-                    st.info(f"⏳ {step_name} (Running...)")
+                    st.warning(f"⏳ {step_name} (Running...)")  # Changed to warning for visibility
                 elif status == "completed":
-                    st.success(f"✅ {step_name}")
+                    if step.get('allow_rerun', False):
+                        run_count = get_script_run_count(project, step_id)
+                        # Light green styling for re-runnable completed steps
+                        st.markdown(f"""
+                        <div style="background-color: #d4edda; padding: 10px; border-radius: 5px; border-left: 5px solid #28a745;">
+                            🔄 {step_name} (Run #{run_count})
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.success(f"✅ {step_name}")  # Standard green for non-rerunnable
                 elif status == "skipped":
-                    st.info(f"⏩ {step_name} - Completed outside workflow")
+                    # Gray styling for skipped steps
+                    st.markdown(f"""
+                    <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 5px solid #6c757d; color: #6c757d;">
+                        ⏩ {step_name} - Completed outside workflow
+                    </div>
+                    """, unsafe_allow_html=True)
                 else:
                     st.info(f"⚪ {step_name}")
 
@@ -1077,7 +1100,11 @@ def main():
                         if not project.has_workflow_state():
                             rerun_button_disabled = True
                         
-                        if st.button("Re-run", key=f"rerun_{step_id}", disabled=rerun_button_disabled):
+                        # Enhanced button text with run count
+                        run_count = get_script_run_count(project, step_id)
+                        button_text = f"Re-run (#{run_count + 1})"
+                        
+                        if st.button(button_text, key=f"rerun_{step_id}", disabled=rerun_button_disabled):
                             # Clear the rerun flag so inputs get cleared again next time
                             if f"rerun_inputs_cleared_{step_id}" in st.session_state:
                                 del st.session_state[f"rerun_inputs_cleared_{step_id}"]
