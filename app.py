@@ -9,25 +9,38 @@ import time
 import queue
 import yaml
 import webbrowser
+import os
 from src.core import Project
 from src.logic import RunResult
 from src.git_update_manager import create_update_managers
+from utils.docker_validation import validate_docker_environment, display_environment_status
 import argparse
 
 def parse_script_path_argument():
     """
     Parse command line arguments to get script path.
     Uses argparse to handle Streamlit's argument passing format.
+    Docker-aware: automatically uses /workflow-scripts in Docker environment.
     """
     parser = argparse.ArgumentParser(add_help=False)  # Disable help to avoid conflicts
-    parser.add_argument('--script-path', 
-                       default='scripts', 
+    parser.add_argument('--script-path',
+                       default='scripts',
                        help='Path to scripts directory')
     
     # Parse only known args to avoid conflicts with Streamlit args
     try:
         args, unknown = parser.parse_known_args()
         script_path = Path(args.script_path)
+        
+        # Docker-aware script path detection
+        if os.path.exists("/.dockerenv"):  # Running in Docker
+            docker_script_path = Path("/workflow-scripts")
+            if docker_script_path.exists():
+                print(f"Docker mode: Using mounted scripts from {docker_script_path}")
+                return docker_script_path
+            else:
+                print(f"Warning: Docker detected but /workflow-scripts not mounted")
+                print("Falling back to default script path")
         
         # Validate that script path exists
         if not script_path.exists():
@@ -205,17 +218,157 @@ def handle_terminal_input_change():
                 st.session_state.terminal_input_box = ""
                 st.session_state.scroll_to_bottom = True
 
+def create_inline_file_browser(input_key: str, start_path: str = None):
+    """
+    Create an inline file browser widget for Docker-compatible file selection.
+    Based on the legacy approach that worked in production.
+    
+    Args:
+        input_key: Unique key for this file browser instance
+        start_path: Starting directory path (defaults to /data in Docker, . otherwise)
+    
+    Returns:
+        str: Selected file path or None if no selection made
+    """
+    if start_path is None:
+        start_path = "/data" if os.path.exists("/data") else "."
+    
+    # Initialize session state for this browser instance
+    browser_key = f"browser_{input_key}"
+    current_path_key = f"current_path_{input_key}"
+    selected_file_key = f"selected_file_{input_key}"
+    
+    if current_path_key not in st.session_state:
+        st.session_state[current_path_key] = Path(start_path)
+    if selected_file_key not in st.session_state:
+        st.session_state[selected_file_key] = None
+    
+    current_path = st.session_state[current_path_key]
+    
+    # File browser container
+    with st.container():
+        st.markdown("**📁 File Browser**")
+        
+        # Current path display
+        st.text(f"📍 Current: {current_path}")
+        
+        # Navigation buttons
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            if st.button("⬆️ Up", key=f"up_{input_key}"):
+                parent = current_path.parent
+                if parent != current_path:  # Prevent going above root
+                    st.session_state[current_path_key] = parent
+                    st.rerun()
+        
+        with col2:
+            if st.button("🏠 Home", key=f"home_{input_key}"):
+                home_path = "/data" if os.path.exists("/data") else Path.home()
+                st.session_state[current_path_key] = Path(home_path)
+                st.rerun()
+        
+        # Directory contents
+        try:
+            items = []
+            if current_path.exists() and current_path.is_dir():
+                # Get directories first, then files
+                dirs = [item for item in current_path.iterdir() if item.is_dir() and not item.name.startswith('.')]
+                files = [item for item in current_path.iterdir() if item.is_file() and not item.name.startswith('.')]
+                
+                # Sort both lists
+                dirs.sort(key=lambda x: x.name.lower())
+                files.sort(key=lambda x: x.name.lower())
+                
+                items = dirs + files
+            
+            if items:
+                # Create a scrollable area for file listing
+                with st.container():
+                    st.markdown("**Contents:**")
+                    
+                    # Display items in a more compact format
+                    for item in items[:50]:  # Limit to first 50 items for performance
+                        col_icon, col_name, col_action = st.columns([1, 4, 1])
+                        
+                        with col_icon:
+                            if item.is_dir():
+                                st.text("📁")
+                            else:
+                                st.text("📄")
+                        
+                        with col_name:
+                            st.text(item.name)
+                        
+                        with col_action:
+                            if item.is_dir():
+                                if st.button("Open", key=f"open_{input_key}_{item.name}"):
+                                    st.session_state[current_path_key] = item
+                                    st.rerun()
+                            else:
+                                if st.button("Select", key=f"select_{input_key}_{item.name}"):
+                                    st.session_state[selected_file_key] = str(item)
+                                    st.success(f"✅ Selected: {item.name}")
+                                    st.rerun()
+                    
+                    if len(items) > 50:
+                        st.info(f"Showing first 50 of {len(items)} items")
+            else:
+                st.info("📂 Empty directory")
+                
+        except PermissionError:
+            st.error("❌ Permission denied accessing this directory")
+        except Exception as e:
+            st.error(f"❌ Error reading directory: {e}")
+    
+    # Return selected file if any
+    return st.session_state[selected_file_key]
+
 def select_file_via_subprocess():
-    python_executable = sys.executable
-    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
-    process = subprocess.run([python_executable, str(script_path), 'file'], capture_output=True, text=True)
-    return process.stdout.strip()
+    """
+    Legacy function maintained for compatibility.
+    Now redirects to inline file browser.
+    """
+    # This is now just a placeholder - the inline browser is used directly in the UI
+    return None
 
 def select_folder_via_subprocess():
-    python_executable = sys.executable
-    script_path = Path(__file__).parent / "utils" / "file_dialog.py"
-    process = subprocess.run([python_executable, str(script_path)], capture_output=True, text=True)
-    return process.stdout.strip()
+    """
+    Docker-compatible folder selection using dedicated browser page.
+    Opens file browser in new tab and returns selected folder path.
+    """
+    import os
+    import urllib.parse
+    
+    # Use /data as the starting path in Docker environment
+    start_path = "/data" if os.path.exists("/data") else "."
+    
+    # Create unique key for this folder selection
+    return_key = f"folder_selection_{int(time.time() * 1000)}"
+    
+    # Build URL for file browser page
+    base_url = "📁_File_Browser"
+    params = {
+        "mode": "folder",
+        "start_path": start_path,
+        "title": "Select Project Folder",
+        "return_key": return_key
+    }
+    query_string = urllib.parse.urlencode(params)
+    file_browser_url = f"{base_url}?{query_string}"
+    
+    # Show link to open file browser
+    st.markdown(f"**📁 [Open File Browser in New Tab]({file_browser_url})**")
+    st.info("👆 Click the link above to open the file browser in a new tab. After selecting a folder, return to this tab.")
+    
+    # Check if result is available
+    if return_key in st.session_state and st.session_state[return_key]:
+        selected_folder = st.session_state[return_key]
+        # Clear the result to prevent reuse
+        del st.session_state[return_key]
+        return str(selected_folder)
+    
+    return None
 
 def perform_undo(project):
     """
@@ -313,6 +466,33 @@ def start_script_thread(project, step_id, user_inputs):
 def main():
     st.title("🧪 SIP LIMS Workflow Manager")
 
+    # --- Docker Environment Validation ---
+    # Validate Docker environment on startup if running in container
+    if not validate_docker_environment():
+        st.error("❌ **Docker Environment Validation Failed**")
+        st.info("Please check the error messages above and resolve the issues before proceeding.")
+        st.stop()
+
+    # --- Docker Auto-Detection and Project Loading ---
+    # In Docker mode, automatically load project from /data if available
+    def detect_and_load_docker_project():
+        """Auto-detect and load project in Docker environment."""
+        import os
+        from pathlib import Path
+        
+        # Check if running in Docker with mounted /data volume
+        if os.path.exists("/data") and os.path.ismount("/data"):
+            data_path = Path("/data")
+            
+            # Auto-load the project from /data regardless of contents
+            # Let the existing project loading logic handle all scenarios
+            if 'project_path' not in st.session_state or st.session_state.project_path != data_path:
+                st.session_state.project_path = data_path
+                st.session_state.project = None  # Force reload
+                st.info(f"🐳 **Docker Mode**: Auto-loaded project from mounted volume: `{data_path}`")
+            return True
+        return False
+
     # --- State Initialization ---
     if 'project' not in st.session_state:
         st.session_state.project = None
@@ -343,18 +523,25 @@ def main():
     if 'completed_script_success' not in st.session_state:
         st.session_state.completed_script_success = None
 
+    # --- Docker Auto-Detection ---
+    # Try to auto-detect and load Docker project
+    is_docker_mode = detect_and_load_docker_project()
 
     # --- Sidebar ---
     with st.sidebar:
         st.header("Controls")
         
         st.subheader("Project")
-        if st.button("Browse for Project Folder", key="browse_button"):
-            folder = select_folder_via_subprocess()
-            if folder:
-                st.session_state.project_path = Path(folder)
-                st.session_state.project = None
-                st.rerun()
+        
+        # Only show Browse button if NOT in Docker mode
+        if not is_docker_mode:
+            st.info("💡 **Native Mode**: Use file system to select project folder")
+        else:
+            # In Docker mode, show current project path
+            if st.session_state.project_path:
+                st.info(f"🐳 **Docker Project**: `{st.session_state.project_path}`")
+            else:
+                st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
         
         # Quick Start functionality - only show for projects without workflow state
         if st.session_state.project and not st.session_state.project.has_workflow_state():
@@ -459,6 +646,11 @@ def main():
             st.success("✅ Update cache cleared!")
             st.rerun()
         st.caption("Clears update cache and checks for new versions")
+        
+        # Docker Environment Status (for debugging)
+        st.subheader("Environment")
+        if st.button("🐳 Show Docker Status", key="docker_status_button"):
+            display_environment_status()
         
         # Shutdown functionality
         st.subheader("Application")
@@ -1066,20 +1258,42 @@ def main():
                     for i, input_def in enumerate(step['inputs']):
                         input_key = f"{step_id}_input_{i}"
                         if input_def['type'] == 'file':
-                            col_a, col_b = st.columns([3, 1])
-                            with col_a:
-                                current_value = st.session_state.user_inputs[step_id].get(input_key, "")
-                                
-                                file_path = st.text_input(
-                                    label=input_def['name'],
-                                    value=current_value,
-                                    key=f"text_{input_key}_{current_value}"  # Force widget recreation when value changes
-                                )
-                            with col_b:
-                                if st.button("Browse", key=f"browse_{input_key}"):
-                                    selected_file = select_file_via_subprocess()
+                            # Show current selection if any
+                            current_value = st.session_state.user_inputs[step_id].get(input_key, "")
+                            if current_value:
+                                st.success(f"✅ **{input_def['name']}**: `{Path(current_value).name}`")
+                                st.text(f"📍 Full path: {current_value}")
+                                col_clear, col_change = st.columns([1, 1])
+                                with col_clear:
+                                    if st.button("Clear Selection", key=f"clear_{input_key}"):
+                                        st.session_state.user_inputs[step_id][input_key] = ""
+                                        st.rerun()
+                                with col_change:
+                                    show_browser = st.button("Change File", key=f"change_{input_key}")
+                            else:
+                                st.info(f"📄 **{input_def['name']}**: No file selected")
+                                show_browser = st.button("Select File", key=f"select_{input_key}")
+                            
+                            # Show inline file browser when requested
+                            browser_state_key = f"show_browser_{input_key}"
+                            if browser_state_key not in st.session_state:
+                                st.session_state[browser_state_key] = False
+                            
+                            if 'show_browser' in locals() and show_browser:
+                                st.session_state[browser_state_key] = True
+                                st.rerun()
+                            
+                            if st.session_state[browser_state_key]:
+                                with st.expander("📁 File Browser", expanded=True):
+                                    selected_file = create_inline_file_browser(input_key)
                                     if selected_file:
                                         st.session_state.user_inputs[step_id][input_key] = selected_file
+                                        st.session_state[browser_state_key] = False
+                                        st.success(f"✅ File selected: {Path(selected_file).name}")
+                                        st.rerun()
+                                    
+                                    if st.button("Cancel", key=f"cancel_{input_key}"):
+                                        st.session_state[browser_state_key] = False
                                         st.rerun()
 
             with col2:

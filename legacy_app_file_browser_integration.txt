@@ -1,0 +1,89 @@
+from src.core import Project
+from src.logic import RunResult
+from src.git_update_manager import create_update_manager
+# SSHKeyManager is no longer used with the public repository model
+# from src.ssh_key_manager import SSHKeyManager
+from utils.streamlit_file_browser import st_file_browser
+import os
+
+# --- Page Configuration ---
+st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
+
+import streamlit.components.v1 as components
+
+# --- Terminal Configuration ---
+TERMINAL_HEIGHT = 450  # Reduced height for better screen utilization
+
+# --- Helper Functions ---
+@st.cache_data(ttl=3600)  # Cache for 60 minutes - checks automatically + on page refresh
+def check_for_app_updates():
+    """
+    Check for application updates using the unified Git system.
+    Automatically checks every 60 minutes + when page is refreshed.
+    User must click button to actually update.
+    """
+    try:
+        app_manager = create_update_manager("application")
+--
+                st.session_state.last_input_time = current_time
+                st.session_state.terminal_input_box = ""
+                st.session_state.scroll_to_bottom = True
+
+def select_file_in_app(key):
+    st.session_state[f"file_browser_visible_{key}"] = not st.session_state.get(f"file_browser_visible_{key}", False)
+
+def perform_undo(project):
+    """
+    Performs undo operation by reverting to the previous completed step state.
+    Uses the complete snapshot system for comprehensive rollback.
+    Enhanced to handle conditional workflow states properly.
+    """
+    # Check if there are any conditional steps in "awaiting_decision" state
+    # For these, we should undo the trigger step instead of the conditional step
+    for step in project.workflow.steps:
+        step_id = step['id']
+        current_state = project.get_state(step_id)
+        
+        # Check if this is a conditional step in awaiting_decision state
+        if (('conditional' in step) and (current_state == 'awaiting_decision')):
+            conditional_config = step.get('conditional', {})
+            trigger_script = conditional_config.get('trigger_script')
+            
+            if trigger_script:
+                # Find the step that runs this trigger script
+--
+                                    key=f"text_{input_key}",
+                                    disabled=True
+                                )
+                                st.button("Browse", key=f"browse_{input_key}", on_click=select_file_in_app, args=(input_key,))
+
+                                if st.session_state.get(f"file_browser_visible_{input_key}", False):
+                                    with st.expander("File Browser", expanded=True):
+                                        selected_file = st_file_browser(
+                                            project.path, key=f"browser_{input_key}"
+                                        )
+                                        if selected_file:
+                                            relative_path = str(selected_file.relative_to(project.path))
+                                            print(f"DEBUG: File selected: '{selected_file}'. Storing relative path: '{relative_path}' for input key '{input_key}'")
+                                            st.session_state.user_inputs[step_id][input_key] = relative_path
+                                            st.session_state[f"file_browser_visible_{input_key}"] = False
+                                            st.rerun()
+
+            with col2:
+                # Check if this is a conditional step that should show Yes/No buttons
+                is_conditional = 'conditional' in step
+                should_show_conditional_prompt = False
+                
+                if is_conditional and project.should_show_conditional_prompt(step_id):
+                    should_show_conditional_prompt = True
+                
+                if should_show_conditional_prompt:
+                    # Show conditional prompt and Yes/No buttons
+                    conditional_config = step['conditional']
+                    prompt = conditional_config.get('prompt', 'Do you want to run this step?')
+                    
+                    st.info(f"💭 {prompt}")
+                    
+                    col_yes, col_no = st.columns(2)
+                    with col_yes:
+                        if st.button("✅ Yes", key=f"conditional_yes_{step_id}"):

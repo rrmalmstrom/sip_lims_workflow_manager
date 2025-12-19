@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  sip-lims-workflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USER_ID: ${USER_ID:-1000}
+        GROUP_ID: ${GROUP_ID:-1000}
+        APP_VERSION: ${APP_VERSION:-0.0.0-local}
+    
+    image: sip-lims-workflow-manager:latest
+    
+    container_name: sip-lims-workflow-manager
+    
+    ports:
+      - "8501:8501"
+    
+    volumes:
+      # Project data volume - user's project directory
+      - type: bind
+        source: ${PROJECT_PATH:-.}
+        target: /data
+        bind:
+          create_host_path: true
+      
+      # Scripts volume - centralized workflow scripts repository
+      - type: bind
+        source: ${SCRIPTS_PATH:-~/.sip_lims_workflow_manager/scripts}
+        target: /workflow-scripts
+        bind:
+          create_host_path: true
+    
+    working_dir: /data
+    
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+    
+    # Health check to ensure container is ready
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits for scientific computing workloads
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Network configuration
+    networks:
+      - sip-lims-network
+
+networks:
+  sip-lims-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
