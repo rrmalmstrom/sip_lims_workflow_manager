@@ -600,18 +600,13 @@ def main():
             st.rerun()
         st.caption("Clears update cache and checks for new versions")
         
-        # Docker Environment Status (for debugging)
-        st.subheader("Environment")
-        if st.button("🐳 Show Docker Status", key="docker_status_button"):
-            display_environment_status()
-        
         # Shutdown functionality
         st.subheader("Application")
-        if st.button("🛑 Shutdown App", key="shutdown_app", type="secondary"):
+        if st.button("Shut Down Workflow Manager", key="shutdown_app", type="primary", help="Stop the Docker container and exit the application"):
             st.warning("⚠️ Shutting down the application...")
-            st.info("💡 Terminating Streamlit server...")
+            st.info("💡 Terminating container...")
             
-            # Try multiple methods to terminate the process
+            # Check if running in Docker environment
             try:
                 import os
                 import signal
@@ -619,96 +614,81 @@ def main():
                 import platform
                 
                 def delayed_shutdown():
-                    """Shutdown the process after a short delay to allow the response to be sent."""
+                    """Shutdown the application after a short delay to allow the response to be sent."""
                     time.sleep(1)  # Give time for the response to be sent to browser
                     
-                    # Try psutil first if available (most reliable cross-platform method)
-                    try:
-                        import psutil
-                        current_process = psutil.Process(os.getpid())
-                        
-                        # Find all streamlit processes
-                        streamlit_processes = []
-                        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                            try:
-                                if proc.info['cmdline'] and any('streamlit' in str(arg).lower() for arg in proc.info['cmdline']):
-                                    streamlit_processes.append(proc)
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                        
-                        # Terminate all streamlit processes gracefully
-                        for proc in streamlit_processes:
-                            try:
-                                proc.terminate()
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                        
-                        # Wait for processes to terminate
-                        gone, alive = psutil.wait_procs(streamlit_processes, timeout=3)
-                        
-                        # Force kill any remaining processes
-                        for proc in alive:
-                            try:
-                                proc.kill()
-                            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                continue
-                        
-                        return  # Success with psutil
-                        
-                    except ImportError:
-                        # psutil not available, fall back to platform-specific methods
-                        pass
-                    except Exception as e:
-                        # psutil failed, fall back to platform-specific methods
-                        pass
-                    
-                    # Fallback methods using standard library
-                    try:
-                        system = platform.system().lower()
-                        
-                        if system in ['linux', 'darwin']:  # macOS/Linux
-                            # Method 1: Try pkill first (Unix-like systems)
-                            subprocess.run(["pkill", "-f", "streamlit"], check=False)
-                            time.sleep(0.5)
+                    # Check if we're running in Docker
+                    if os.path.exists("/.dockerenv"):
+                        # Running in Docker - send SIGTERM to PID 1 (the container's main process)
+                        # This will cause the container to shut down gracefully
+                        try:
+                            # Send SIGTERM to the container's main process (PID 1)
+                            # This is the proper way to shut down a Docker container from inside
+                            os.kill(1, signal.SIGTERM)
+                            print("Sent SIGTERM to container main process (PID 1)")
+                        except Exception as e:
+                            print(f"Error sending SIGTERM to PID 1: {e}")
+                            # Fallback: exit the current process
+                            os._exit(0)
+                    else:
+                        # Not running in Docker - use original shutdown logic
+                        try:
+                            import psutil
+                            current_process = psutil.Process(os.getpid())
                             
-                            # Method 2: Kill current process with SIGTERM
-                            os.kill(os.getpid(), signal.SIGTERM)
-                            time.sleep(0.5)
+                            # Find all streamlit processes
+                            streamlit_processes = []
+                            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                                try:
+                                    if proc.info['cmdline'] and any('streamlit' in str(arg).lower() for arg in proc.info['cmdline']):
+                                        streamlit_processes.append(proc)
+                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                    continue
                             
-                            # Method 3: Force kill with SIGKILL
-                            os.kill(os.getpid(), signal.SIGKILL)
+                            # Terminate all streamlit processes gracefully
+                            for proc in streamlit_processes:
+                                try:
+                                    proc.terminate()
+                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                    continue
                             
-                        elif system == 'windows':  # Windows
-                            # Method 1: Try taskkill for streamlit processes
-                            subprocess.run(["taskkill", "/f", "/im", "python.exe", "/fi", "COMMANDLINE eq *streamlit*"], check=False)
-                            time.sleep(0.5)
+                            # Wait for processes to terminate
+                            gone, alive = psutil.wait_procs(streamlit_processes, timeout=3)
                             
-                            # Method 2: Kill current process (Windows doesn't have SIGKILL)
-                            os.kill(os.getpid(), signal.SIGTERM)
-                        
-                    except:
-                        pass  # Ignore errors, try next method
-                    
-                    # Last resort: force exit (works on all platforms)
-                    try:
-                        os._exit(0)
-                    except:
-                        pass
+                            # Force kill any remaining processes
+                            for proc in alive:
+                                try:
+                                    proc.kill()
+                                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                    continue
+                            
+                        except ImportError:
+                            # psutil not available, fall back to platform-specific methods
+                            system = platform.system().lower()
+                            
+                            if system in ['linux', 'darwin']:  # macOS/Linux
+                                subprocess.run(["pkill", "-f", "streamlit"], check=False)
+                                time.sleep(0.5)
+                                os.kill(os.getpid(), signal.SIGTERM)
+                            elif system == 'windows':  # Windows
+                                subprocess.run(["taskkill", "/f", "/im", "python.exe", "/fi", "COMMANDLINE eq *streamlit*"], check=False)
+                                time.sleep(0.5)
+                                os.kill(os.getpid(), signal.SIGTERM)
+                        except Exception:
+                            # Last resort: force exit
+                            os._exit(0)
                 
                 # Start shutdown in background thread
                 shutdown_thread = threading.Thread(target=delayed_shutdown, daemon=True)
                 shutdown_thread.start()
                 
-                st.success("✅ Server shutdown initiated! Browser connection will be lost shortly.")
+                st.success("✅ Application shutdown initiated! Browser connection will be lost shortly.")
                 st.info("You can close this browser tab.")
                 
             except Exception as e:
-                st.error(f"❌ Could not terminate server automatically: {e}")
+                st.error(f"❌ Could not shutdown application automatically: {e}")
                 st.info("💡 **Manual shutdown required:**")
-                if platform.system().lower() == 'windows':
-                    st.info("Press **Ctrl+C** in the command prompt where you started the app")
-                else:
-                    st.info("Press **Ctrl+C** in the terminal where you started the app")
+                st.info("Run `docker-compose down` in the terminal where you started the container")
             
             # Stop the Streamlit script execution
             st.stop()

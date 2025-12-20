@@ -55,8 +55,8 @@ services:
           memory: 512M
           cpus: '0.5'
     
-    # Restart policy
-    restart: unless-stopped
+    # Restart policy - no automatic restart for development tool
+    restart: "no"
     
     # Network configuration
     networks:
