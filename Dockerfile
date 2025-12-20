@@ -25,10 +25,10 @@ RUN groupadd -g $GROUP_ID appuser 2>/dev/null || groupmod -n appuser $(getent gr
 WORKDIR /opt/app
 
 # Copy the corrected Docker-compatible environment file first to leverage Docker's layer caching.
-COPY environment-docker-fixed.yml .
+COPY environment-docker-final-validated.yml .
 
 # Create the Conda environment from the corrected environment file
-RUN conda env create -f environment-docker-fixed.yml
+RUN conda env create -f environment-docker-final-validated.yml
 
 # Copy the application source code and all supporting files
 COPY app.py .

@@ -293,7 +293,7 @@ def create_inline_file_browser(input_key: str, start_path: str = None):
                         
                         with col_icon:
                             if item.is_dir():
-                                st.text("📁")
+                                st.text("�")
                             else:
                                 st.text("📄")
                         
@@ -324,51 +324,8 @@ def create_inline_file_browser(input_key: str, start_path: str = None):
     # Return selected file if any
     return st.session_state[selected_file_key]
 
-def select_file_via_subprocess():
-    """
-    Legacy function maintained for compatibility.
-    Now redirects to inline file browser.
-    """
-    # This is now just a placeholder - the inline browser is used directly in the UI
-    return None
-
-def select_folder_via_subprocess():
-    """
-    Docker-compatible folder selection using dedicated browser page.
-    Opens file browser in new tab and returns selected folder path.
-    """
-    import os
-    import urllib.parse
-    
-    # Use /data as the starting path in Docker environment
-    start_path = "/data" if os.path.exists("/data") else "."
-    
-    # Create unique key for this folder selection
-    return_key = f"folder_selection_{int(time.time() * 1000)}"
-    
-    # Build URL for file browser page
-    base_url = "📁_File_Browser"
-    params = {
-        "mode": "folder",
-        "start_path": start_path,
-        "title": "Select Project Folder",
-        "return_key": return_key
-    }
-    query_string = urllib.parse.urlencode(params)
-    file_browser_url = f"{base_url}?{query_string}"
-    
-    # Show link to open file browser
-    st.markdown(f"**📁 [Open File Browser in New Tab]({file_browser_url})**")
-    st.info("👆 Click the link above to open the file browser in a new tab. After selecting a folder, return to this tab.")
-    
-    # Check if result is available
-    if return_key in st.session_state and st.session_state[return_key]:
-        selected_folder = st.session_state[return_key]
-        # Clear the result to prevent reuse
-        del st.session_state[return_key]
-        return str(selected_folder)
-    
-    return None
+# Dead file browser functions removed - project selection handled by run.command
+# Only inline file browser for workflow steps is needed
 
 def perform_undo(project):
     """
@@ -533,15 +490,11 @@ def main():
         
         st.subheader("Project")
         
-        # Only show Browse button if NOT in Docker mode
-        if not is_docker_mode:
-            st.info("💡 **Native Mode**: Use file system to select project folder")
+        # Docker-only mode - project path set by run.command
+        if st.session_state.project_path:
+            st.info(f"🐳 **Docker Project**: `{st.session_state.project_path}`")
         else:
-            # In Docker mode, show current project path
-            if st.session_state.project_path:
-                st.info(f"🐳 **Docker Project**: `{st.session_state.project_path}`")
-            else:
-                st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
+            st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
         
         # Quick Start functionality - only show for projects without workflow state
         if st.session_state.project and not st.session_state.project.has_workflow_state():
@@ -1249,15 +1202,16 @@ def main():
                     
                     # For completed steps that allow re-runs, show a note about re-run inputs
                     if status == 'completed' and step.get('allow_rerun', False):
-                        st.info("💡 **Re-run Setup**: Please select input files for this re-run. Previous inputs are cleared to ensure fresh data.")
-                        # Clear previous inputs for re-run to force user to select new files
-                        if f"rerun_inputs_cleared_{step_id}" not in st.session_state:
-                            st.session_state.user_inputs[step_id] = {}
-                            st.session_state[f"rerun_inputs_cleared_{step_id}"] = True
+                        st.info("💡 **Re-run Setup**: Please select input files for this re-run.")
                     
                     for i, input_def in enumerate(step['inputs']):
                         input_key = f"{step_id}_input_{i}"
                         if input_def['type'] == 'file':
+                            # Initialize browser state key
+                            browser_state_key = f"show_browser_{input_key}"
+                            if browser_state_key not in st.session_state:
+                                st.session_state[browser_state_key] = False
+                            
                             # Show current selection if any
                             current_value = st.session_state.user_inputs[step_id].get(input_key, "")
                             if current_value:
@@ -1266,26 +1220,33 @@ def main():
                                 col_clear, col_change = st.columns([1, 1])
                                 with col_clear:
                                     if st.button("Clear Selection", key=f"clear_{input_key}"):
+                                        # Clear all related state
+                                        browser_selected_key = f"selected_file_{input_key}"
                                         st.session_state.user_inputs[step_id][input_key] = ""
+                                        if browser_selected_key in st.session_state:
+                                            st.session_state[browser_selected_key] = None
+                                        st.session_state[browser_state_key] = False
                                         st.rerun()
                                 with col_change:
-                                    show_browser = st.button("Change File", key=f"change_{input_key}")
+                                    if st.button("Change File", key=f"change_{input_key}"):
+                                        # Clear current selection and show browser
+                                        browser_selected_key = f"selected_file_{input_key}"
+                                        st.session_state.user_inputs[step_id][input_key] = ""
+                                        if browser_selected_key in st.session_state:
+                                            st.session_state[browser_selected_key] = None
+                                        st.session_state[browser_state_key] = True
+                                        st.rerun()
                             else:
                                 st.info(f"📄 **{input_def['name']}**: No file selected")
-                                show_browser = st.button("Select File", key=f"select_{input_key}")
+                                if st.button("Select File", key=f"select_{input_key}"):
+                                    st.session_state[browser_state_key] = True
+                                    st.rerun()
                             
-                            # Show inline file browser when requested
-                            browser_state_key = f"show_browser_{input_key}"
-                            if browser_state_key not in st.session_state:
-                                st.session_state[browser_state_key] = False
-                            
-                            if 'show_browser' in locals() and show_browser:
-                                st.session_state[browser_state_key] = True
-                                st.rerun()
-                            
+                            # Show inline file browser when browser state is True
                             if st.session_state[browser_state_key]:
                                 with st.expander("📁 File Browser", expanded=True):
                                     selected_file = create_inline_file_browser(input_key)
+                                    
                                     if selected_file:
                                         st.session_state.user_inputs[step_id][input_key] = selected_file
                                         st.session_state[browser_state_key] = False
@@ -1319,10 +1280,6 @@ def main():
                         button_text = f"Re-run (#{run_count + 1})"
                         
                         if st.button(button_text, key=f"rerun_{step_id}", disabled=rerun_button_disabled):
-                            # Clear the rerun flag so inputs get cleared again next time
-                            if f"rerun_inputs_cleared_{step_id}" in st.session_state:
-                                del st.session_state[f"rerun_inputs_cleared_{step_id}"]
-                            
                             st.session_state.running_step_id = step_id
                             st.session_state.terminal_output = ""
                             step_user_inputs = st.session_state.user_inputs.get(step_id, {})
@@ -1365,10 +1322,6 @@ def main():
         if st.session_state.running_step_id:
             runner = st.session_state.project.script_runner
             
-            # DEBUG: Add diagnostic logging to understand polling behavior
-            import datetime
-            current_time = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-            
             # Enhanced polling logic to retrieve all available output
             # This fixes the pseudo-terminal buffering issue where prompts
             # would remain invisible until user interaction
@@ -1383,8 +1336,6 @@ def main():
                         st.session_state.terminal_output += output
                         output_received = True
                         items_retrieved += 1
-                        # DEBUG: Log each item retrieved
-                        print(f"[{current_time}] POLLING DEBUG: Retrieved item {items_retrieved}: '{output[:50]}{'...' if len(output) > 50 else ''}'")
                 except queue.Empty:
                     if output_received:
                         # If we got some output, wait briefly and try again
@@ -1394,20 +1345,9 @@ def main():
                     else:
                         break  # No output available, stop polling
             
-            queue_size_after = runner.output_queue.qsize()
-            
-            # DEBUG: Log polling results
-            if queue_size_before > 0 or items_retrieved > 0:
-                print(f"[{current_time}] POLLING DEBUG: Queue before={queue_size_before}, retrieved={items_retrieved}, queue after={queue_size_after}, will_rerun={output_received}")
-            
             # Only trigger rerun if we actually received output
             if output_received:
-                print(f"[{current_time}] POLLING DEBUG: Triggering st.rerun() due to output received")
                 st.rerun()
-            else:
-                # DEBUG: Check if there's actually content in the queue that we missed
-                if queue_size_before > 0:
-                    print(f"[{current_time}] POLLING DEBUG: WARNING - Queue had {queue_size_before} items but we retrieved {items_retrieved}")
 
             # Poll for the final result
             try:
