@@ -15,7 +15,7 @@ services:
     container_name: sip-lims-workflow-manager
     
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     
     volumes:
       # Project data volume - user's project directory
