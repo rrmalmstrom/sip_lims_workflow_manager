@@ -46,7 +46,6 @@ COPY app.py .
 COPY src/ ./src/
 COPY templates/ ./templates/
 COPY utils/ ./utils/
-COPY pages/ ./pages/
 
 # Copy and set up the entrypoint script
 COPY entrypoint.sh .
