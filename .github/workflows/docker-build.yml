@@ -10,6 +10,8 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  # Force repository-scoped package by using full repository path
+  PACKAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
