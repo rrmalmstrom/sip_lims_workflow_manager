@@ -65,9 +65,25 @@ jobs:
         labels: |
           ${{ steps.meta.outputs.labels }}
           org.opencontainers.image.revision=${{ steps.commit.outputs.sha }}
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.url=${{ github.server_url }}/${{ github.repository }}
+          org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
           com.sip-lims.commit-sha=${{ steps.commit.outputs.sha }}
           com.sip-lims.build-date=${{ steps.date.outputs.date }}
         build-args: |
           APP_VERSION=${{ github.ref_name }}
           COMMIT_SHA=${{ steps.commit.outputs.sha }}
           BUILD_DATE=${{ steps.date.outputs.date }}
+
+    - name: Package publication summary
+      run: |
+        echo "✅ Docker image published successfully!"
+        echo "📦 Image: ghcr.io/${{ github.repository }}:latest"
+        echo "🔗 Repository: ${{ github.server_url }}/${{ github.repository }}"
+        echo "📋 Commit SHA: ${{ steps.commit.outputs.sha }}"
+        echo "📅 Build Date: ${{ steps.date.outputs.date }}"
+        echo ""
+        echo "🔍 To see packages in GitHub UI:"
+        echo "   1. Go to your repository: ${{ github.server_url }}/${{ github.repository }}"
+        echo "   2. Look for 'Packages' tab (may take a few minutes to appear)"
+        echo "   3. If not visible, check: Settings > Actions > General > Workflow permissions"
