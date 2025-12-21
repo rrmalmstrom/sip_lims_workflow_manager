@@ -26,8 +26,13 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -g $GROUP_ID appuser 2>/dev/null || groupmod -n appuser $(getent group $GROUP_ID | cut -d: -f1) && \
     useradd -u $USER_ID -g $GROUP_ID -m appuser 2>/dev/null || usermod -l appuser -d /home/appuser -m $(getent passwd $USER_ID | cut -d: -f1)
 
-# Add version labels for update detection
-LABEL org.opencontainers.image.revision="${COMMIT_SHA}" \
+# Add version labels for update detection and repository linking
+LABEL org.opencontainers.image.source="https://github.com/rrmalmstrom/sip_lims_workflow_manager" \
+      org.opencontainers.image.url="https://github.com/rrmalmstrom/sip_lims_workflow_manager" \
+      org.opencontainers.image.documentation="https://github.com/rrmalmstrom/sip_lims_workflow_manager" \
+      org.opencontainers.image.title="SIP LIMS Workflow Manager" \
+      org.opencontainers.image.description="LIMS Workflow Manager with Python scripts for processing SIP metagenomic files" \
+      org.opencontainers.image.revision="${COMMIT_SHA}" \
       com.sip-lims.commit-sha="${COMMIT_SHA}" \
       com.sip-lims.build-date="${BUILD_DATE}" \
       com.sip-lims.version="${APP_VERSION}"
