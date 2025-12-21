@@ -1,12 +1,174 @@
 #!/bin/bash
 # Enhanced SIP LIMS Workflow Manager Docker Runner
-# Combines legacy Docker functionality with current ESP features
+# Combines legacy Docker functionality with current ESP features and robust update detection
 
 # Get the directory where the script is located
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
 echo "--- Starting SIP LIMS Workflow Manager (Docker) ---"
+
+# Container Management Functions
+stop_workflow_containers() {
+    echo "🛑 Checking for running workflow manager containers..."
+    
+    # Find containers using workflow manager images
+    local workflow_containers=$(docker ps -a --filter "ancestor=ghcr.io/rrmalmstrom/sip_lims_workflow_manager" --filter "ancestor=sip-lims-workflow-manager" --format "{{.ID}} {{.Names}} {{.Status}}" 2>/dev/null)
+    
+    if [ -n "$workflow_containers" ]; then
+        echo "📋 Found workflow manager containers:"
+        echo "$workflow_containers" | while read container_id container_name status; do
+            echo "    - $container_name ($container_id): $status"
+        done
+        
+        # Stop and remove workflow manager containers
+        local container_ids=$(echo "$workflow_containers" | awk '{print $1}')
+        if [ -n "$container_ids" ]; then
+            echo "🛑 Stopping workflow manager containers..."
+            docker stop $container_ids >/dev/null 2>&1
+            echo "🗑️  Removing workflow manager containers..."
+            docker rm $container_ids >/dev/null 2>&1
+            echo "✅ Workflow manager containers cleaned up"
+        fi
+    else
+        echo "✅ No running workflow manager containers found"
+    fi
+}
+
+# Update Detection Functions
+check_docker_updates() {
+    echo "🔍 Checking for Docker image updates..."
+    
+    # Use the update detector to check for Docker updates
+    local update_result=$(python3 src/update_detector.py --check-docker 2>/dev/null)
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        # Parse the JSON result to check if update is available
+        local update_available=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print('true' if data.get('update_available', False) else 'false')
+except:
+    print('false')
+")
+        
+        if [ "$update_available" = "true" ]; then
+            echo "📦 Docker image update available - updating to latest version..."
+            
+            # Get current image ID before cleanup
+            local old_image_id=$(docker images ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest --format "{{.ID}}" 2>/dev/null)
+            
+            # Clean up old image BEFORE pulling new one (since containers are already stopped)
+            if [ -n "$old_image_id" ]; then
+                echo "🧹 Removing old Docker image before update..."
+                # Remove by tag first, then clean up any dangling images
+                docker rmi ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest >/dev/null 2>&1
+                # Clean up dangling images to prevent disk space waste
+                docker image prune -f >/dev/null 2>&1
+                echo "✅ Old Docker image and dangling images cleaned up"
+            fi
+            
+            # Pull the new image
+            echo "📥 Pulling latest Docker image..."
+            docker pull ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest
+            if [ $? -eq 0 ]; then
+                echo "✅ Docker image updated successfully"
+                return 0
+            else
+                echo "❌ ERROR: Docker image update failed"
+                return 1
+            fi
+        else
+            echo "✅ Docker image is up to date"
+            return 0
+        fi
+    else
+        echo "⚠️  Warning: Could not check for Docker updates, continuing with current version"
+        return 1
+    fi
+}
+
+check_and_download_scripts() {
+    local scripts_dir="$1"
+    local branch="${2:-analysis/esp-docker-adaptation}"
+    
+    echo "🔍 Checking for script updates..."
+    
+    # Check if scripts directory exists and has content
+    if [ ! -d "$scripts_dir" ] || [ -z "$(ls -A "$scripts_dir" 2>/dev/null)" ]; then
+        echo "📁 Scripts directory missing or empty - downloading scripts..."
+        mkdir -p "$scripts_dir"
+        
+        # Download scripts using update detector
+        python3 src/update_detector.py --download-scripts --scripts-dir "$scripts_dir" --branch "$branch"
+        if [ $? -eq 0 ]; then
+            echo "✅ Scripts downloaded successfully to: $scripts_dir"
+            return 0
+        else
+            echo "❌ ERROR: Failed to download scripts"
+            return 1
+        fi
+    else
+        # Check for script updates
+        local update_result=$(python3 src/update_detector.py --check-scripts --branch "$branch" 2>/dev/null)
+        local exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            local update_available=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print('true' if data.get('update_available', False) else 'false')
+except:
+    print('false')
+")
+            
+            if [ "$update_available" = "true" ]; then
+                echo "📦 Script updates available - downloading latest version..."
+                python3 src/update_detector.py --download-scripts --scripts-dir "$scripts_dir" --branch "$branch"
+                if [ $? -eq 0 ]; then
+                    echo "✅ Scripts updated successfully"
+                    return 0
+                else
+                    echo "⚠️  Warning: Script update failed, continuing with current version"
+                    return 1
+                fi
+            else
+                echo "✅ Scripts are up to date"
+                return 0
+            fi
+        else
+            echo "⚠️  Warning: Could not check for script updates, continuing with current version"
+            return 1
+        fi
+    fi
+}
+
+production_auto_update() {
+    echo "🏭 Production mode - performing automatic updates..."
+    
+    # Check and update Docker image
+    check_docker_updates
+    
+    # Set up centralized scripts directory
+    local scripts_dir="$HOME/.sip_lims_workflow_manager/scripts"
+    
+    # Check and download/update scripts
+    check_and_download_scripts "$scripts_dir"
+    
+    # Set scripts path for production use
+    SCRIPTS_PATH="$scripts_dir"
+    export SCRIPTS_PATH
+    export APP_ENV="production"
+    
+    # Use pre-built Docker image for production
+    export DOCKER_IMAGE="ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest"
+    
+    echo "📁 Using centralized scripts: $SCRIPTS_PATH"
+    echo "🐳 Using pre-built Docker image: $DOCKER_IMAGE"
+}
 
 # Auto-detect host user ID for proper file permissions on shared drives
 detect_user_ids() {
@@ -24,43 +186,63 @@ detect_mode() {
     fi
 }
 
-# Script Path Selection Function (adapted from current ESP for Docker)
-select_script_path() {
-    MODE=$(detect_mode)
+# Developer Mode Choice Function
+choose_developer_mode() {
+    echo "🔧 Developer mode detected"
+    echo ""
+    echo "Choose your workflow mode:"
+    echo "1) Production mode (auto-updates, centralized scripts)"
+    echo "2) Development mode (local scripts, no auto-updates)"
+    echo ""
+    printf "Enter choice (1 or 2): "
+    read dev_choice
+    dev_choice=$(echo "$dev_choice" | tr -d '\r\n' | xargs)
     
-    if [ "$MODE" = "developer" ]; then
-        echo "🔧 Developer mode detected"
-        echo ""
-        echo "Choose script source for this session:"
-        echo "1) Development scripts (../sip_scripts_dev)"
-        echo "2) Production scripts (../sip_scripts_prod)"
-        echo ""
-        printf "Enter choice (1 or 2): "
-        read choice
-        choice=$(echo "$choice" | tr -d '\r\n' | xargs)
-        
-        case $choice in
-            1)
-                SCRIPTS_PATH="../sip_scripts_dev"
-                echo "✅ Using development scripts from: $SCRIPTS_PATH"
-                export APP_ENV="development"
-                ;;
-            2)
-                SCRIPTS_PATH="../sip_scripts_prod"
-                echo "✅ Using production scripts from: $SCRIPTS_PATH"
-                export APP_ENV="production"
-                ;;
-            *)
-                echo "❌ ERROR: Invalid choice '$choice'. Please enter 1 or 2."
-                echo "Exiting."
-                exit 1
-                ;;
-        esac
-    else
-        echo "🏭 Production mode - using production scripts"
-        SCRIPTS_PATH="../sip_scripts_prod"
-        export APP_ENV="production"
-    fi
+    case $dev_choice in
+        1)
+            echo "✅ Using production mode workflow"
+            return 0  # Production workflow
+            ;;
+        2)
+            echo "✅ Using development mode workflow"
+            return 1  # Development workflow
+            ;;
+        *)
+            echo "❌ ERROR: Invalid choice '$dev_choice'. Please enter 1 or 2."
+            echo "Exiting."
+            exit 1
+            ;;
+    esac
+}
+
+# Development Script Path Selection Function
+select_development_script_path() {
+    echo ""
+    echo "Choose script source for development:"
+    echo "1) Development scripts (../sip_scripts_dev)"
+    echo "2) Production scripts (../sip_scripts_prod)"
+    echo ""
+    printf "Enter choice (1 or 2): "
+    read choice
+    choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+    
+    case $choice in
+        1)
+            SCRIPTS_PATH="../sip_scripts_dev"
+            echo "✅ Using development scripts from: $SCRIPTS_PATH"
+            export APP_ENV="development"
+            ;;
+        2)
+            SCRIPTS_PATH="../sip_scripts_prod"
+            echo "✅ Using production scripts from: $SCRIPTS_PATH"
+            export APP_ENV="production"
+            ;;
+        *)
+            echo "❌ ERROR: Invalid choice '$choice'. Please enter 1 or 2."
+            echo "Exiting."
+            exit 1
+            ;;
+    esac
     
     # Verify script directory exists
     if [ ! -d "$SCRIPTS_PATH" ]; then
@@ -69,15 +251,44 @@ select_script_path() {
         exit 1
     fi
     
+    # Use local Docker build for development mode
+    export DOCKER_IMAGE="sip-lims-workflow-manager:latest"
+    
     echo "📁 Script path: $SCRIPTS_PATH"
+    echo "🐳 Using local Docker build: $DOCKER_IMAGE"
     export SCRIPTS_PATH
+}
+
+# Main Mode and Update Logic
+handle_mode_and_updates() {
+    MODE=$(detect_mode)
+    
+    if [ "$MODE" = "developer" ]; then
+        # Developer detected - ask for production vs development workflow
+        choose_developer_mode
+        use_production_workflow=$?
+        
+        if [ $use_production_workflow -eq 0 ]; then
+            # Developer chose production workflow - use auto-updates
+            production_auto_update
+        else
+            # Developer chose development workflow - use local scripts
+            select_development_script_path
+        fi
+    else
+        # Regular production user - always use auto-updates
+        production_auto_update
+    fi
 }
 
 # Call user ID detection
 detect_user_ids
 
-# Call script path selection
-select_script_path
+# Stop any running workflow manager containers first
+stop_workflow_containers
+
+# Handle mode detection and updates
+handle_mode_and_updates
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then

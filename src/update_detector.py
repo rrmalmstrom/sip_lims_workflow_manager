@@ -58,17 +58,10 @@ class UpdateDetector:
         except (urllib.error.URLError, KeyError, json.JSONDecodeError):
             return None
     
-    def get_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
-        """Get the commit SHA embedded in a Docker image's labels."""
+    def get_local_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
+        """Get the commit SHA from a LOCAL Docker image's labels (no pulling)."""
         try:
-            # First try to pull the latest image
-            subprocess.run(
-                ["docker", "pull", f"{self.ghcr_image}:{tag}"],
-                capture_output=True,
-                check=True
-            )
-            
-            # Inspect the image to get labels
+            # Inspect the LOCAL image only - do NOT pull
             result = subprocess.run(
                 ["docker", "inspect", f"{self.ghcr_image}:{tag}"],
                 capture_output=True,
@@ -88,28 +81,54 @@ class UpdateDetector:
         except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError):
             return None
     
-    def check_docker_image_update(self, tag: str = "latest") -> Dict[str, any]:
-        """Check if there's a Docker image update available."""
-        local_sha = self.get_local_commit_sha()
-        remote_sha = self.get_docker_image_commit_sha(tag)
+    def get_remote_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
+        """Get the commit SHA from REMOTE Docker image without pulling."""
+        try:
+            # Use GitHub API to get the latest commit SHA from the branch that builds the image
+            # This assumes the remote image is built from the latest commit on analysis/esp-docker-adaptation
+            return self.get_remote_commit_sha("analysis/esp-docker-adaptation")
+        except Exception:
+            return None
+    
+    def get_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
+        """DEPRECATED: Get the commit SHA embedded in a Docker image's labels."""
+        # This method is deprecated because it pulls images
+        # Use get_local_docker_image_commit_sha() or get_remote_docker_image_commit_sha() instead
+        return self.get_local_docker_image_commit_sha(tag)
+    
+    def check_docker_update(self, tag: str = "latest") -> Dict[str, any]:
+        """Check if there's a Docker image update available (local vs remote)."""
+        local_sha = self.get_local_docker_image_commit_sha(tag)
+        remote_sha = self.get_remote_docker_image_commit_sha(tag)
         
         result = {
             "update_available": False,
             "local_sha": local_sha,
             "remote_sha": remote_sha,
+            "reason": None,
             "error": None
         }
         
         if not local_sha:
-            result["error"] = "Could not determine local commit SHA"
+            result["reason"] = "No local Docker image found"
+            result["update_available"] = True  # Need to pull if no local image
             return result
         
         if not remote_sha:
             result["error"] = "Could not determine remote Docker image commit SHA"
             return result
         
-        result["update_available"] = local_sha != remote_sha
+        if local_sha != remote_sha:
+            result["update_available"] = True
+            result["reason"] = f"Local SHA {local_sha[:8]}... != Remote SHA {remote_sha[:8]}..."
+        else:
+            result["reason"] = "Local and remote SHAs match"
+        
         return result
+    
+    def check_docker_image_update(self, tag: str = "latest") -> Dict[str, any]:
+        """DEPRECATED: Use check_docker_update() instead."""
+        return self.check_docker_update(tag)
     
     def check_scripts_update(self, branch: str = "main") -> Dict[str, any]:
         """Check if there are script updates available."""
@@ -188,7 +207,7 @@ class UpdateDetector:
     
     def get_update_summary(self) -> Dict[str, any]:
         """Get a comprehensive update summary for both Docker images and scripts."""
-        docker_update = self.check_docker_image_update()
+        docker_update = self.check_docker_update()
         scripts_update = self.check_scripts_update()
         
         return {
@@ -216,7 +235,7 @@ def main():
     detector = UpdateDetector()
     
     if args.check_docker:
-        result = detector.check_docker_image_update()
+        result = detector.check_docker_update()
         print(json.dumps(result, indent=2))
     
     elif args.check_scripts:
