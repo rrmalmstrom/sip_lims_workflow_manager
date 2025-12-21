@@ -92,31 +92,16 @@ except:
 
 check_and_download_scripts() {
     local scripts_dir="$1"
-    local branch="${2:-analysis/esp-docker-adaptation}"
+    local branch="${2:-main}"
     
     echo "🔍 Checking for script updates..."
     
-    # Check if scripts directory exists and has content
-    if [ ! -d "$scripts_dir" ] || [ -z "$(ls -A "$scripts_dir" 2>/dev/null)" ]; then
-        echo "📁 Scripts directory missing or empty - downloading scripts..."
-        mkdir -p "$scripts_dir"
-        
-        # Download scripts using update detector
-        python3 src/update_detector.py --download-scripts --scripts-dir "$scripts_dir" --branch "$branch"
-        if [ $? -eq 0 ]; then
-            echo "✅ Scripts downloaded successfully to: $scripts_dir"
-            return 0
-        else
-            echo "❌ ERROR: Failed to download scripts"
-            return 1
-        fi
-    else
-        # Check for script updates
-        local update_result=$(python3 src/update_detector.py --check-scripts --branch "$branch" 2>/dev/null)
-        local exit_code=$?
-        
-        if [ $exit_code -eq 0 ]; then
-            local update_available=$(echo "$update_result" | python3 -c "
+    # Check for script updates using the new scripts updater
+    local update_result=$(python3 src/scripts_updater.py --check-scripts --scripts-dir "$scripts_dir" --branch "$branch" 2>/dev/null)
+    local exit_code=$?
+    
+    if [ $exit_code -eq 0 ]; then
+        local update_available=$(echo "$update_result" | python3 -c "
 import sys, json
 try:
     data = json.load(sys.stdin)
@@ -124,25 +109,24 @@ try:
 except:
     print('false')
 ")
-            
-            if [ "$update_available" = "true" ]; then
-                echo "📦 Script updates available - downloading latest version..."
-                python3 src/update_detector.py --download-scripts --scripts-dir "$scripts_dir" --branch "$branch"
-                if [ $? -eq 0 ]; then
-                    echo "✅ Scripts updated successfully"
-                    return 0
-                else
-                    echo "⚠️  Warning: Script update failed, continuing with current version"
-                    return 1
-                fi
-            else
-                echo "✅ Scripts are up to date"
+        
+        if [ "$update_available" = "true" ]; then
+            echo "📦 Script updates available - updating scripts..."
+            python3 src/scripts_updater.py --update-scripts --scripts-dir "$scripts_dir" --branch "$branch"
+            if [ $? -eq 0 ]; then
+                echo "✅ Scripts updated successfully"
                 return 0
+            else
+                echo "❌ ERROR: Failed to update scripts"
+                return 1
             fi
         else
-            echo "⚠️  Warning: Could not check for script updates, continuing with current version"
-            return 1
+            echo "✅ Scripts are up to date"
+            return 0
         fi
+    else
+        echo "⚠️  Warning: Could not check for script updates, continuing with current version"
+        return 1
     fi
 }
 
@@ -218,45 +202,35 @@ choose_developer_mode() {
 # Development Script Path Selection Function
 select_development_script_path() {
     echo ""
-    echo "Choose script source for development:"
-    echo "1) Development scripts (../sip_scripts_dev)"
-    echo "2) Production scripts (../sip_scripts_prod)"
-    echo ""
-    printf "Enter choice (1 or 2): "
-    read choice
-    choice=$(echo "$choice" | tr -d '\r\n' | xargs)
+    echo "Please drag and drop your development scripts folder here, then press Enter:"
+    printf "> "
+    read SCRIPTS_PATH
     
-    case $choice in
-        1)
-            SCRIPTS_PATH="../sip_scripts_dev"
-            echo "✅ Using development scripts from: $SCRIPTS_PATH"
-            export APP_ENV="development"
-            ;;
-        2)
-            SCRIPTS_PATH="../sip_scripts_prod"
-            echo "✅ Using production scripts from: $SCRIPTS_PATH"
-            export APP_ENV="production"
-            ;;
-        *)
-            echo "❌ ERROR: Invalid choice '$choice'. Please enter 1 or 2."
-            echo "Exiting."
-            exit 1
-            ;;
-    esac
+    # Clean up the path (removes potential quotes, trailing spaces, and control characters)
+    SCRIPTS_PATH=$(echo "$SCRIPTS_PATH" | tr -d '\r\n' | sed "s/'//g" | xargs)
     
-    # Verify script directory exists
-    if [ ! -d "$SCRIPTS_PATH" ]; then
-        echo "❌ ERROR: Script directory not found: $SCRIPTS_PATH"
-        echo "Please run setup.command first to initialize script repositories."
+    # Exit if the path is empty
+    if [ -z "$SCRIPTS_PATH" ]; then
+        echo "❌ ERROR: No scripts folder provided. Exiting."
         exit 1
     fi
+    
+    # Validate that the scripts path exists and is a directory
+    if [ ! -d "$SCRIPTS_PATH" ]; then
+        echo "❌ ERROR: Scripts folder does not exist or is not a directory: $SCRIPTS_PATH"
+        echo "Please provide a valid scripts folder path."
+        exit 1
+    fi
+    
+    echo "✅ Selected development scripts folder: $SCRIPTS_PATH"
+    export SCRIPTS_PATH
+    export APP_ENV="development"
     
     # Use local Docker build for development mode
     export DOCKER_IMAGE="sip-lims-workflow-manager:latest"
     
     echo "📁 Script path: $SCRIPTS_PATH"
     echo "🐳 Using local Docker build: $DOCKER_IMAGE"
-    export SCRIPTS_PATH
 }
 
 # Main Mode and Update Logic

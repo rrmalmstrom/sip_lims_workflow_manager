@@ -37,14 +37,13 @@ This includes:
 
 ## Repository Structure
 
-This project uses a decoupled, two-repository structure to separate the core application from the scientific scripts:
+This project uses an intelligent update system that automatically manages both the application and Python scripts:
 
 -   `sip_lims_workflow_manager/` (This repository): Contains the core application, GUI, and documentation.
--   `sip_scripts_prod/` or `sip_scripts_dev/`: Sibling directories containing the Python workflow scripts.
-    -   `sip_scripts_prod/`: For production users, containing stable, version-controlled scripts.
-    -   `sip_scripts_dev/`: For developers, containing local, mutable scripts for testing and development.
+-   **Production Scripts**: Automatically downloaded and updated to `~/.sip_lims_workflow_manager/scripts` from GitHub.
+-   **Developer Scripts**: Optional local development scripts for testing and development.
 
-This structure allows the application and scripts to be updated independently, providing greater stability for production users and flexibility for developers.
+This structure provides automatic updates for production users while maintaining flexibility for developers.
 
 ## Installation and Setup
 
@@ -53,16 +52,22 @@ The setup process is performed only **once** per computer. For detailed instruct
 1.  **Download the Application**: Download and unzip the `sip_lims_workflow_manager` repository.
 2.  **Run the Setup Script**: Double-click `setup.command`.
 
-The setup script automatically detects the mode:
--   **Production Mode (Default)**: Clones or updates the production scripts into a sibling directory named `../sip_scripts_prod`.
--   **Developer Mode**: If a `config/developer.marker` file is present, the script provides interactive prompts for developers, including options for offline work and guidance on setting up a local `../sip_scripts_dev` repository.
-
 ## Running the Application
 
 -   Double-click `run.command`.
 
-The `run.command` script also adapts to the execution mode:
--   **Production Mode**: Automatically uses the scripts from `../sip_scripts_prod`.
--   **Developer Mode**: Prompts the developer to choose between using the development (`../sip_scripts_dev`) or production (`../sip_scripts_prod`) scripts for the session.
+The `run.command` script provides intelligent workflow management:
+
+### For Production Users:
+-   **Automatic Updates**: Silently checks and downloads latest Docker images and Python scripts from GitHub
+-   **No User Prompts**: Completely automated experience
+-   **Centralized Management**: Scripts stored in `~/.sip_lims_workflow_manager/scripts`
+
+### For Developers:
+-   **Mode Detection**: Automatically detects `config/developer.marker` file
+-   **Workflow Choice**: Choose between:
+    - **Production Mode**: Same auto-update behavior as regular users
+    - **Development Mode**: Use local development scripts with no auto-updates
+-   **Flexible Script Paths**: Drag-and-drop selection of local script directories
 
 The application will open in your default web browser at `http://127.0.0.1:8501`.

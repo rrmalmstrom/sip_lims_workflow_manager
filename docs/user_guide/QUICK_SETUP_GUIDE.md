@@ -20,19 +20,13 @@ You should see output like `conda 24.x.x`. If you see an error, the installation
 
 ---
 
-## 2. Application and Scripts Setup
+## 2. Application Setup
 
-This project uses a decoupled structure where the application (`sip_lims_workflow_manager`) and the scientific scripts (`sip_scripts_prod` or `sip_scripts_dev`) reside in **sibling directories**.
-
-```
-/some/path/
-├── sip_lims_workflow_manager/  (The application you downloaded)
-└── sip_scripts_prod/           (The scripts, automatically created by the setup script)
-```
+This project uses an intelligent update system that automatically manages both the application and Python scripts.
 
 ### Standard User Setup (Production Mode)
 
-This is the default, non-interactive setup for all standard users.
+This is the default, automated setup for all standard users.
 
 1.  **Download and Extract**:
     *   Download the latest `sip_lims_workflow_manager` .zip file from GitHub.
@@ -40,7 +34,7 @@ This is the default, non-interactive setup for all standard users.
 
 2.  **Run the Setup Script (One-time only)**:
     *   Double-click `setup.command`.
-    *   This script will create the `sip-lims` Conda environment and automatically clone or update the production scripts into a **sibling directory** named `sip_scripts_prod`.
+    *   This script will create the `sip-lims` Conda environment.
 
 ---
 
@@ -48,7 +42,18 @@ This is the default, non-interactive setup for all standard users.
 
 -   Double-click `run.command`.
 
-The application will automatically use the scripts from the `sip_scripts_prod` directory and will open in your web browser.
+### For Production Users:
+-   **Automatic Updates**: The application silently checks and downloads the latest Docker images and Python scripts from GitHub
+-   **No User Prompts**: Completely automated experience
+-   **Centralized Management**: Scripts are automatically managed in `~/.sip_lims_workflow_manager/scripts`
+
+### For Developers:
+-   **Mode Detection**: Automatically detects `config/developer.marker` file
+-   **Workflow Choice**: Choose between:
+    - **Production Mode (1)**: Auto-updates enabled, uses centralized scripts
+    - **Development Mode (2)**: No auto-updates, drag-and-drop local script folder selection
+
+The application will open in your web browser at `http://127.0.0.1:8501`.
 
 ---
 
@@ -62,27 +67,28 @@ Developers can use a local, mutable set of scripts for testing and development.
 
 The presence of this file activates "Developer Mode," which enables interactive prompts during setup and runtime.
 
-### Running Setup in Developer Mode
--   With `config/developer.marker` present, run `setup.command`.
--   The script will provide an interactive prompt asking if you want to work **offline** (skipping remote updates) or **online**.
--   It will set up the `sip_scripts_prod` repository. If you are a developer, you will need to separately clone the `sip_scripts_dev` repository into a sibling directory.
-
 ### Running the Application in Developer Mode
--   When you run `run.command`, you will be prompted to choose which set of scripts to use for the session:
-    *   **Development Scripts** (`../sip_scripts_dev`)
-    *   **Production Scripts** (`../sip_scripts_prod`)
+-   When you run `run.command`, you will be prompted to choose your workflow:
+    *   **Production Mode (1)**: Auto-updates enabled, uses centralized scripts from GitHub
+    *   **Development Mode (2)**: No auto-updates, drag-and-drop selection of local script folder
 
 ---
 
 ## 5. Updating the Application
 
-The update process for the core application remains the same.
+### Automatic Updates (Production Users)
+-   **Docker Images**: Automatically updated every time you run `run.command`
+-   **Python Scripts**: Automatically updated every time you run `run.command`
+-   **No Manual Action Required**: Updates happen silently in the background
 
+### Manual Updates (Application Core)
 1.  **Download the New Version**: When notified of an update, download the new `sip_lims_workflow_manager` .zip file.
 2.  **Replace the Old Folder**: Close the application, delete your old `sip_lims_workflow_manager` folder, and replace it with the new one.
 3.  **Re-run Setup**: Run `setup.command` again to ensure all dependencies are up-to-date.
 
-The production scripts in `../sip_scripts_prod` are updated automatically each time you run the setup script.
+### Developer Updates
+-   **Production Mode**: Same automatic updates as regular users
+-   **Development Mode**: No automatic updates - manage your local scripts manually
 
 ---
 

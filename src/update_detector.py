@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-Host-based Update Detection System
+Docker Image Update Detection System
 
-This module provides functionality to detect updates for both:
-1. Docker workflow manager images (from GitHub Container Registry)
-2. Python scripts (from GitHub repository)
+This module provides functionality to detect updates for:
+- Docker workflow manager images (from GitHub Container Registry)
 
 Key Features:
-- Compares local vs remote commit SHAs
-- Handles both production and developer modes
-- Provides update recommendations
-- Downloads and manages script updates
+- Compares local vs remote commit SHAs for Docker images
+- Uses Docker image labels and GitHub API
+- Provides Docker update recommendations
 """
 
 import json
@@ -130,105 +128,26 @@ class UpdateDetector:
         """DEPRECATED: Use check_docker_update() instead."""
         return self.check_docker_update(tag)
     
-    def check_scripts_update(self, branch: str = "main") -> Dict[str, any]:
-        """Check if there are script updates available."""
-        local_sha = self.get_local_commit_sha()
-        remote_sha = self.get_remote_commit_sha(branch)
-        
-        result = {
-            "update_available": False,
-            "local_sha": local_sha,
-            "remote_sha": remote_sha,
-            "error": None
-        }
-        
-        if not local_sha:
-            result["error"] = "Could not determine local commit SHA"
-            return result
-        
-        if not remote_sha:
-            result["error"] = "Could not determine remote commit SHA"
-            return result
-        
-        result["update_available"] = local_sha != remote_sha
-        return result
-    
-    def download_scripts(self, branch: str = "main", target_dir: str = "scripts") -> bool:
-        """Download the latest scripts from GitHub."""
-        try:
-            # Create target directory if it doesn't exist
-            target_path = Path(target_dir)
-            target_path.mkdir(exist_ok=True)
-            
-            # Download the repository as a ZIP file
-            zip_url = f"https://github.com/{self.repo_owner}/{self.repo_name}/archive/{branch}.zip"
-            
-            with tempfile.TemporaryDirectory() as temp_dir:
-                zip_path = Path(temp_dir) / "repo.zip"
-                
-                # Download ZIP file
-                with urllib.request.urlopen(zip_url, timeout=30) as response:
-                    with open(zip_path, "wb") as f:
-                        f.write(response.read())
-                
-                # Extract ZIP file
-                import zipfile
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(temp_dir)
-                
-                # Find the extracted directory
-                extracted_dirs = [d for d in Path(temp_dir).iterdir() if d.is_dir() and d.name.startswith(self.repo_name)]
-                if not extracted_dirs:
-                    return False
-                
-                extracted_dir = extracted_dirs[0]
-                
-                # Copy Python scripts to target directory
-                for script_file in extracted_dir.rglob("*.py"):
-                    # Skip test files and __pycache__
-                    if "test" in script_file.name.lower() or "__pycache__" in str(script_file):
-                        continue
-                    
-                    # Create relative path structure
-                    rel_path = script_file.relative_to(extracted_dir)
-                    target_file = target_path / rel_path
-                    
-                    # Create parent directories
-                    target_file.parent.mkdir(parents=True, exist_ok=True)
-                    
-                    # Copy file
-                    shutil.copy2(script_file, target_file)
-                
-                return True
-                
-        except Exception as e:
-            print(f"Error downloading scripts: {e}")
-            return False
     
     def get_update_summary(self) -> Dict[str, any]:
-        """Get a comprehensive update summary for both Docker images and scripts."""
+        """Get a comprehensive update summary for Docker images."""
         docker_update = self.check_docker_update()
-        scripts_update = self.check_scripts_update()
         
         return {
             "timestamp": datetime.now().isoformat(),
             "docker": docker_update,
-            "scripts": scripts_update,
-            "any_updates_available": docker_update.get("update_available", False) or scripts_update.get("update_available", False)
+            "any_updates_available": docker_update.get("update_available", False)
         }
 
 
 def main():
-    """Command-line interface for update detection."""
+    """Command-line interface for Docker image update detection."""
     import argparse
     
-    parser = argparse.ArgumentParser(description="Detect updates for SIP LIMS Workflow Manager")
+    parser = argparse.ArgumentParser(description="Detect Docker image updates for SIP LIMS Workflow Manager")
     parser.add_argument("--check-docker", action="store_true", help="Check for Docker image updates")
-    parser.add_argument("--check-scripts", action="store_true", help="Check for script updates")
-    parser.add_argument("--download-scripts", action="store_true", help="Download latest scripts")
-    parser.add_argument("--summary", action="store_true", help="Show complete update summary")
-    parser.add_argument("--scripts-dir", default="scripts", help="Directory to download scripts to")
-    parser.add_argument("--branch", default="main", help="Git branch to check/download from")
+    parser.add_argument("--summary", action="store_true", help="Show Docker update summary")
+    parser.add_argument("--branch", default="main", help="Git branch to check from")
     
     args = parser.parse_args()
     
@@ -237,15 +156,6 @@ def main():
     if args.check_docker:
         result = detector.check_docker_update()
         print(json.dumps(result, indent=2))
-    
-    elif args.check_scripts:
-        result = detector.check_scripts_update(args.branch)
-        print(json.dumps(result, indent=2))
-    
-    elif args.download_scripts:
-        success = detector.download_scripts(args.branch, args.scripts_dir)
-        print(f"Script download {'successful' if success else 'failed'}")
-        sys.exit(0 if success else 1)
     
     elif args.summary:
         result = detector.get_update_summary()

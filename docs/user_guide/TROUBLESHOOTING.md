@@ -28,6 +28,34 @@ This guide provides solutions to common issues you may encounter while using the
 -   **Cause**: The application's environment may be out of date or corrupted.
 -   **Solution**: Run the `setup.command` or `setup.bat` script again. It is safe to run the setup script multiple times and will ensure your environment is properly configured.
 
+### Docker Update Issues
+
+-   **Cause**: Docker image updates may fail due to network issues, Docker Desktop not running, or insufficient disk space.
+-   **Solution**:
+    1.  **Check Docker Desktop**: Ensure Docker Desktop is running
+    2.  **Check internet connection**: Updates require downloading from GitHub Container Registry
+    3.  **Clear Docker cache**: Run `docker system prune -f` to clean up old images
+    4.  **Check disk space**: Ensure sufficient disk space for Docker images (3+ GB)
+    5.  **Restart Docker**: Restart Docker Desktop if updates consistently fail
+
+### Script Update Issues
+
+-   **Cause**: Python script updates may fail due to network issues or git repository problems.
+-   **Solution**:
+    1.  **Check internet connection**: Updates require downloading from GitHub
+    2.  **Clear scripts directory**: Delete `~/.sip_lims_workflow_manager/scripts` to force fresh download
+    3.  **Check permissions**: Ensure write access to `~/.sip_lims_workflow_manager/` directory
+    4.  **Use developer mode**: If updates fail, try running in developer mode with local scripts
+
+### Developer Mode Issues
+
+-   **Cause**: Developer mode script path selection may fail if paths are invalid.
+-   **Solution**:
+    1.  **Verify script path**: Ensure the drag-and-dropped folder contains Python (.py) files
+    2.  **Check permissions**: Ensure read access to the script directory
+    3.  **Use absolute paths**: Avoid relative paths that may not resolve correctly
+    4.  **Fallback to production**: If local scripts fail, choose production mode instead
+
 ## Project Loading Issues
 
 ### Inconsistent State Detected
