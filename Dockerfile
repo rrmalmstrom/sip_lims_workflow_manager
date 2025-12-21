@@ -4,8 +4,13 @@ FROM continuumio/miniconda3:latest
 # --- Build Arguments and Environment Variables ---
 # Define build-time argument for the application version
 ARG APP_VERSION=0.0.0-local
+ARG COMMIT_SHA=unknown
+ARG BUILD_DATE=unknown
+
 # Set the application version as an environment variable
 ENV APP_VERSION=${APP_VERSION}
+ENV COMMIT_SHA=${COMMIT_SHA}
+ENV BUILD_DATE=${BUILD_DATE}
 
 # User ID mapping for shared network drives
 ARG USER_ID=1000
@@ -20,6 +25,12 @@ RUN apt-get update && apt-get install -y \
 # Handle case where group ID already exists
 RUN groupadd -g $GROUP_ID appuser 2>/dev/null || groupmod -n appuser $(getent group $GROUP_ID | cut -d: -f1) && \
     useradd -u $USER_ID -g $GROUP_ID -m appuser 2>/dev/null || usermod -l appuser -d /home/appuser -m $(getent passwd $USER_ID | cut -d: -f1)
+
+# Add version labels for update detection
+LABEL org.opencontainers.image.revision="${COMMIT_SHA}" \
+      com.sip-lims.commit-sha="${COMMIT_SHA}" \
+      com.sip-lims.build-date="${BUILD_DATE}" \
+      com.sip-lims.version="${APP_VERSION}"
 
 # Set the application directory inside the container
 WORKDIR /opt/app
