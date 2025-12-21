@@ -1,0 +1,421 @@
+=== SYSTEM INFO ===
+PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
+NAME="Debian GNU/Linux"
+VERSION_ID="12"
+VERSION="12 (bookworm)"
+VERSION_CODENAME=bookworm
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+
+=== CONDA INFO ===
+
+     active environment : sip-lims-workflow-manager
+    active env location : /opt/conda/envs/sip-lims-workflow-manager
+            shell level : 1
+       user config file : /home/appuser/.condarc
+ populated config files : /opt/conda/.condarc
+          conda version : 25.3.1
+    conda-build version : not installed
+         python version : 3.13.2.final.0
+                 solver : libmamba (default)
+       virtual packages : __archspec=1=aarch64
+                          __conda=25.3.1=0
+                          __glibc=2.36=0
+                          __linux=6.10.14=0
+                          __unix=0=0
+       base environment : /opt/conda  (read only)
+      conda av data dir : /opt/conda/etc/conda
+  conda av metadata url : None
+           channel URLs : https://repo.anaconda.com/pkgs/main/linux-aarch64
+                          https://repo.anaconda.com/pkgs/main/noarch
+                          https://repo.anaconda.com/pkgs/r/linux-aarch64
+                          https://repo.anaconda.com/pkgs/r/noarch
+          package cache : /opt/conda/pkgs
+                          /home/appuser/.conda/pkgs
+       envs directories : /home/appuser/.conda/envs
+                          /opt/conda/envs
+               platform : linux-aarch64
+             user-agent : conda/25.3.1 requests/2.32.3 CPython/3.13.2 Linux/6.10.14-linuxkit debian/12.10 glibc/2.36 solver/libmamba conda-libmamba-solver/25.4.0 libmambapy/2.0.5 aau/0.7.0 c/. s/.
+                UID:GID : 1000:1000
+             netrc file : None
+           offline mode : False
+
+
+=== CONDA LIST ===
+# packages in environment at /opt/conda/envs/sip-lims-workflow-manager:
+#
+# Name                    Version                   Build  Channel
+_openmp_mutex             4.5                       2_gnu    conda-forge
+altair                    5.5.0                    pypi_0    pypi
+attrs                     25.3.0                   pypi_0    pypi
+blinker                   1.9.0                    pypi_0    pypi
+bzip2                     1.0.8                h4777abc_8    conda-forge
+c-ares                    1.34.5               h86ecc28_0    conda-forge
+ca-certificates           2025.8.3             hbd8a1cb_0    conda-forge
+cachetools                6.2.0                    pypi_0    pypi
+certifi                   2025.8.3                 pypi_0    pypi
+charset-normalizer        3.4.3                    pypi_0    pypi
+click                     8.1.8                    pypi_0    pypi
+contourpy                 1.3.0                    pypi_0    pypi
+cycler                    0.12.1                   pypi_0    pypi
+et-xmlfile                2.0.0                    pypi_0    pypi
+exceptiongroup            1.3.0                    pypi_0    pypi
+fonttools                 4.60.1                   pypi_0    pypi
+git                       2.51.0          pl5321h1beed63_1    conda-forge
+gitdb                     4.0.12                   pypi_0    pypi
+gitpython                 3.1.45                   pypi_0    pypi
+greenlet                  3.2.4                    pypi_0    pypi
+idna                      3.10                     pypi_0    pypi
+importlib-resources       6.5.2                    pypi_0    pypi
+iniconfig                 2.1.0                    pypi_0    pypi
+jinja2                    3.1.6                    pypi_0    pypi
+jsonschema                4.25.1                   pypi_0    pypi
+jsonschema-specifications 2025.9.1                 pypi_0    pypi
+keyutils                  1.6.3                h86ecc28_0    conda-forge
+kiwisolver                1.4.7                    pypi_0    pypi
+krb5                      1.21.3               h50a48e9_0    conda-forge
+ld_impl_linux-aarch64     2.45            default_h1979696_104    conda-forge
+libcurl                   8.14.1               h6702fde_0    conda-forge
+libedit                   3.1.20250104    pl5321h976ea20_0    conda-forge
+libev                     4.33                 h31becfc_2    conda-forge
+libexpat                  2.7.1                hfae3067_0    conda-forge
+libffi                    3.4.6                he21f813_1    conda-forge
+libgcc                    15.2.0              h8acb6b2_16    conda-forge
+libgcc-ng                 15.2.0              he9431aa_16    conda-forge
+libgomp                   15.2.0              h8acb6b2_16    conda-forge
+libiconv                  1.18                 h90929bb_2    conda-forge
+liblzma                   5.8.1                h86ecc28_2    conda-forge
+libnghttp2                1.67.0               ha888d0e_0    conda-forge
+libnsl                    2.0.1                h86ecc28_1    conda-forge
+libsqlite                 3.51.1               h022381a_0    conda-forge
+libssh2                   1.11.1               h18c354c_0    conda-forge
+libstdcxx                 15.2.0              hef695bb_16    conda-forge
+libstdcxx-ng              15.2.0              hdbbeba8_16    conda-forge
+libuuid                   2.41.2               h1022ec0_1    conda-forge
+libxcrypt                 4.4.36               h31becfc_1    conda-forge
+libzlib                   1.3.1                h86ecc28_2    conda-forge
+lxml                      6.0.2                    pypi_0    pypi
+markupsafe                3.0.3                    pypi_0    pypi
+matplotlib                3.9.4                    pypi_0    pypi
+narwhals                  2.6.0                    pypi_0    pypi
+ncurses                   6.5                  ha32ae93_3    conda-forge
+numpy                     2.0.2                    pypi_0    pypi
+openpyxl                  3.1.5                    pypi_0    pypi
+openssl                   3.5.4                h8e36d6e_0    conda-forge
+packaging                 25.0                     pypi_0    pypi
+pandas                    2.3.2                    pypi_0    pypi
+pcre2                     10.46                h15761aa_0    conda-forge
+perl                      5.32.1          7_h31becfc_perl5    conda-forge
+pillow                    11.3.0                   pypi_0    pypi
+pip                       25.2               pyh8b19718_0    conda-forge
+pluggy                    1.6.0                    pypi_0    pypi
+protobuf                  6.32.1                   pypi_0    pypi
+psutil                    7.1.0                    pypi_0    pypi
+pyarrow                   21.0.0                   pypi_0    pypi
+pydeck                    0.9.1                    pypi_0    pypi
+pygments                  2.19.2                   pypi_0    pypi
+pyparsing                 3.2.5                    pypi_0    pypi
+pypdf2                    3.0.1                    pypi_0    pypi
+pyte                      0.8.2                    pypi_0    pypi
+pytest                    8.4.2                    pypi_0    pypi
+python                    3.9.23          h0819846_0_cpython    conda-forge
+python-dateutil           2.9.0.post0              pypi_0    pypi
+pytz                      2025.2                   pypi_0    pypi
+pyyaml                    6.0.2                    pypi_0    pypi
+readline                  8.2                  h8382b9d_2    conda-forge
+referencing               0.36.2                   pypi_0    pypi
+requests                  2.32.5                   pypi_0    pypi
+rpds-py                   0.27.1                   pypi_0    pypi
+seaborn                   0.13.2                   pypi_0    pypi
+setuptools                80.9.0             pyhff2d567_0    conda-forge
+six                       1.17.0                   pypi_0    pypi
+smmap                     5.0.2                    pypi_0    pypi
+sqlalchemy                2.0.43                   pypi_0    pypi
+streamlit                 1.50.0                   pypi_0    pypi
+tenacity                  9.1.2                    pypi_0    pypi
+tk                        8.6.13          noxft_h561c983_103    conda-forge
+toml                      0.10.2                   pypi_0    pypi
+tomli                     2.2.1                    pypi_0    pypi
+tornado                   6.5.2                    pypi_0    pypi
+typing-extensions         4.15.0                   pypi_0    pypi
+tzdata                    2025.2                   pypi_0    pypi
+urllib3                   2.5.0                    pypi_0    pypi
+watchdog                  6.0.0                    pypi_0    pypi
+wcwidth                   0.2.14                   pypi_0    pypi
+wheel                     0.45.1             pyhd8ed1ab_1    conda-forge
+xlrd                      2.0.2                    pypi_0    pypi
+xlutils                   2.0.0                    pypi_0    pypi
+xlwt                      1.3.0                    pypi_0    pypi
+zipp                      3.23.0                   pypi_0    pypi
+zstd                      1.5.7                h85ac4a6_6    conda-forge
+
+=== PIP LIST ===
+Package                   Version
+------------------------- -----------
+altair                    5.5.0
+attrs                     25.3.0
+blinker                   1.9.0
+cachetools                6.2.0
+certifi                   2025.8.3
+charset-normalizer        3.4.3
+click                     8.1.8
+contourpy                 1.3.0
+cycler                    0.12.1
+et_xmlfile                2.0.0
+exceptiongroup            1.3.0
+fonttools                 4.60.1
+gitdb                     4.0.12
+GitPython                 3.1.45
+greenlet                  3.2.4
+idna                      3.10
+importlib_resources       6.5.2
+iniconfig                 2.1.0
+Jinja2                    3.1.6
+jsonschema                4.25.1
+jsonschema-specifications 2025.9.1
+kiwisolver                1.4.7
+lxml                      6.0.2
+MarkupSafe                3.0.3
+matplotlib                3.9.4
+narwhals                  2.6.0
+numpy                     2.0.2
+openpyxl                  3.1.5
+packaging                 25.0
+pandas                    2.3.2
+pillow                    11.3.0
+pip                       25.2
+pluggy                    1.6.0
+protobuf                  6.32.1
+psutil                    7.1.0
+pyarrow                   21.0.0
+pydeck                    0.9.1
+Pygments                  2.19.2
+pyparsing                 3.2.5
+PyPDF2                    3.0.1
+pyte                      0.8.2
+pytest                    8.4.2
+python-dateutil           2.9.0.post0
+pytz                      2025.2
+PyYAML                    6.0.2
+referencing               0.36.2
+requests                  2.32.5
+rpds-py                   0.27.1
+seaborn                   0.13.2
+setuptools                80.9.0
+six                       1.17.0
+smmap                     5.0.2
+SQLAlchemy                2.0.43
+streamlit                 1.50.0
+tenacity                  9.1.2
+toml                      0.10.2
+tomli                     2.2.1
+tornado                   6.5.2
+typing_extensions         4.15.0
+tzdata                    2025.2
+urllib3                   2.5.0
+watchdog                  6.0.0
+wcwidth                   0.2.14
+wheel                     0.45.1
+xlrd                      2.0.2
+xlutils                   2.0.0
+xlwt                      1.3.0
+zipp                      3.23.0
+
+=== SYSTEM LIBRARIES ===
+	libzstd.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libzstd.so.1
+	libz.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libz.so.1
+	libxxhash.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libxxhash.so.0
+	libxcb.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libxcb.so.1
+	libuuid.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libuuid.so.1
+	libutil.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libutil.so.1
+	libutf8proc.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libutf8proc.so.2
+	libunistring.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libunistring.so.2
+	libudev.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libudev.so.1
+	libtirpc.so.3 (libc6,AArch64) => /lib/aarch64-linux-gnu/libtirpc.so.3
+	libtinfo.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libtinfo.so.6
+	libtic.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libtic.so.6
+	libthread_db.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libthread_db.so.1
+	libtasn1.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libtasn1.so.6
+	libsystemd.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsystemd.so.0
+	libsvn_wc-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_wc-1.so.1
+	libsvn_subr-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_subr-1.so.1
+	libsvn_repos-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_repos-1.so.1
+	libsvn_ra_svn-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_ra_svn-1.so.1
+	libsvn_ra_serf-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_ra_serf-1.so.1
+	libsvn_ra_local-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_ra_local-1.so.1
+	libsvn_ra-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_ra-1.so.1
+	libsvn_fs_x-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_fs_x-1.so.1
+	libsvn_fs_util-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_fs_util-1.so.1
+	libsvn_fs_fs-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_fs_fs-1.so.1
+	libsvn_fs_base-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_fs_base-1.so.1
+	libsvn_fs-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_fs-1.so.1
+	libsvn_diff-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_diff-1.so.1
+	libsvn_delta-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_delta-1.so.1
+	libsvn_client-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_client-1.so.1
+	libsvn_auth_kwallet-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_auth_kwallet-1.so.1
+	libsvn_auth_gnome_keyring-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsvn_auth_gnome_keyring-1.so.1
+	libstdc++.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libstdc++.so.6
+	libssl.so.3 (libc6,AArch64) => /lib/aarch64-linux-gnu/libssl.so.3
+	libssh2.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libssh2.so.1
+	libss.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libss.so.2
+	libsqlite3.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsqlite3.so.0
+	libsmartcols.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsmartcols.so.1
+	libserf-1.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libserf-1.so.1
+	libsepol.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsepol.so.2
+	libsemanage.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsemanage.so.2
+	libselinux.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libselinux.so.1
+	libseccomp.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libseccomp.so.2
+	libsasl2.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libsasl2.so.2
+	librtmp.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/librtmp.so.1
+	librt.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/librt.so.1
+	libresolv.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libresolv.so.2
+	libreadline.so.8 (libc6,AArch64) => /lib/aarch64-linux-gnu/libreadline.so.8
+	libp11-kit.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libp11-kit.so.0
+	libpthread.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpthread.so.0
+	libpsx.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpsx.so.2
+	libpsl.so.5 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpsl.so.5
+	libproc2.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libproc2.so.0
+	libperl.so.5.36 (libc6,AArch64) => /lib/aarch64-linux-gnu/libperl.so.5.36
+	libpcre2-8.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpcre2-8.so.0
+	libpcprofile.so (libc6,AArch64) => /lib/aarch64-linux-gnu/libpcprofile.so
+	libpanelw.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpanelw.so.6
+	libpamc.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpamc.so.0
+	libpam_misc.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpam_misc.so.0
+	libpam.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libpam.so.0
+	libnss_hesiod.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnss_hesiod.so.2
+	libnss_files.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnss_files.so.2
+	libnss_dns.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnss_dns.so.2
+	libnss_compat.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnss_compat.so.2
+	libnsl.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnsl.so.2
+	libnsl.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnsl.so.1
+	libnghttp2.so.14 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnghttp2.so.14
+	libnettle.so.8 (libc6,AArch64) => /lib/aarch64-linux-gnu/libnettle.so.8
+	libncursesw.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libncursesw.so.6
+	libmount.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libmount.so.1
+	libmenuw.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libmenuw.so.6
+	libmemusage.so (libc6,AArch64) => /lib/aarch64-linux-gnu/libmemusage.so
+	libmd.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libmd.so.0
+	libm.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libm.so.6
+	liblz4.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/liblz4.so.1
+	liblzma.so.5 (libc6,AArch64) => /lib/aarch64-linux-gnu/liblzma.so.5
+	libldap-2.5.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libldap-2.5.so.0
+	liblber-2.5.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/liblber-2.5.so.0
+	libk5crypto.so.3 (libc6,AArch64) => /lib/aarch64-linux-gnu/libk5crypto.so.3
+	libkrb5support.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libkrb5support.so.0
+	libkrb5.so.3 (libc6,AArch64) => /lib/aarch64-linux-gnu/libkrb5.so.3
+	libkeyutils.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libkeyutils.so.1
+	libidn2.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libidn2.so.0
+	libhogweed.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libhogweed.so.6
+	libhistory.so.8 (libc6,AArch64) => /lib/aarch64-linux-gnu/libhistory.so.8
+	libgthread-2.0.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgthread-2.0.so.0
+	libgssapi_krb5.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgssapi_krb5.so.2
+	libgpg-error.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgpg-error.so.0
+	libgobject-2.0.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgobject-2.0.so.0
+	libgnutls.so.30 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgnutls.so.30
+	libgmp.so.10 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgmp.so.10
+	libgmodule-2.0.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgmodule-2.0.so.0
+	libglib-2.0.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libglib-2.0.so.0
+	libgio-2.0.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgio-2.0.so.0
+	libgdbm_compat.so.4 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgdbm_compat.so.4
+	libgdbm.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgdbm.so.6
+	libgcrypt.so.20 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgcrypt.so.20
+	libgcc_s.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libgcc_s.so.1
+	libformw.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libformw.so.6
+	libfido2.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libfido2.so.1
+	libffi.so.8 (libc6,AArch64) => /lib/aarch64-linux-gnu/libffi.so.8
+	libe2p.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libe2p.so.2
+	libext2fs.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libext2fs.so.2
+	libexpatw.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libexpatw.so.1
+	libexpat.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libexpat.so.1
+	libedit.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libedit.so.2
+	libdrop_ambient.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libdrop_ambient.so.0
+	libdl.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libdl.so.2
+	libdebconfclient.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libdebconfclient.so.0
+	libdb-5.3.so (libc6,AArch64) => /lib/aarch64-linux-gnu/libdb-5.3.so
+	libcurl.so.4 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcurl.so.4
+	libcurl-gnutls.so.4 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcurl-gnutls.so.4
+	libcrypto.so.3 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcrypto.so.3
+	libcrypt.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcrypt.so.1
+	libcom_err.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcom_err.so.2
+	libcbor.so.0.8 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcbor.so.0.8
+	libcap.so.2 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcap.so.2
+	libcap-ng.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libcap-ng.so.0
+	libc_malloc_debug.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libc_malloc_debug.so.0
+	libc.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libc.so.6
+	libbz2.so.1.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libbz2.so.1.0
+	libbsd.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libbsd.so.0
+	libbrotlienc.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libbrotlienc.so.1
+	libbrotlidec.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libbrotlidec.so.1
+	libbrotlicommon.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libbrotlicommon.so.1
+	libblkid.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libblkid.so.1
+	libaudit.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libaudit.so.1
+	libattr.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libattr.so.1
+	libapt-private.so.0.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libapt-private.so.0.0
+	libapt-pkg.so.6.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libapt-pkg.so.6.0
+	libaprutil-1.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libaprutil-1.so.0
+	libapr-1.so.0 (libc6,AArch64) => /lib/aarch64-linux-gnu/libapr-1.so.0
+	libanl.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libanl.so.1
+	libacl.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libacl.so.1
+	libX11.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libX11.so.6
+	libXrender.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libXrender.so.1
+	libXext.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libXext.so.6
+	libXdmcp.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libXdmcp.so.6
+	libXau.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libXau.so.6
+	libSM.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libSM.so.6
+	libICE.so.6 (libc6,AArch64) => /lib/aarch64-linux-gnu/libICE.so.6
+	libBrokenLocale.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/libBrokenLocale.so.1
+	ld-linux-aarch64.so.1 (libc6,AArch64) => /lib/aarch64-linux-gnu/ld-linux-aarch64.so.1
+	ld-linux-aarch64.so.1 (libc6,AArch64) => /lib/ld-linux-aarch64.so.1
+
+=== ICU LIBRARIES ===
+/opt/conda/lib/libicui18n.so.73.1
+/opt/conda/lib/libicutu.so
+/opt/conda/lib/libicudata.so.73
+/opt/conda/lib/libicuuc.so.73
+/opt/conda/lib/libicutu.so.73
+/opt/conda/lib/libicuuc.so
+/opt/conda/lib/libicuio.so.73
+/opt/conda/lib/libicuio.so.73.1
+/opt/conda/lib/libicui18n.so.73
+/opt/conda/lib/libicuio.so
+/opt/conda/lib/libicutu.so.73.1
+/opt/conda/lib/libicudata.so.73.1
+/opt/conda/lib/libicutest.so.73.1
+/opt/conda/lib/libicutest.so
+/opt/conda/lib/libicutest.so.73
+/opt/conda/lib/libicui18n.so
+/opt/conda/lib/libicudata.so
+/opt/conda/lib/libicuuc.so.73.1
+
+=== ENVIRONMENT VARIABLES ===
+APP_VERSION=0.0.0-local
+CONDA_DEFAULT_ENV=sip-lims-workflow-manager
+CONDA_EXE=/opt/conda/bin/conda
+CONDA_PREFIX=/opt/conda/envs/sip-lims-workflow-manager
+CONDA_PROMPT_MODIFIER=(sip-lims-workflow-manager) 
+CONDA_PYTHON_EXE=/opt/conda/bin/python
+CONDA_SHLVL=1
+HOME=/home/appuser
+HOSTNAME=3d70c59b61ef
+LANG=C.UTF-8
+LC_ALL=C.UTF-8
+PATH=/opt/conda/envs/sip-lims-workflow-manager/bin:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/opt/app
+SHLVL=1
+_=/usr/bin/env
+
+=== DEBIAN PACKAGES ===
+ii  gcc-12-base:arm64           12.2.0-14                      arm64        GCC, the GNU Compiler Collection (base package)
+ii  libc-bin                    2.36-9+deb12u10                arm64        GNU C Library: Binaries
+ii  libc6:arm64                 2.36-9+deb12u10                arm64        GNU C Library: Shared libraries
+ii  libcap-ng0:arm64            0.8.3-1+b3                     arm64        alternate POSIX capabilities library
+ii  libcap2:arm64               1:2.66-4                       arm64        POSIX 1003.1e capabilities (library)
+ii  libcbor0.8:arm64            0.8.0-2+b1                     arm64        library for parsing and generating CBOR (RFC 7049)
+ii  libcom-err2:arm64           1.47.0-2                       arm64        common error description library
+ii  libcrypt1:arm64             1:4.4.33-2                     arm64        libcrypt shared library
+ii  libcurl3-gnutls:arm64       7.88.1-10+deb12u14             arm64        easy-to-use client-side URL transfer library (GnuTLS flavour)
+ii  libcurl4:arm64              7.88.1-10+deb12u14             arm64        easy-to-use client-side URL transfer library (OpenSSL flavour)
+ii  libgcc-s1:arm64             12.2.0-14                      arm64        GCC support library
+ii  libstdc++6:arm64            12.2.0-14                      arm64        GNU Standard C++ Library v3

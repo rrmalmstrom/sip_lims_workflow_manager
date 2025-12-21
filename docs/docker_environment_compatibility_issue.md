@@ -1,8 +1,9 @@
-# Docker Environment Compatibility Issue
+# Docker Environment Compatibility Issue - RESOLVED
 
 ## Problem Summary
-**Date**: December 21, 2025  
+**Date**: December 21, 2025
 **Issue**: SQLite/SQLAlchemy import failure in production mode (Docker container) while working correctly in development mode (local Python environment)
+**Status**: ✅ **RESOLVED** - Fixed with deterministic Docker build strategy
 
 ## Error Details
 ```
@@ -56,10 +57,39 @@ The error `CXXABI_1.3.15' not found` indicates that the conda-installed packages
 3. Test with different base images or library combinations
 4. Verify if this affects other workflow steps beyond step 7
 
-## Workaround
-For immediate testing, use **development mode** which bypasses the Docker environment compatibility issue.
+## Solution Implemented ✅
+
+**Deterministic Docker Build Strategy** - Implemented December 21, 2025
+
+### What Was Changed:
+1. **Pinned Base Image**: `continuumio/miniconda3:latest` → `continuumio/miniconda3@sha256:4a2425c3ca891633e5a27280120f3fb6d5960a0f509b7594632cdd5bb8cbaea8`
+2. **Exact Package Lock Files**: Replaced `environment-docker-final-validated.yml` with:
+   - [`conda-lock.txt`](../conda-lock.txt) - Exact conda package versions
+   - [`requirements-lock.txt`](../requirements-lock.txt) - Exact pip package versions
+3. **Pinned System Dependencies**: All system packages now use exact versions
+4. **Enhanced CI/CD**: Added validation for lock files in GitHub Actions
+
+### Why This Fixes The Issue:
+- **Eliminates Version Drift**: Exact package versions prevent library mismatches
+- **Consistent C++ Libraries**: Pinned base image ensures compatible system libraries
+- **Reproducible Builds**: Same exact environment every time, eliminating compatibility surprises
+
+### Files Modified:
+- [`Dockerfile`](../Dockerfile) - Now uses deterministic build process
+- [`.github/workflows/docker-build.yml`](../.github/workflows/docker-build.yml) - Added lock file validation
+- [`README.md`](../README.md) - Documents new deterministic approach
+
+### Files Archived:
+- `archive/environment-docker-final-validated.yml` - Replaced by lock files
+- `archive/environment.yml` - No longer needed
+- `archive/Dockerfile.deterministic` - Content moved to main Dockerfile
+
+## Verification
+The deterministic build has been tested and resolves the SQLAlchemy/SQLite compatibility issue while maintaining all functionality.
 
 ## Related Files
-- [`Dockerfile`](../Dockerfile) - Docker image configuration
-- [`environment-docker-final-validated.yml`](../environment-docker-final-validated.yml) - Conda environment specification
-- [`process.post.DNA.quantification.py`](~/.sip_lims_workflow_manager/scripts/process.post.DNA.quantification.py) - Failing script (line 89)
+- [`Dockerfile`](../Dockerfile) - Deterministic Docker image configuration
+- [`conda-lock.txt`](../conda-lock.txt) - Exact conda package versions
+- [`requirements-lock.txt`](../requirements-lock.txt) - Exact pip package versions
+- [`generate_lock_files.sh`](../generate_lock_files.sh) - Script to update lock files
+- [`validate_lock_files.sh`](../validate_lock_files.sh) - Script to validate lock files

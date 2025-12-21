@@ -2,10 +2,10 @@ version: '3.8'
 
 services:
   sip-lims-workflow:
-    # Use pre-built image for production, local build for development
+    # Use pre-built deterministic image for production, local deterministic build for development
     image: ${DOCKER_IMAGE:-ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest}
     
-    # Only build locally if USE_LOCAL_BUILD is set to true
+    # Build using deterministic Dockerfile with exact package lock files
     build:
       context: .
       dockerfile: Dockerfile

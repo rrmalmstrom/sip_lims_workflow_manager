@@ -26,6 +26,21 @@ jobs:
       with:
         fetch-depth: 0
 
+    - name: Validate deterministic build files
+      run: |
+        echo "🔍 Validating deterministic build requirements..."
+        if [ ! -f "conda-lock.txt" ]; then
+          echo "❌ ERROR: conda-lock.txt not found - required for deterministic builds"
+          exit 1
+        fi
+        if [ ! -f "requirements-lock.txt" ]; then
+          echo "❌ ERROR: requirements-lock.txt not found - required for deterministic builds"
+          exit 1
+        fi
+        echo "✅ Deterministic build files validated"
+        echo "📋 Conda packages: $(wc -l < conda-lock.txt) entries"
+        echo "📋 Pip packages: $(wc -l < requirements-lock.txt) entries"
+
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
@@ -72,6 +87,7 @@ jobs:
           org.opencontainers.image.documentation=${{ github.server_url }}/${{ github.repository }}
           com.sip-lims.commit-sha=${{ steps.commit.outputs.sha }}
           com.sip-lims.build-date=${{ steps.date.outputs.date }}
+          com.sip-lims.build-type=deterministic
         build-args: |
           APP_VERSION=${{ github.ref_name }}
           COMMIT_SHA=${{ steps.commit.outputs.sha }}

@@ -33,7 +33,24 @@ This includes:
 
 ## Prerequisites
 
--   **Miniconda or Anaconda**: This application uses the Conda package manager to ensure a consistent and reproducible environment. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
+-   **Docker**: This application uses Docker with deterministic builds to ensure a consistent and reproducible environment across all platforms. Please see the **[Quick Setup Guide](docs/user_guide/QUICK_SETUP_GUIDE.md)** for installation instructions.
+
+## Deterministic Build System
+
+This project uses a **deterministic Docker build strategy** to ensure 100% reproducible environments:
+
+- **Pinned Base Image**: Uses exact SHA instead of floating tags (`continuumio/miniconda3@sha256:...`)
+- **Exact Package Versions**: Uses `conda-lock.txt` and `requirements-lock.txt` with precise package versions
+- **Pinned System Dependencies**: All system packages use exact version numbers
+- **Reproducible Builds**: Same exact environment every time, regardless of when/where built
+
+This approach solves compatibility issues (like SQLAlchemy/SQLite library mismatches) and ensures scientific reproducibility.
+
+### Lock Files
+- [`conda-lock.txt`](conda-lock.txt) - Exact conda package versions
+- [`requirements-lock.txt`](requirements-lock.txt) - Exact pip package versions
+- [`generate_lock_files.sh`](generate_lock_files.sh) - Script to update lock files
+- [`validate_lock_files.sh`](validate_lock_files.sh) - Script to validate lock files
 
 ## Repository Structure
 

@@ -13,9 +13,30 @@ This document provides a high-level overview of the architecture, design princip
 
 -   **GUI**: Streamlit
 -   **Backend & Core Logic**: Python 3
--   **Environment Management**: Conda
+-   **Environment Management**: Docker with Deterministic Builds
+-   **Package Management**: Conda + Pip with exact version lock files
 -   **Configuration**: YAML (`workflow.yml`)
 -   **State Management**: JSON (`workflow_state.json`)
+-   **Container Registry**: GitHub Container Registry (ghcr.io)
+-   **CI/CD**: GitHub Actions with deterministic Docker builds
+
+## Deterministic Build System
+
+The application uses a **deterministic Docker build strategy** to ensure 100% reproducible environments:
+
+### Key Components:
+-   **Pinned Base Image**: `continuumio/miniconda3@sha256:...` (exact SHA, not floating tags)
+-   **Exact Package Lock Files**:
+    -   `conda-lock.txt`: Exact conda package versions with build hashes
+    -   `requirements-lock.txt`: Exact pip package versions
+-   **Pinned System Dependencies**: All system packages use exact version numbers
+-   **Reproducible Builds**: Same exact environment every time, regardless of when/where built
+
+### Benefits:
+-   **Scientific Reproducibility**: Ensures consistent results across all deployments
+-   **Compatibility Fix**: Resolves SQLAlchemy/SQLite library compatibility issues
+-   **Cross-Platform Consistency**: Same environment on all Docker-supported platforms
+-   **Version Control**: Lock files are committed to git for full traceability
 
 ## On-Disk Structure (Per Project)
 
@@ -46,23 +67,45 @@ The backend is composed of several key classes that work together to manage the 
 -   **`SnapshotManager`**: Manages the creation and restoration of complete project snapshots in the `.snapshots` directory.
 -   **`ScriptRunner`**: Responsible for executing the individual Python workflow scripts in a pseudo-terminal, allowing for real-time, interactive execution.
 
-## Decoupled Repository Architecture
+## Docker-Based Architecture
 
-The system uses a decoupled architecture to separate the core application from the scientific scripts, allowing for independent management and versioning. The application and scripts are stored in **sibling directories**.
+The system uses a Docker-based architecture to ensure consistent, reproducible environments across all platforms.
 
--   **`sip_lims_workflow_manager/`**: The main application repository. It contains the GUI, workflow engine, setup scripts, and documentation. It is agnostic to the script location.
--   **`sip_scripts_prod/`**: A sibling directory containing the stable, version-controlled production scripts. This repository is automatically cloned and managed by the `setup.command` script for standard users.
--   **`sip_scripts_dev/`**: An optional, local-only sibling directory for developers. It is not managed by Git, allowing developers to maintain a local, mutable set of scripts for testing and development.
+### Container Structure:
+-   **Application Container**: Contains the GUI, workflow engine, and all dependencies
+-   **Volume Mounts**: Project data and scripts are mounted from the host system
+-   **User ID Mapping**: Proper file permissions for shared network drives
+-   **Network Isolation**: Application only accessible from localhost (127.0.0.1:8501)
 
-This structure provides stability for production users while offering flexibility for developers. The path to the active script repository is passed to the Python application at runtime via the `--script-path` command-line argument.
+### Script Management:
+-   **Production Scripts**: Automatically downloaded to `~/.sip_lims_workflow_manager/scripts`
+-   **Development Scripts**: Local scripts mounted via drag-and-drop selection
+-   **Version Control**: Scripts are independently versioned and updated
 
 ## Execution Modes: Production vs. Developer
 
 The application operates in one of two modes, determined by the presence of a marker file.
 
--   **Production Mode (Default)**: The standard mode for end-users. The application automatically uses the scripts located in the `../sip_scripts_prod` directory.
--   **Developer Mode**: Activated by the presence of a `config/developer.marker` file. In this mode, the `setup.command` and `run.command` scripts become interactive:
-    -   `setup.command` offers options for online/offline work.
-    -   `run.command` prompts the developer to choose between using the `../sip_scripts_dev` or `../sip_scripts_prod` directory for the current session.
+### Production Mode (Default)
+-   **Docker Image**: Uses pre-built deterministic images from GitHub Container Registry
+-   **Script Management**: Automatically downloads and updates scripts from GitHub
+-   **Environment**: Completely automated, no user intervention required
+-   **Updates**: Both Docker images and scripts are automatically updated
 
-This dual-mode system ensures a standardized, stable environment for production use while providing a flexible and controlled workflow for development and testing.
+### Developer Mode
+Activated by the presence of a `config/developer.marker` file:
+
+-   **Docker Build**: Can use either pre-built images or local deterministic builds
+-   **Script Choice**: Interactive prompts to choose between:
+    -   **Production Mode**: Uses centralized scripts with auto-updates
+    -   **Development Mode**: Uses local scripts with drag-and-drop selection
+-   **Flexibility**: Allows testing with local script modifications
+-   **Isolation**: Docker ensures no interference with host system
+
+### Docker Image Management:
+-   **Automatic Cleanup**: Old containers and images are automatically removed
+-   **Update Detection**: Intelligent update system checks for new deterministic images
+-   **Build Caching**: Docker layer caching optimizes build times
+-   **Multi-Platform**: Supports both Intel and ARM architectures
+
+This Docker-based system ensures a standardized, reproducible environment for production use while providing complete flexibility for development and testing.
