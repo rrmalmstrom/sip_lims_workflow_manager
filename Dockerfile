@@ -47,7 +47,7 @@ RUN conda create --name sip-lims-workflow-manager --file conda-lock.txt
 
 # Copy pip lock file and install exact pip packages
 COPY requirements-lock.txt .
-RUN /opt/conda/envs/sip-lims-workflow-manager/bin/pip install -r requirements-lock.txt --no-deps
+RUN /opt/conda/envs/sip-lims-workflow-manager/bin/python -m pip install -r requirements-lock.txt --no-deps
 
 # Copy the application source code and all supporting files
 COPY app.py .

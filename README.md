@@ -46,11 +46,15 @@ This project uses a **deterministic Docker build strategy** to ensure 100% repro
 
 This approach solves compatibility issues (like SQLAlchemy/SQLite library mismatches) and ensures scientific reproducibility.
 
-### Lock Files
+### Development Workflow Scripts
 - [`conda-lock.txt`](conda-lock.txt) - Exact conda package versions
 - [`requirements-lock.txt`](requirements-lock.txt) - Exact pip package versions
-- [`generate_lock_files.sh`](generate_lock_files.sh) - Script to update lock files
-- [`validate_lock_files.sh`](validate_lock_files.sh) - Script to validate lock files
+- [`generate_lock_files.sh`](generate_lock_files.sh) - Generate new lock files from environment.yml
+- [`validate_lock_files.sh`](validate_lock_files.sh) - Validate lock file integrity
+- [`build_image_from_lock_files.sh`](build_image_from_lock_files.sh) - Build deterministic Docker image
+- [`push_image_to_github.sh`](push_image_to_github.sh) - Push image to GitHub Container Registry
+
+For detailed development workflow, see [`DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md`](DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md).
 
 ## Repository Structure
 

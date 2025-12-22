@@ -108,4 +108,28 @@ Activated by the presence of a `config/developer.marker` file:
 -   **Build Caching**: Docker layer caching optimizes build times
 -   **Multi-Platform**: Supports both Intel and ARM architectures
 
+## Development Workflow Scripts
+
+The project includes specialized scripts for managing the deterministic Docker build workflow:
+
+### Core Build Scripts:
+-   **`generate_lock_files.sh`**: Creates deterministic lock files from `environment.yml`
+-   **`validate_lock_files.sh`**: Validates integrity of existing lock files
+-   **`build_image_from_lock_files.sh`**: Builds Docker image using existing lock files
+-   **`push_image_to_github.sh`**: Pushes built image to GitHub Container Registry
+
+### Development Workflow:
+1. **Development**: Modify dependencies in `environment.yml`
+2. **Lock Generation**: Run `generate_lock_files.sh` to create new lock files
+3. **Validation**: Run `validate_lock_files.sh` to ensure integrity
+4. **Local Build**: Run `build_image_from_lock_files.sh` for testing
+5. **Deployment**: Run `push_image_to_github.sh` to publish to registry
+
+### Testing Infrastructure:
+-   **TDD Test Suite**: Comprehensive tests for all workflow scripts
+-   **Integration Tests**: End-to-end validation of build and push processes
+-   **Remote Validation**: Tests for GitHub Container Registry functionality
+
+For detailed workflow instructions, see [`DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md`](../../DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md).
+
 This Docker-based system ensures a standardized, reproducible environment for production use while providing complete flexibility for development and testing.
