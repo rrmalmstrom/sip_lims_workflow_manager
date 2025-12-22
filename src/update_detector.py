@@ -106,12 +106,28 @@ class UpdateDetector:
         except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError):
             return None
     
-    def get_remote_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
+    def get_remote_docker_image_commit_sha(self, tag: str = "latest", branch: Optional[str] = None) -> Optional[str]:
         """Get the commit SHA from REMOTE Docker image without pulling."""
         try:
-            # Use GitHub API to get the latest commit SHA from the branch that builds the image
-            # This assumes the remote image is built from the latest commit on analysis/esp-docker-adaptation
-            return self.get_remote_commit_sha("analysis/esp-docker-adaptation")
+            # If branch not specified, detect current branch
+            if branch is None:
+                try:
+                    import sys
+                    import os
+                    # Add project root to path for imports
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    sys.path.insert(0, project_root)
+                    from utils.branch_utils import get_current_branch
+                    branch = get_current_branch()
+                except ImportError:
+                    # Fallback to main if utils not available
+                    branch = "main"
+                except Exception:
+                    # Fallback to main if branch detection fails
+                    branch = "main"
+            
+            # Use GitHub API to get the latest commit SHA from the specified branch
+            return self.get_remote_commit_sha(branch)
         except Exception:
             return None
     
@@ -121,10 +137,10 @@ class UpdateDetector:
         # Use get_local_docker_image_commit_sha() or get_remote_docker_image_commit_sha() instead
         return self.get_local_docker_image_commit_sha(tag)
     
-    def check_docker_update(self, tag: str = "latest") -> Dict[str, any]:
+    def check_docker_update(self, tag: str = "latest", branch: Optional[str] = None) -> Dict[str, any]:
         """Enhanced Docker update check with chronological validation."""
         local_sha = self.get_local_docker_image_commit_sha(tag)
-        remote_sha = self.get_remote_docker_image_commit_sha(tag)
+        remote_sha = self.get_remote_docker_image_commit_sha(tag, branch)
         
         result = {
             "update_available": False,

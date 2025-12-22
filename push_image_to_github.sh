@@ -1,8 +1,12 @@
 #!/bin/bash
 # Push Docker Image to GitHub Container Registry
-# Tags and pushes local sip-lims-workflow-manager:latest to GitHub
+# Tags and pushes local branch-specific image to GitHub
 
 set -e
+
+# Source branch utilities
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/utils/branch_utils.sh"
 
 echo "📤 Pushing Docker Image to GitHub Container Registry"
 echo "===================================================="
@@ -13,21 +17,44 @@ if ! docker info > /dev/null 2>&1; then
     exit 1
 fi
 
+# Get branch-aware image names
+echo ""
+echo "🌿 Detecting branch and generating image names..."
+if ! validate_git_repository; then
+    echo "❌ ERROR: Not in a valid Git repository"
+    exit 1
+fi
+
+CURRENT_BRANCH=$(get_current_branch_tag)
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: Failed to detect current branch"
+    echo "   Make sure you're on a proper branch (not detached HEAD)"
+    exit 1
+fi
+
+LOCAL_IMAGE_NAME=$(get_local_image_name)
+REMOTE_IMAGE_NAME=$(get_remote_image_name)
+
+echo "   ✅ Current branch: $(git branch --show-current)"
+echo "   ✅ Docker tag: $CURRENT_BRANCH"
+echo "   ✅ Local image: $LOCAL_IMAGE_NAME"
+echo "   ✅ Remote image: $REMOTE_IMAGE_NAME"
+
 # Check if local image exists
 echo ""
 echo "🔍 Checking for local image..."
-if ! docker images sip-lims-workflow-manager:latest --format "{{.Repository}}" | grep -q "sip-lims-workflow-manager"; then
-    echo "❌ ERROR: Local image 'sip-lims-workflow-manager:latest' not found"
+if ! docker images "$LOCAL_IMAGE_NAME" --format "{{.Repository}}" | grep -q "sip-lims-workflow-manager"; then
+    echo "❌ ERROR: Local image '$LOCAL_IMAGE_NAME' not found"
     echo "   Run ./build_image_from_lock_files.sh first to build the image"
     exit 1
 fi
 
-echo "   ✅ Found local image: sip-lims-workflow-manager:latest"
+echo "   ✅ Found local image: $LOCAL_IMAGE_NAME"
 
 # Get image metadata
-IMAGE_ID=$(docker images sip-lims-workflow-manager:latest --format "{{.ID}}")
-IMAGE_SIZE=$(docker images sip-lims-workflow-manager:latest --format "{{.Size}}")
-CREATED=$(docker images sip-lims-workflow-manager:latest --format "{{.CreatedAt}}")
+IMAGE_ID=$(docker images "$LOCAL_IMAGE_NAME" --format "{{.ID}}")
+IMAGE_SIZE=$(docker images "$LOCAL_IMAGE_NAME" --format "{{.Size}}")
+CREATED=$(docker images "$LOCAL_IMAGE_NAME" --format "{{.CreatedAt}}")
 
 echo "   📋 Image ID: $IMAGE_ID"
 echo "   📋 Size: $IMAGE_SIZE"
@@ -36,7 +63,7 @@ echo "   📋 Created: $CREATED"
 # Tag the image for GitHub Container Registry
 echo ""
 echo "🏷️  Tagging image for GitHub Container Registry..."
-docker tag sip-lims-workflow-manager:latest ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest
+docker tag "$LOCAL_IMAGE_NAME" "$REMOTE_IMAGE_NAME"
 
 if [ $? -eq 0 ]; then
     echo "   ✅ Image tagged successfully"
@@ -48,9 +75,9 @@ fi
 # Push to GitHub Container Registry
 echo ""
 echo "📤 Pushing to GitHub Container Registry..."
-echo "   Registry: ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest"
+echo "   Registry: $REMOTE_IMAGE_NAME"
 
-if ! docker push ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest; then
+if ! docker push "$REMOTE_IMAGE_NAME"; then
     echo ""
     echo "❌ ERROR: Push failed. You may need to authenticate with GitHub Container Registry."
     echo ""
@@ -66,7 +93,7 @@ fi
 echo "   ✅ Image pushed successfully"
 
 # Get final metadata
-REMOTE_DIGEST=$(docker inspect ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest --format='{{index .RepoDigests 0}}' 2>/dev/null || echo "unknown")
+REMOTE_DIGEST=$(docker inspect "$REMOTE_IMAGE_NAME" --format='{{index .RepoDigests 0}}' 2>/dev/null || echo "unknown")
 
 echo ""
 echo "🎉 Push Complete!"
@@ -76,12 +103,13 @@ echo "✅ Users can now pull the updated deterministic image"
 echo ""
 echo "📋 Registry Details:"
 echo "   - Repository: ghcr.io/rrmalmstrom/sip_lims_workflow_manager"
-echo "   - Tag: latest"
+echo "   - Tag: $CURRENT_BRANCH"
+echo "   - Branch: $(git branch --show-current)"
 echo "   - Image ID: $IMAGE_ID"
 echo "   - Size: $IMAGE_SIZE"
 echo "   - Digest: $REMOTE_DIGEST"
 echo ""
 echo "🔄 Users will get this image when they run:"
-echo "   ./run.command (production mode)"
+echo "   ./run.command (and are on the same branch)"
 echo ""
-echo "💡 The image is now available for production use with deterministic packages!"
+echo "💡 The image is now available with deterministic packages for branch: $(git branch --show-current)"
