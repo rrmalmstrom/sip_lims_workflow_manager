@@ -121,7 +121,7 @@ You should see output like `git version 2.x.x`.
 
 ## 3. Install Python 3.10+
 
-Python 3.10 or higher is required for the application's update detection scripts.
+Python 3.10 or higher is required for the application's setup and update detection system. While the workflow itself runs inside Docker containers, Python is needed on your local system to manage Docker image updates and script synchronization.
 
 ### On macOS:
 1.  **Check if Python 3.10+ is already installed:**
@@ -191,7 +191,7 @@ This project uses an intelligent Docker-based update system that automatically m
     *   Download the latest `sip_lims_workflow_manager` .zip file from GitHub
     *   Extract it to a permanent location (e.g., your Desktop or Documents folder)
 
-2.  **No Setup Script Required**:
+2.  **Automatic Setup Handled by Docker**:
     *   All environment setup is handled automatically by Docker
     *   The deterministic Docker image contains all dependencies with exact versions
     *   No manual environment configuration needed
@@ -216,11 +216,6 @@ This project uses an intelligent Docker-based update system that automatically m
 -   **Centralized Management**: Scripts are managed in `~/.sip_lims_workflow_manager/scripts`
 -   **Deterministic Environment**: Exact same package versions every time
 
-### For Developers (Optional):
--   **Mode Detection**: Automatically detects `config/developer.marker` file
--   **Workflow Choice**: Choose between:
-    - **Production Mode (1)**: Auto-updates enabled, uses pre-built Docker images
-    - **Development Mode (2)**: Uses local scripts, drag-and-drop local script folder selection
 
 ### Docker Container Features:
 -   **Deterministic Builds**: Same exact environment every time using pinned package versions
@@ -230,24 +225,7 @@ This project uses an intelligent Docker-based update system that automatically m
 
 ---
 
-## 6. Developer Setup (Optional)
-
-Developers can use a local, mutable set of scripts for testing and development.
-
-### Activating Developer Mode
-1.  Inside the `sip_lims_workflow_manager` directory, create a new folder named `config`
-2.  Inside the `config` folder, create an empty file named `developer.marker`
-
-The presence of this file activates "Developer Mode," which enables interactive prompts during runtime.
-
-### Running the Application in Developer Mode
--   When you run the application, you will be prompted to choose your workflow:
-    *   **Production Mode (1)**: Auto-updates enabled, uses centralized scripts from GitHub
-    *   **Development Mode (2)**: No auto-updates, drag-and-drop selection of local script folder
-
----
-
-## 7. Updating the Application
+## 6. Updating the Application
 
 ### Automatic Updates (Production Users)
 -   **Docker Images**: Automatically updated every time you run the application
@@ -255,18 +233,10 @@ The presence of this file activates "Developer Mode," which enables interactive 
 -   **No Manual Action Required**: Updates happen automatically in the background
 -   **Reproducible Updates**: Each update uses exact package versions for consistency
 
-### Manual Updates (Application Core)
-1.  **Download the New Version**: When notified of an update, download the new `sip_lims_workflow_manager` .zip file
-2.  **Replace the Old Folder**: Close the application, delete your old `sip_lims_workflow_manager` folder, and replace it with the new one
-3.  **No Setup Required**: Docker handles all environment setup automatically
-
-### Developer Updates
--   **Production Mode**: Same automatic updates as regular users
--   **Development Mode**: Uses local Docker build - manage your local scripts manually
 
 ---
 
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 ### Installation Issues
 -   **`docker: command not found`**: Docker Desktop was not installed correctly. Please reinstall following the instructions above

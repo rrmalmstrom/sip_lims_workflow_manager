@@ -132,6 +132,8 @@ The project includes specialized scripts for managing the deterministic Docker b
 -   **Integration Tests**: End-to-end validation of build and push processes
 -   **Remote Validation**: Tests for GitHub Container Registry functionality
 
-For detailed workflow instructions, see [`DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md`](../../DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md).
+For detailed workflow instructions, see [`DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md`](../Docker_docs/DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md).
+
+For technical details about the Docker Compose configuration, see [`DOCKER_COMPOSE_CONFIGURATION.md`](../Docker_docs/DOCKER_COMPOSE_CONFIGURATION.md).
 
 This Docker-based system ensures a standardized, reproducible environment for production use while providing complete flexibility for development and testing.
