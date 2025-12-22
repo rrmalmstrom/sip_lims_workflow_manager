@@ -1,6 +1,6 @@
 #!/bin/bash
 # This script runs the test suite, assuming the environment is already set up.
-# Run ./setup.command once first to create/update the environment.
+# Ensure Docker Desktop is running before running tests.
 
 # Exit on any error
 set -e

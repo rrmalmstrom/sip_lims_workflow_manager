@@ -29,6 +29,8 @@ The application uses a **deterministic Docker build strategy** to ensure 100% re
 -   **Exact Package Lock Files**:
     -   `conda-lock.txt`: Exact conda package versions with build hashes
     -   `requirements-lock.txt`: Exact pip package versions
+-   **Docker-Only Workflow**: No local Conda installation required for end users
+-   **Automatic Updates**: Docker images and scripts updated automatically via [`run.command`](../../run.command)
 -   **Pinned System Dependencies**: All system packages use exact version numbers
 -   **Reproducible Builds**: Same exact environment every time, regardless of when/where built
 

@@ -16,9 +16,9 @@ This section is for developers who are contributing to the project. It contains 
 
 -   **[System Architecture](developer_guide/ARCHITECTURE.md)**: A high-level overview of the application's architecture, design principles, and technology stack.
 -   **[Update System](developer_guide/ARCHITECTURE.md#decoupled-repository-architecture)**: An explanation of the Git-based system for managing both application and script updates.
--   **[Docker Development Workflow](../DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md)**: Complete guide to the deterministic Docker build system, including lock files, build scripts, and deployment workflow.
+-   **[Docker Development Workflow](Docker_docs/DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md)**: Complete guide to the deterministic Docker build system, including lock files, build scripts, and deployment workflow.
 -   **[FA Results Archiving](developer_guide/fa_results_archiving.md)**: Technical documentation for the Fragment Analyzer results archiving system that preserves experimental data during workflow operations.
 
 ## 🗄️ Archive
 
-Outdated and historical documents are kept in the [archive](archive/) for reference.
+Outdated and historical documents are kept in the [archive](archive/) for reference. This includes documentation from the transition period when the application was converted from a Conda-based to Docker-based workflow.
