@@ -6,14 +6,39 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
+# Source branch utilities
+source "$DIR/utils/branch_utils.sh"
+
 echo "--- Starting SIP LIMS Workflow Manager (Docker) ---"
+
+# Initialize branch-aware Docker image names
+echo "🌿 Detecting branch and generating Docker image names..."
+if ! validate_git_repository; then
+    echo "❌ ERROR: Not in a valid Git repository"
+    exit 1
+fi
+
+CURRENT_BRANCH=$(get_current_branch_tag)
+if [ $? -ne 0 ]; then
+    echo "❌ ERROR: Failed to detect current branch"
+    echo "   Make sure you're on a proper branch (not detached HEAD)"
+    exit 1
+fi
+
+LOCAL_IMAGE_NAME=$(get_local_image_name)
+REMOTE_IMAGE_NAME=$(get_remote_image_name)
+
+echo "   ✅ Current branch: $(git branch --show-current)"
+echo "   ✅ Docker tag: $CURRENT_BRANCH"
+echo "   ✅ Local image: $LOCAL_IMAGE_NAME"
+echo "   ✅ Remote image: $REMOTE_IMAGE_NAME"
 
 # Container Management Functions
 stop_workflow_containers() {
     echo "🛑 Checking for running workflow manager containers..."
     
-    # Find containers using workflow manager images
-    local workflow_containers=$(docker ps -a --filter "ancestor=ghcr.io/rrmalmstrom/sip_lims_workflow_manager" --filter "ancestor=sip-lims-workflow-manager" --format "{{.ID}} {{.Names}} {{.Status}}" 2>/dev/null)
+    # Find containers using workflow manager images (both local and remote, branch-aware)
+    local workflow_containers=$(docker ps -a --filter "ancestor=$REMOTE_IMAGE_NAME" --filter "ancestor=$LOCAL_IMAGE_NAME" --format "{{.ID}} {{.Names}} {{.Status}}" 2>/dev/null)
     
     if [ -n "$workflow_containers" ]; then
         echo "📋 Found workflow manager containers:"
@@ -39,8 +64,19 @@ stop_workflow_containers() {
 check_docker_updates() {
     echo "🔍 Checking for Docker image updates..."
     
-    # Use the update detector to check for Docker updates
-    local update_result=$(python3 src/update_detector.py --check-docker 2>/dev/null)
+    # Use the update detector to check for Docker updates with branch-aware tag
+    local update_result=$(python3 -c "
+from src.update_detector import UpdateDetector
+from utils.branch_utils import get_current_branch, sanitize_branch_for_docker_tag
+import json
+
+detector = UpdateDetector()
+branch = get_current_branch()
+tag = sanitize_branch_for_docker_tag(branch)
+
+result = detector.check_docker_update(tag=tag, branch=branch)
+print(json.dumps(result))
+" 2>/dev/null)
     local exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
@@ -58,21 +94,21 @@ except:
             echo "📦 Docker image update available - updating to latest version..."
             
             # Get current image ID before cleanup
-            local old_image_id=$(docker images ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest --format "{{.ID}}" 2>/dev/null)
+            local old_image_id=$(docker images "$REMOTE_IMAGE_NAME" --format "{{.ID}}" 2>/dev/null)
             
             # Clean up old image BEFORE pulling new one (since containers are already stopped)
             if [ -n "$old_image_id" ]; then
                 echo "🧹 Removing old Docker image before update..."
                 # Remove by tag first, then clean up any dangling images
-                docker rmi ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest >/dev/null 2>&1
+                docker rmi "$REMOTE_IMAGE_NAME" >/dev/null 2>&1
                 # Clean up dangling images to prevent disk space waste
                 docker image prune -f >/dev/null 2>&1
                 echo "✅ Old Docker image and dangling images cleaned up"
             fi
             
             # Pull the new image
-            echo "📥 Pulling latest Docker image..."
-            docker pull ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest
+            echo "📥 Pulling Docker image for branch: $(git branch --show-current)..."
+            docker pull "$REMOTE_IMAGE_NAME"
             if [ $? -eq 0 ]; then
                 echo "✅ Docker image updated successfully"
                 return 0
@@ -147,11 +183,12 @@ production_auto_update() {
     export SCRIPTS_PATH
     export APP_ENV="production"
     
-    # Use pre-built Docker image for production
-    export DOCKER_IMAGE="ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest"
+    # Use pre-built Docker image for production (branch-aware)
+    export DOCKER_IMAGE="$REMOTE_IMAGE_NAME"
     
     echo "📁 Using centralized scripts: $SCRIPTS_PATH"
     echo "🐳 Using pre-built Docker image: $DOCKER_IMAGE"
+    echo "🌿 Branch: $(git branch --show-current)"
 }
 
 # Auto-detect host user ID for proper file permissions on shared drives
@@ -226,11 +263,12 @@ select_development_script_path() {
     export SCRIPTS_PATH
     export APP_ENV="development"
     
-    # Use local Docker build for development mode
-    export DOCKER_IMAGE="sip-lims-workflow-manager:latest"
+    # Use local Docker build for development mode (branch-aware)
+    export DOCKER_IMAGE="$LOCAL_IMAGE_NAME"
     
     echo "📁 Script path: $SCRIPTS_PATH"
     echo "🐳 Using local Docker build: $DOCKER_IMAGE"
+    echo "🌿 Branch: $(git branch --show-current)"
 }
 
 # Main Mode and Update Logic
