@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Docker Image Update Detection System with Chronological Checking
+Docker Image Update Detection System
 
 This module provides functionality to detect updates for:
 - Docker workflow manager images (from GitHub Container Registry)
@@ -9,7 +9,6 @@ Key Features:
 - Compares local vs remote commit SHAs for Docker images
 - Uses Docker image labels and GitHub API
 - Provides Docker update recommendations
-- Enhanced: Determines if remote commits are actually newer (not just different)
 """
 
 import json
@@ -26,7 +25,7 @@ from datetime import datetime
 
 
 class UpdateDetector:
-    """Enhanced update detector that checks chronological order of commits."""
+    """Detects and manages updates for the workflow manager system."""
     
     def __init__(self, repo_owner: str = "rrmalmstrom", repo_name: str = "sip_lims_workflow_manager"):
         self.repo_owner = repo_owner
@@ -55,32 +54,6 @@ class UpdateDetector:
                 data = json.loads(response.read().decode('utf-8'))
                 return data["sha"]
         except (urllib.error.URLError, KeyError, json.JSONDecodeError):
-            return None
-    
-    def get_commit_timestamp(self, commit_sha: str) -> Optional[datetime]:
-        """Get the timestamp of a specific commit from GitHub API."""
-        try:
-            url = f"{self.github_api_base}/repos/{self.repo_owner}/{self.repo_name}/commits/{commit_sha}"
-            with urllib.request.urlopen(url, timeout=10) as response:
-                data = json.loads(response.read().decode('utf-8'))
-                timestamp_str = data["commit"]["committer"]["date"]
-                # Parse ISO 8601 timestamp: "2025-12-22T03:10:38Z"
-                return datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-        except (urllib.error.URLError, KeyError, json.JSONDecodeError, ValueError):
-            return None
-    
-    def is_commit_ancestor(self, ancestor_sha: str, descendant_sha: str) -> Optional[bool]:
-        """Check if ancestor_sha is an ancestor of descendant_sha using git merge-base."""
-        try:
-            # Use git merge-base to check if ancestor_sha is reachable from descendant_sha
-            result = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", ancestor_sha, descendant_sha],
-                capture_output=True,
-                text=True
-            )
-            # Exit code 0 means ancestor_sha IS an ancestor of descendant_sha
-            return result.returncode == 0
-        except (subprocess.CalledProcessError, FileNotFoundError):
             return None
     
     def get_local_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
@@ -122,7 +95,7 @@ class UpdateDetector:
         return self.get_local_docker_image_commit_sha(tag)
     
     def check_docker_update(self, tag: str = "latest") -> Dict[str, any]:
-        """Enhanced Docker update check with chronological validation."""
+        """Check if there's a Docker image update available (local vs remote)."""
         local_sha = self.get_local_docker_image_commit_sha(tag)
         remote_sha = self.get_remote_docker_image_commit_sha(tag)
         
@@ -134,65 +107,27 @@ class UpdateDetector:
             "error": None
         }
         
-        # Handle missing local image
         if not local_sha:
             result["reason"] = "No local Docker image found"
             result["update_available"] = True  # Need to pull if no local image
             return result
         
-        # Handle missing remote SHA
         if not remote_sha:
             result["error"] = "Could not determine remote Docker image commit SHA"
             return result
         
-        # If SHAs are identical, no update needed
-        if local_sha == remote_sha:
-            result["reason"] = "Local and remote SHAs match"
-            return result
-        
-        # SHAs are different - now check chronology using enhanced logic
-        # Method 1: Try git ancestry check (most reliable if we have git history)
-        ancestry_check = self.is_commit_ancestor(local_sha, remote_sha)
-        if ancestry_check is not None:
-            if ancestry_check:
-                # Local is ancestor of remote = remote is newer
-                result["update_available"] = True
-                result["reason"] = f"Remote commit {remote_sha[:8]}... is newer than local {local_sha[:8]}..."
-            else:
-                # Check reverse - is remote ancestor of local?
-                reverse_check = self.is_commit_ancestor(remote_sha, local_sha)
-                if reverse_check:
-                    # Remote is ancestor of local = local is newer
-                    result["update_available"] = False
-                    result["reason"] = f"Local commit {local_sha[:8]}... is newer than remote {remote_sha[:8]}..."
-                else:
-                    # Neither is ancestor = diverged branches
-                    result["update_available"] = False
-                    result["reason"] = f"Local and remote commits have diverged - manual review needed"
-            return result
-        
-        # Method 2: Fallback to timestamp comparison
-        local_timestamp = self.get_commit_timestamp(local_sha)
-        remote_timestamp = self.get_commit_timestamp(remote_sha)
-        
-        if local_timestamp and remote_timestamp:
-            if remote_timestamp > local_timestamp:
-                result["update_available"] = True
-                result["reason"] = f"Remote commit {remote_sha[:8]}... is newer ({remote_timestamp.isoformat()})"
-            else:
-                result["update_available"] = False
-                result["reason"] = f"Local commit {local_sha[:8]}... is newer or same age ({local_timestamp.isoformat()})"
-        else:
-            # Fallback to original behavior if timestamp check fails
+        if local_sha != remote_sha:
             result["update_available"] = True
-            result["reason"] = f"Could not determine chronology - assuming update needed (Local: {local_sha[:8]}... != Remote: {remote_sha[:8]}...)"
-            result["error"] = "Could not determine commit chronology"
+            result["reason"] = f"Local SHA {local_sha[:8]}... != Remote SHA {remote_sha[:8]}..."
+        else:
+            result["reason"] = "Local and remote SHAs match"
         
         return result
     
     def check_docker_image_update(self, tag: str = "latest") -> Dict[str, any]:
         """DEPRECATED: Use check_docker_update() instead."""
         return self.check_docker_update(tag)
+    
     
     def get_update_summary(self) -> Dict[str, any]:
         """Get a comprehensive update summary for Docker images."""

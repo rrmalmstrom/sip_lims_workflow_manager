@@ -5,15 +5,6 @@ services:
     # Use pre-built deterministic image for production, local deterministic build for development
     image: ${DOCKER_IMAGE:-ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest}
     
-    # Build using deterministic Dockerfile with exact package lock files
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        USER_ID: ${USER_ID:-1000}
-        GROUP_ID: ${GROUP_ID:-1000}
-        APP_VERSION: ${APP_VERSION:-0.0.0-local}
-    
     container_name: sip-lims-workflow-manager
     
     ports:
