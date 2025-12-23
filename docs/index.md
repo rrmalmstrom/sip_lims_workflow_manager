@@ -10,6 +10,7 @@ Welcome to the central documentation for the SIP LIMS Workflow Manager. This gui
 
 For users of the application, this section provides everything you need to get started and use the workflow manager effectively.
 
+-   **[Platform-Specific Usage Guide](PLATFORM_SPECIFIC_USAGE.md)**: 🆕 Choose the right run script for your operating system (macOS vs Windows).
 -   **[Quick Setup Guide](user_guide/QUICK_SETUP_GUIDE.md)**: A step-by-step guide to installing and configuring the application for the first time.
 -   **[Features Guide](user_guide/FEATURES.md)**: A detailed explanation of the application's features, including conditional workflows, "skip to step," and the granular undo system.
 -   **[Troubleshooting Guide](user_guide/TROUBLESHOOTING.md)**: A guide to help you resolve common issues.

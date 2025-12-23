@@ -202,8 +202,8 @@ This project uses an intelligent Docker-based update system that automatically m
 
 ### For All Users:
 1.  **Start the Application**:
-    - **macOS**: Double-click `run.command`
-    - **Windows**: Double-click `run.bat`
+    - **macOS**: Double-click `run.mac.command`
+    - **Windows**: Double-click `run.windows.bat`
 
 2.  **First-Time Experience**:
     - The application automatically downloads the latest Docker image from GitHub Container Registry
@@ -257,7 +257,7 @@ This project uses an intelligent Docker-based update system that automatically m
 ### Platform-Specific Issues
 
 **macOS:**
--   **Permission Denied**: Right-click `run.command` and select "Open" to bypass Gatekeeper
+-   **Permission Denied**: Right-click `run.mac.command` and select "Open" to bypass Gatekeeper
 -   **Docker Desktop Won't Start**: Check that you downloaded the correct version (Apple Silicon vs Intel)
 
 **Windows:**

@@ -15,7 +15,9 @@ The `refactoring_plan/` directory contains documentation from the transition per
 
 **Current Workflow:**
 - Users only need Docker Desktop, Git, and Python 3.10+ installed
-- No setup script required - [`run.command`](../run.command) handles everything automatically
+- No setup script required - platform-specific run scripts handle everything automatically:
+  - **macOS**: [`run.mac.command`](../run.mac.command)
+  - **Windows**: [`run.windows.bat`](../run.windows.bat)
 - Docker images are pulled from GitHub Container Registry
 - See [`docs/user_guide/QUICK_SETUP_GUIDE.md`](../user_guide/QUICK_SETUP_GUIDE.md) for current setup instructions
 

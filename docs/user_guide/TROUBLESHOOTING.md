@@ -71,9 +71,9 @@ This guide provides solutions to common issues you may encounter while using the
 
 ### macOS Issues
 
-#### Permission Denied when running `run.command`
+#### Permission Denied when running `run.mac.command`
 -   **Cause**: macOS Gatekeeper is blocking the script from running.
--   **Solution**: Right-click `run.command` and select "Open" to bypass Gatekeeper security.
+-   **Solution**: Right-click `run.mac.command` and select "Open" to bypass Gatekeeper security.
 
 #### Docker Desktop Won't Start
 -   **Cause**: Wrong Docker Desktop version for your Mac's processor.
