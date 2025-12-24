@@ -12,16 +12,17 @@ cd /d "%DIR%"
 
 echo 🌿 Detecting branch and generating Docker image names...
 
-REM Validate Git repository
-git rev-parse --git-dir >nul 2>&1
+REM Source branch utilities (Windows equivalent of bash source)
+REM This will validate Git repo and set CURRENT_BRANCH, LOCAL_IMAGE_NAME, REMOTE_IMAGE_NAME
+call "%DIR%utils\branch_utils.bat"
 if %errorlevel% neq 0 (
-    echo ❌ ERROR: Not in a valid Git repository
+    echo ❌ ERROR: Branch utilities failed
+    echo    Make sure you're in a valid Git repository and Python utilities are available
     pause
     exit /b 1
 )
 
-REM Get current branch using Python utilities
-for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '.'); from utils.branch_utils import get_docker_tag_for_current_branch; print(get_docker_tag_for_current_branch())" 2^>nul') do set "CURRENT_BRANCH=%%i"
+REM Verify that variables were set
 if "%CURRENT_BRANCH%"=="" (
     echo ❌ ERROR: Failed to detect current branch
     echo    Make sure you're on a proper branch (not detached HEAD)
@@ -29,9 +30,17 @@ if "%CURRENT_BRANCH%"=="" (
     exit /b 1
 )
 
-REM Get local and remote image names
-for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '.'); from utils.branch_utils import get_local_image_name_for_current_branch; print(get_local_image_name_for_current_branch())" 2^>nul') do set "LOCAL_IMAGE_NAME=%%i"
-for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '.'); from utils.branch_utils import get_remote_image_name_for_current_branch; print(get_remote_image_name_for_current_branch())" 2^>nul') do set "REMOTE_IMAGE_NAME=%%i"
+if "%LOCAL_IMAGE_NAME%"=="" (
+    echo ❌ ERROR: Failed to generate local image name
+    pause
+    exit /b 1
+)
+
+if "%REMOTE_IMAGE_NAME%"=="" (
+    echo ❌ ERROR: Failed to generate remote image name
+    pause
+    exit /b 1
+)
 
 REM Display current branch information
 for /f "delims=" %%i in ('git branch --show-current 2^>nul') do set "DISPLAY_BRANCH=%%i"
