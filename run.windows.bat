@@ -90,6 +90,10 @@ if not exist "%PROJECT_PATH%" (
 
 echo ✅ Selected project folder: %PROJECT_PATH%
 
+REM Extract project name from the project path (Windows equivalent of basename)
+for %%f in ("%PROJECT_PATH%") do set "PROJECT_NAME=%%~nxf"
+echo ✅ Project name: %PROJECT_NAME%
+
 REM Set environment variables for docker-compose
 set "USER_ID=1000"
 set "GROUP_ID=1000"
@@ -100,6 +104,7 @@ echo --- Environment Variables ---
 echo USER_ID: %USER_ID%
 echo GROUP_ID: %GROUP_ID%
 echo PROJECT_PATH: %PROJECT_PATH%
+echo PROJECT_NAME: %PROJECT_NAME%
 echo SCRIPTS_PATH: %SCRIPTS_PATH%
 echo APP_ENV: %APP_ENV%
 echo DOCKER_IMAGE: %DOCKER_IMAGE%

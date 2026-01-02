@@ -20,6 +20,7 @@ The main interface of the application is an interactive checklist that visually 
 The application provides a streamlined process for setting up new and existing projects.
 
 -   **Automatic Detection**: The application automatically detects the state of a project folder and guides you through the setup process.
+-   **Project Name Display**: The sidebar displays the actual name of your project folder for easy identification, rather than the internal Docker mount path.
 -   **New Project**: If you are starting a new project, the application will initialize the workflow with all steps marked as "pending."
 -   **Existing Work**: If you are working with a project that has already been partially completed outside of the workflow manager, you can use the "Skip to Step" feature to mark all previous steps as "skipped" and start the workflow from any step.
 

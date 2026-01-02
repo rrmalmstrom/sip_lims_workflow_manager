@@ -17,8 +17,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-# Configure logging for debugging
-logging.basicConfig(level=logging.DEBUG)
+# Configure logging - use INFO level to reduce debug noise
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def is_docker_environment() -> bool:

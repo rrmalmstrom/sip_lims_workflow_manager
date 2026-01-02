@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   sip-lims-workflow:
     # Use pre-built deterministic image for production, local deterministic build for development
@@ -29,6 +27,7 @@ services:
     
     environment:
       - APP_ENV=${APP_ENV:-production}
+      - PROJECT_NAME=${PROJECT_NAME:-data}
     
     # Health check to ensure container is ready
     healthcheck:

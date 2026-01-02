@@ -332,7 +332,13 @@ if [ ! -d "$PROJECT_PATH" ]; then
 fi
 
 echo "✅ Selected project folder: $PROJECT_PATH"
+
+# Extract project folder name for display purposes
+PROJECT_NAME=$(basename "$PROJECT_PATH")
+echo "📁 Project name: $PROJECT_NAME"
+
 export PROJECT_PATH
+export PROJECT_NAME
 
 # Launch using docker-compose with user ID mapping
 echo "Launching application with Docker Compose..."
@@ -340,6 +346,7 @@ echo "--- Environment Variables ---"
 echo "USER_ID: $USER_ID"
 echo "GROUP_ID: $GROUP_ID"
 echo "PROJECT_PATH: $PROJECT_PATH"
+echo "PROJECT_NAME: $PROJECT_NAME"
 echo "SCRIPTS_PATH: $SCRIPTS_PATH"
 echo "APP_ENV: $APP_ENV"
 echo "--- Starting Container ---"

@@ -16,6 +16,34 @@ from src.git_update_manager import create_update_managers
 from utils.docker_validation import validate_docker_environment, display_environment_status
 import argparse
 
+def get_project_display_name(project_path: Path) -> str:
+    """
+    Get the display name for the project.
+    Uses PROJECT_NAME environment variable if available, otherwise falls back to path name.
+    
+    Args:
+        project_path: The project path (typically /data in Docker)
+        
+    Returns:
+        str: The project name to display in the UI
+    """
+    project_name = os.environ.get('PROJECT_NAME', '').strip()
+    
+    if project_name and project_name != 'data':  # Don't use 'data' as it's the fallback
+        return project_name
+    return project_path.name
+
+def display_project_info_in_sidebar():
+    """
+    Display project information in the sidebar.
+    Shows the actual project folder name instead of the Docker mount point.
+    """
+    if st.session_state.project_path:
+        project_display_name = get_project_display_name(st.session_state.project_path)
+        st.info(f"🐳 **Docker Project**: `{project_display_name}`")
+    else:
+        st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
+
 def parse_script_path_argument():
     """
     Parse command line arguments to get script path.
@@ -491,10 +519,7 @@ def main():
         st.subheader("Project")
         
         # Docker-only mode - project path set by run.command
-        if st.session_state.project_path:
-            st.info(f"🐳 **Docker Project**: `{st.session_state.project_path}`")
-        else:
-            st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
+        display_project_info_in_sidebar()
         
         # Quick Start functionality - only show for projects without workflow state
         if st.session_state.project and not st.session_state.project.has_workflow_state():
