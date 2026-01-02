@@ -51,7 +51,7 @@ def get_remote_docker_image_commit_sha(self, tag: str = "latest", branch: Option
     # Auto-detects branch if not provided
 ```
 
-### 3. Enhanced Build Script (`build_image_from_lock_files.sh`)
+### 3. Enhanced Build Script (`build/build_image_from_lock_files.sh`)
 
 **Purpose**: Build Docker images with branch-aware tagging and metadata.
 
@@ -69,7 +69,7 @@ LABEL com.sip-lims.version="v3.0.0-23-g0ce0434"
 LABEL org.opencontainers.image.revision="0ce04341c6b91a659cdf7fba2377ac7c2ff80760"
 ```
 
-### 4. Enhanced Push Script (`push_image_to_github.sh`)
+### 4. Enhanced Push Script (`build/push_image_to_github.sh`)
 
 **Purpose**: Push branch-specific images to GitHub Container Registry.
 

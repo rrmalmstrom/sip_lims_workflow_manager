@@ -28,7 +28,7 @@ class TestNewDeterministicWorkflow:
     
     def test_build_script_exists_and_executable(self):
         """Test that build_image_from_lock_files.sh exists and is executable"""
-        script_path = self.project_root / "build_image_from_lock_files.sh"
+        script_path = self.project_root / "build" / "build_image_from_lock_files.sh"
         
         if not script_path.exists():
             self.log_test("Build script exists", False, "build_image_from_lock_files.sh not found")
@@ -41,7 +41,7 @@ class TestNewDeterministicWorkflow:
     
     def test_push_script_exists_and_executable(self):
         """Test that push_image_to_github.sh exists and is executable"""
-        script_path = self.project_root / "push_image_to_github.sh"
+        script_path = self.project_root / "build" / "push_image_to_github.sh"
         
         if not script_path.exists():
             self.log_test("Push script exists", False, "push_image_to_github.sh not found")
@@ -54,7 +54,7 @@ class TestNewDeterministicWorkflow:
     
     def test_build_script_validates_prerequisites(self):
         """Test that build script properly validates prerequisites"""
-        script_path = self.project_root / "build_image_from_lock_files.sh"
+        script_path = self.project_root / "build" / "build_image_from_lock_files.sh"
         
         # Test with missing lock files (backup and remove temporarily)
         conda_lock_backup = None
@@ -94,7 +94,7 @@ class TestNewDeterministicWorkflow:
     
     def test_push_script_validates_local_image(self):
         """Test that push script validates local image exists"""
-        script_path = self.project_root / "push_image_to_github.sh"
+        script_path = self.project_root / "build" / "push_image_to_github.sh"
         
         # Remove local image if it exists
         try:
@@ -125,7 +125,7 @@ class TestNewDeterministicWorkflow:
     
     def test_build_script_creates_local_image(self):
         """Test that build script successfully creates local image"""
-        script_path = self.project_root / "build_image_from_lock_files.sh"
+        script_path = self.project_root / "build" / "build_image_from_lock_files.sh"
         
         # Remove existing local image
         try:
@@ -167,7 +167,7 @@ class TestNewDeterministicWorkflow:
     
     def test_push_script_tags_image(self):
         """Test that push script properly tags image for GitHub registry"""
-        script_path = self.project_root / "push_image_to_github.sh"
+        script_path = self.project_root / "build" / "push_image_to_github.sh"
         
         # Check if local image exists
         try:
@@ -259,9 +259,9 @@ class TestNewDeterministicWorkflow:
         content = doc_file.read_text()
         
         # Check for key elements of new workflow
-        has_build_script = "build_image_from_lock_files.sh" in content
-        has_push_script = "push_image_to_github.sh" in content
-        has_generate_script = "generate_lock_files.sh" in content
+        has_build_script = "build/build_image_from_lock_files.sh" in content
+        has_push_script = "build/push_image_to_github.sh" in content
+        has_generate_script = "build/generate_lock_files.sh" in content
         has_integration_info = "run.command" in content
         
         if all([has_build_script, has_push_script, has_generate_script, has_integration_info]):

@@ -115,17 +115,17 @@ Activated by the presence of a `config/developer.marker` file:
 The project includes specialized scripts for managing the deterministic Docker build workflow:
 
 ### Core Build Scripts:
--   **`generate_lock_files.sh`**: Creates deterministic lock files from `environment.yml`
--   **`validate_lock_files.sh`**: Validates integrity of existing lock files
--   **`build_image_from_lock_files.sh`**: Builds Docker image using existing lock files
--   **`push_image_to_github.sh`**: Pushes built image to GitHub Container Registry
+-   **`build/generate_lock_files.sh`**: Creates deterministic lock files from `environment.yml`
+-   **`build/validate_lock_files.sh`**: Validates integrity of existing lock files
+-   **`build/build_image_from_lock_files.sh`**: Builds Docker image using existing lock files
+-   **`build/push_image_to_github.sh`**: Pushes built image to GitHub Container Registry
 
 ### Development Workflow:
 1. **Development**: Modify dependencies in `environment.yml`
-2. **Lock Generation**: Run `generate_lock_files.sh` to create new lock files
-3. **Validation**: Run `validate_lock_files.sh` to ensure integrity
-4. **Local Build**: Run `build_image_from_lock_files.sh` for testing
-5. **Deployment**: Run `push_image_to_github.sh` to publish to registry
+2. **Lock Generation**: Run `build/generate_lock_files.sh` to create new lock files
+3. **Validation**: Run `build/validate_lock_files.sh` to ensure integrity
+4. **Local Build**: Run `build/build_image_from_lock_files.sh` for testing
+5. **Deployment**: Run `build/push_image_to_github.sh` to publish to registry
 
 ### Testing Infrastructure:
 -   **TDD Test Suite**: Comprehensive tests for all workflow scripts

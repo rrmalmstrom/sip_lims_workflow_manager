@@ -6,7 +6,7 @@ set -e
 
 # Source branch utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils/branch_utils.sh"
+source "$SCRIPT_DIR/../utils/branch_utils.sh"
 
 echo "🔨 Building Docker Image from Lock Files"
 echo "========================================"
@@ -22,13 +22,13 @@ echo ""
 echo "🔍 Verifying deterministic lock files..."
 if [ ! -f "conda-lock.txt" ]; then
     echo "❌ ERROR: conda-lock.txt not found"
-    echo "   Run ./generate_lock_files.sh first to create lock files"
+    echo "   Run ./build/generate_lock_files.sh first to create lock files"
     exit 1
 fi
 
 if [ ! -f "requirements-lock.txt" ]; then
     echo "❌ ERROR: requirements-lock.txt not found"
-    echo "   Run ./generate_lock_files.sh first to create lock files"
+    echo "   Run ./build/generate_lock_files.sh first to create lock files"
     exit 1
 fi
 
@@ -113,4 +113,4 @@ echo "   - Base Image: $BASE_IMAGE"
 echo ""
 echo "🚀 Next steps:"
 echo "   - Test locally: ./run.command (choose development mode)"
-echo "   - Push to remote: ./push_image_to_github.sh"
+echo "   - Push to remote: ./build/push_image_to_github.sh"

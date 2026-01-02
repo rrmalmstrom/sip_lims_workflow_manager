@@ -18,10 +18,10 @@ docker run --rm sip-lims-workflow-manager:latest bash -c "
     source /opt/conda/etc/profile.d/conda.sh
     conda activate sip-lims-workflow-manager
     conda list --explicit
-" > conda-lock.txt
+" > ../conda-lock.txt
 
 if [ $? -eq 0 ]; then
-    echo "✅ Generated conda-lock.txt ($(grep -c "^https://" conda-lock.txt) packages)"
+    echo "✅ Generated conda-lock.txt ($(grep -c "^https://" ../conda-lock.txt) packages)"
 else
     echo "❌ ERROR: Failed to generate conda lock file"
     exit 1
@@ -33,10 +33,10 @@ docker run --rm sip-lims-workflow-manager:latest bash -c "
     source /opt/conda/etc/profile.d/conda.sh
     conda activate sip-lims-workflow-manager
     pip freeze
-" > requirements-lock.txt
+" > ../requirements-lock.txt
 
 if [ $? -eq 0 ]; then
-    echo "✅ Generated requirements-lock.txt ($(wc -l < requirements-lock.txt) packages)"
+    echo "✅ Generated requirements-lock.txt ($(wc -l < ../requirements-lock.txt) packages)"
 else
     echo "❌ ERROR: Failed to generate pip lock file"
     exit 1
@@ -46,11 +46,11 @@ fi
 echo "🐳 Getting base image SHA..."
 BASE_SHA=$(docker inspect continuumio/miniconda3:latest --format='{{index .RepoDigests 0}}' 2>/dev/null)
 if [ -n "$BASE_SHA" ]; then
-    echo "Base image SHA: $BASE_SHA" > base-image-info.txt
+    echo "Base image SHA: $BASE_SHA" > ../base-image-info.txt
     echo "✅ Generated base-image-info.txt"
 else
     echo "⚠️  Warning: Could not get base image SHA (image may be locally built)"
-    echo "Base image: continuumio/miniconda3:latest (locally built)" > base-image-info.txt
+    echo "Base image: continuumio/miniconda3:latest (locally built)" > ../base-image-info.txt
 fi
 
 echo ""

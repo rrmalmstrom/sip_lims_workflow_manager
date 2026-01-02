@@ -28,7 +28,7 @@ echo "  Commit SHA: $(git rev-parse HEAD)"
 ### Step 1.2: Build New Image with Branch-Aware System
 ```bash
 # Build using our enhanced script
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 ```
 
 **Expected Results:**
@@ -170,7 +170,7 @@ print(f'Using current branch (not main): {remote_sha != main_sha}')
 ```bash
 # Push using our enhanced script
 echo "Pushing with branch-aware script..."
-./push_image_to_github.sh
+./build/push_image_to_github.sh
 ```
 
 **Expected Results:**
@@ -305,14 +305,14 @@ git add README.md
 git commit -m "Test commit to simulate newer remote image"
 
 # Build new local image with new SHA
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 
 # Push this new image to remote
-./push_image_to_github.sh
+./build/push_image_to_github.sh
 
 # Now revert the change and build old local image
 git reset --hard HEAD~1
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 ```
 
 **Expected Results:**

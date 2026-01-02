@@ -160,7 +160,7 @@ class TestScriptIntegration:
     def test_build_script_syntax(self):
         """Test that build script has valid syntax."""
         result = subprocess.run(
-            ["bash", "-n", "build_image_from_lock_files.sh"],
+            ["bash", "-n", "build/build_image_from_lock_files.sh"],
             cwd=project_root,
             capture_output=True,
             text=True
@@ -170,7 +170,7 @@ class TestScriptIntegration:
     def test_push_script_syntax(self):
         """Test that push script has valid syntax."""
         result = subprocess.run(
-            ["bash", "-n", "push_image_to_github.sh"],
+            ["bash", "-n", "build/push_image_to_github.sh"],
             cwd=project_root,
             capture_output=True,
             text=True
@@ -180,7 +180,7 @@ class TestScriptIntegration:
     def test_run_script_syntax(self):
         """Test that run script has valid syntax."""
         result = subprocess.run(
-            ["bash", "-n", "run.command"],
+            ["bash", "-n", "run.mac.command"],
             cwd=project_root,
             capture_output=True,
             text=True

@@ -24,7 +24,7 @@ Both have the same Image ID - this is standard Docker behavior and **not a probl
 
 ## Available Scripts
 
-### 1. **`build_image_from_lock_files.sh`** (Branch-Aware)
+### 1. **`build/build_image_from_lock_files.sh`** (Branch-Aware)
 - Builds local Docker image from existing lock files
 - **Creates**: `sip-lims-workflow-manager:<current-branch-tag>` (local)
 - **Auto-detects**: Current Git branch and generates appropriate tag
@@ -38,7 +38,7 @@ Both have the same Image ID - this is standard Docker behavior and **not a probl
    ✅ Local image: sip-lims-workflow-manager:analysis-esp-docker-adaptation
 ```
 
-### 2. **`push_image_to_github.sh`** (Branch-Aware)
+### 2. **`build/push_image_to_github.sh`** (Branch-Aware)
 - Tags and pushes local image to GitHub Container Registry
 - **Creates**: `ghcr.io/rrmalmstrom/sip_lims_workflow_manager:<current-branch-tag>` (remote)
 - **Auto-detects**: Current Git branch and pushes to appropriate registry location
@@ -57,7 +57,7 @@ Both have the same Image ID - this is standard Docker behavior and **not a probl
 - **Development Mode**: Uses `sip-lims-workflow-manager:<current-branch-tag>`
 - **Auto-detects**: Updates available by comparing local vs remote images
 
-### 4. **`generate_lock_files.sh`**
+### 4. **`build/generate_lock_files.sh`**
 - Extracts lock files from a working Docker image
 - Creates: New `conda-lock.txt` and `requirements-lock.txt`
 - Use: During development when you want to freeze new package versions
@@ -68,8 +68,8 @@ Both have the same Image ID - this is standard Docker behavior and **not a probl
 ```bash
 # Your main branch has working lock files
 git checkout main
-./build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:main
-./push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:main
+./build/build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:main
+./build/push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:main
 ```
 
 ### 2. **Development Branch Work**
@@ -78,13 +78,13 @@ git checkout main
 git checkout analysis/esp-docker-adaptation
 
 # Build branch-specific image
-./build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:analysis-esp-docker-adaptation
+./build/build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:analysis-esp-docker-adaptation
 
 # Test locally using development mode
 ./run.command  # Choose development mode, uses branch-specific local image
 
 # Push to branch-specific remote location
-./push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:analysis-esp-docker-adaptation
+./build/push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:analysis-esp-docker-adaptation
 ```
 
 ### 3. **Experiment Safely (feature branches)**
@@ -104,10 +104,10 @@ RUN conda env create -f environment.yml
 EOF
 
 # Extract new lock files from test image
-./generate_lock_files.sh
+./build/generate_lock_files.sh
 
 # Build deterministic image from new lock files (branch-aware)
-./build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:experiment-new-package
+./build/build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:experiment-new-package
 
 # Test locally using development mode
 ./run.command  # Choose development mode, uses branch-specific image
@@ -120,15 +120,15 @@ git add conda-lock.txt requirements-lock.txt archive/environment-docker-final-va
 git commit -m "Add new package XYZ"
 
 # Push branch-specific image
-./push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:experiment-new-package
+./build/push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:experiment-new-package
 
 # Merge to main
 git checkout main
 git merge experiment/new-package
 
 # Build and push main branch image
-./build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:main
-./push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:main
+./build/build_image_from_lock_files.sh    # Build: sip-lims-workflow-manager:main
+./build/push_image_to_github.sh           # Push: ghcr.io/.../sip_lims_workflow_manager:main
 ```
 
 ## Update Detection System
@@ -187,16 +187,16 @@ Both have the **same Image ID** - they're the same image data with different tag
 
 ```bash
 # Build from current lock files (branch-aware)
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 
 # Test locally (uses branch-specific image)
 ./run.command  # Choose development mode
 
 # Push to branch-specific remote location
-./push_image_to_github.sh
+./build/push_image_to_github.sh
 
 # Create new lock files (during development)
-./generate_lock_files.sh
+./build/generate_lock_files.sh
 
 # Run with auto-updates (uses branch-specific remote image)
 ./run.command  # Choose production mode

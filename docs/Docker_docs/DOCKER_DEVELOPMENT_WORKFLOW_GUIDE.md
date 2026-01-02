@@ -6,17 +6,17 @@ This is the **industry standard** approach for managing deterministic builds dur
 
 ## Available Scripts
 
-### 1. **`build_image_from_lock_files.sh`**
+### 1. **`build/build_image_from_lock_files.sh`**
 - Builds local Docker image from existing lock files
 - Creates: `sip-lims-workflow-manager:latest` (local)
 - Use: When you want to build from current stable lock files
 
-### 2. **`push_image_to_github.sh`**
+### 2. **`build/push_image_to_github.sh`**
 - Tags and pushes local image to GitHub Container Registry
 - Creates: `ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest` (remote)
 - Use: After building and testing locally
 
-### 3. **`generate_lock_files.sh`**
+### 3. **`build/generate_lock_files.sh`**
 - Extracts lock files from a working Docker image
 - Creates: New `conda-lock.txt` and `requirements-lock.txt`
 - Use: During development when you want to freeze new package versions
@@ -27,8 +27,8 @@ This is the **industry standard** approach for managing deterministic builds dur
 ```bash
 # Your main branch has working lock files
 git checkout main
-./build_image_from_lock_files.sh    # Build from stable locks
-./push_image_to_github.sh           # Push to users
+./build/build_image_from_lock_files.sh    # Build from stable locks
+./build/push_image_to_github.sh           # Push to users
 ```
 
 ### 2. **Experiment Safely (feature branches)**
@@ -48,10 +48,10 @@ RUN conda env create -f environment.yml
 EOF
 
 # Extract new lock files from test image
-./generate_lock_files.sh
+./build/generate_lock_files.sh
 
 # Build deterministic image from new lock files
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 
 # Test locally using development mode
 ./run.command  # Choose development mode, uses sip-lims-workflow-manager:latest
@@ -68,8 +68,8 @@ git checkout main
 git merge experiment/new-package
 
 # Build and push to users
-./build_image_from_lock_files.sh
-./push_image_to_github.sh
+./build/build_image_from_lock_files.sh
+./build/push_image_to_github.sh
 ```
 
 ### 4. **If Experiment Fails**
@@ -105,16 +105,16 @@ git checkout main
 
 ```bash
 # Build from current lock files
-./build_image_from_lock_files.sh
+./build/build_image_from_lock_files.sh
 
 # Test locally
 ./run.command  # Choose development mode
 
 # Push to users
-./push_image_to_github.sh
+./build/push_image_to_github.sh
 
 # Create new lock files (during development)
-./generate_lock_files.sh
+./build/generate_lock_files.sh
 ```
 
 ## That's It!

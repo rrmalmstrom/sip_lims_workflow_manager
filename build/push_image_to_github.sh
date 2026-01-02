@@ -6,7 +6,7 @@ set -e
 
 # Source branch utilities
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "$SCRIPT_DIR/utils/branch_utils.sh"
+source "$SCRIPT_DIR/../utils/branch_utils.sh"
 
 echo "📤 Pushing Docker Image to GitHub Container Registry"
 echo "===================================================="
@@ -45,7 +45,7 @@ echo ""
 echo "🔍 Checking for local image..."
 if ! docker images "$LOCAL_IMAGE_NAME" --format "{{.Repository}}" | grep -q "sip-lims-workflow-manager"; then
     echo "❌ ERROR: Local image '$LOCAL_IMAGE_NAME' not found"
-    echo "   Run ./build_image_from_lock_files.sh first to build the image"
+    echo "   Run ./build/build_image_from_lock_files.sh first to build the image"
     exit 1
 fi
 

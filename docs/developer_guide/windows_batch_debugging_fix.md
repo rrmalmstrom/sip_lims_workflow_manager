@@ -55,7 +55,7 @@ Modified [`run.windows.bat`](../run.windows.bat) to:
 ## Testing Approach
 
 ### Cross-Platform Validation
-Created [`test_windows_batch_logic.py`](../test_windows_batch_logic.py) to simulate Windows batch logic on macOS:
+Created [`test_windows_batch_logic.py`](../archive/deprecated_2026/test_windows_batch_logic.py) to simulate Windows batch logic on macOS:
 
 - **Git repository validation** using same commands
 - **Python utilities testing** with same imports and functions

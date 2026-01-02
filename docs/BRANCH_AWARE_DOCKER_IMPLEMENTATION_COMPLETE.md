@@ -19,8 +19,8 @@ The SIP LIMS Workflow Manager has been successfully upgraded to a **branch-aware
    - Enhanced chronological commit comparison logic
 
 3. **Phase 3: Build and Push Script Enhancement**
-   - Updated [`build_image_from_lock_files.sh`](../build_image_from_lock_files.sh) for branch-aware tagging
-   - Updated [`push_image_to_github.sh`](../push_image_to_github.sh) for branch-specific registry locations
+   - Updated [`build/build_image_from_lock_files.sh`](../build/build_image_from_lock_files.sh) for branch-aware tagging
+   - Updated [`build/push_image_to_github.sh`](../build/push_image_to_github.sh) for branch-specific registry locations
    - Added automatic branch detection and image name generation
 
 4. **Phase 4: Run Script Enhancement**

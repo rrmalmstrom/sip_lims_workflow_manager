@@ -91,5 +91,5 @@ The deterministic build has been tested and resolves the SQLAlchemy/SQLite compa
 - [`Dockerfile`](../Dockerfile) - Deterministic Docker image configuration
 - [`conda-lock.txt`](../conda-lock.txt) - Exact conda package versions
 - [`requirements-lock.txt`](../requirements-lock.txt) - Exact pip package versions
-- [`generate_lock_files.sh`](../generate_lock_files.sh) - Script to update lock files
-- [`validate_lock_files.sh`](../validate_lock_files.sh) - Script to validate lock files
+- [`build/generate_lock_files.sh`](../build/generate_lock_files.sh) - Script to update lock files
+- [`build/validate_lock_files.sh`](../build/validate_lock_files.sh) - Script to validate lock files

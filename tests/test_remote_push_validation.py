@@ -26,7 +26,7 @@ class TestRemotePushValidation:
     
     def test_push_to_remote_registry(self):
         """Test actual push to GitHub Container Registry"""
-        script_path = self.project_root / "push_image_to_github.sh"
+        script_path = self.project_root / "build" / "push_image_to_github.sh"
         
         print("    Attempting to push to GitHub Container Registry...")
         print("    (This will fail if not authenticated)")
