@@ -147,7 +147,9 @@ class UpdateDetector:
             "local_sha": local_sha,
             "remote_sha": remote_sha,
             "reason": None,
-            "error": None
+            "error": None,
+            "chronology_uncertain": False,
+            "requires_user_confirmation": False
         }
         
         # Handle missing local image
@@ -199,10 +201,13 @@ class UpdateDetector:
                 result["update_available"] = False
                 result["reason"] = f"Local commit {local_sha[:8]}... is newer or same age ({local_timestamp.isoformat()})"
         else:
-            # Fallback to original behavior if timestamp check fails
+            # Enhanced fallback behavior with uncertainty warnings
             result["update_available"] = True
-            result["reason"] = f"Could not determine chronology - assuming update needed (Local: {local_sha[:8]}... != Remote: {remote_sha[:8]}...)"
-            result["error"] = "Could not determine commit chronology"
+            result["chronology_uncertain"] = True
+            result["requires_user_confirmation"] = True
+            result["reason"] = f"⚠️  CHRONOLOGY UNCERTAIN: Cannot determine if local ({local_sha[:8]}...) or remote ({remote_sha[:8]}...) is newer"
+            result["error"] = "Could not determine commit chronology - git ancestry and timestamp checks both failed"
+            result["warning"] = "Local version might be newer than remote. Manual confirmation recommended before updating."
         
         return result
     
@@ -217,7 +222,9 @@ class UpdateDetector:
         return {
             "timestamp": datetime.now().isoformat(),
             "docker": docker_update,
-            "any_updates_available": docker_update.get("update_available", False)
+            "any_updates_available": docker_update.get("update_available", False),
+            "chronology_uncertain": docker_update.get("chronology_uncertain", False),
+            "requires_user_confirmation": docker_update.get("requires_user_confirmation", False)
         }
 
 

@@ -159,11 +159,44 @@ REM Use the update detector to check for Docker updates with branch-aware tag
 python3 -c "from src.update_detector import UpdateDetector; from utils.branch_utils import get_current_branch, sanitize_branch_for_docker_tag; import json; detector = UpdateDetector(); branch = get_current_branch(); tag = sanitize_branch_for_docker_tag(branch); result = detector.check_docker_update(tag=tag, branch=branch); print(json.dumps(result))" 2>nul > temp_update_result.json
 
 if %errorlevel% equ 0 (
-    REM Parse the JSON result to check if update is available
+    REM Parse the JSON result to check if update is available and if chronology is uncertain
     for /f "delims=" %%i in ('python3 -c "import sys, json; data = json.load(open('temp_update_result.json')); print('true' if data.get('update_available', False) else 'false')" 2^>nul') do set "UPDATE_AVAILABLE=%%i"
     
+    for /f "delims=" %%i in ('python3 -c "import sys, json; data = json.load(open('temp_update_result.json')); print('true' if data.get('chronology_uncertain', False) else 'false')" 2^>nul') do set "CHRONOLOGY_UNCERTAIN=%%i"
+    
+    for /f "delims=" %%i in ('python3 -c "import sys, json; data = json.load(open('temp_update_result.json')); print('true' if data.get('requires_user_confirmation', False) else 'false')" 2^>nul') do set "REQUIRES_CONFIRMATION=%%i"
+    
     if "!UPDATE_AVAILABLE!"=="true" (
-        echo 📦 Docker image update available - updating to latest version...
+        if "!CHRONOLOGY_UNCERTAIN!"=="true" if "!REQUIRES_CONFIRMATION!"=="true" (
+            REM Extract warning message and reason
+            for /f "delims=" %%i in ('python3 -c "import sys, json; data = json.load(open('temp_update_result.json')); print(data.get('warning', 'Chronology uncertain'))" 2^>nul') do set "WARNING_MSG=%%i"
+            for /f "delims=" %%i in ('python3 -c "import sys, json; data = json.load(open('temp_update_result.json')); print(data.get('reason', 'Unknown reason'))" 2^>nul') do set "REASON=%%i"
+            
+            echo ⚠️  **CHRONOLOGY WARNING**
+            echo    !REASON!
+            echo    !WARNING_MSG!
+            echo.
+            echo The system cannot determine if your local Docker image is newer or older than the remote version.
+            echo Proceeding with the update might overwrite a newer local version with an older remote version.
+            echo.
+            set /p "USER_CHOICE=Do you want to proceed with the Docker image update? (y/N): "
+            
+            REM Convert to lowercase and trim
+            for /f "tokens=* delims= " %%a in ("!USER_CHOICE!") do set "USER_CHOICE=%%a"
+            if defined USER_CHOICE (
+                for %%i in (A B C D E F G H I J K L M N O P Q R S T U V W X Y Z) do call set "USER_CHOICE=%%USER_CHOICE:%%i=%%i%%"
+                for %%i in (a b c d e f g h i j k l m n o p q r s t u v w x y z) do call set "USER_CHOICE=%%USER_CHOICE:%%i=%%i%%"
+            )
+            
+            if not "!USER_CHOICE!"=="y" if not "!USER_CHOICE!"=="yes" (
+                echo ❌ Docker image update cancelled by user
+                echo ✅ Continuing with current local Docker image
+                goto :cleanup_and_exit
+            )
+            echo ✅ User confirmed - proceeding with Docker image update...
+        ) else (
+            echo 📦 Docker image update available - updating to latest version...
+        )
         
         REM Get current image ID before cleanup
         for /f "delims=" %%i in ('docker images "%REMOTE_IMAGE_NAME%" --format "{{.ID}}" 2^>nul') do set "OLD_IMAGE_ID=%%i"
@@ -191,6 +224,7 @@ if %errorlevel% equ 0 (
     echo ⚠️  Warning: Could not check for Docker updates, continuing with current version
 )
 
+:cleanup_and_exit
 REM Clean up temporary file
 if exist temp_update_result.json del temp_update_result.json
 goto :eof

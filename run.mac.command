@@ -80,7 +80,7 @@ print(json.dumps(result))
     local exit_code=$?
     
     if [ $exit_code -eq 0 ]; then
-        # Parse the JSON result to check if update is available
+        # Parse the JSON result to check if update is available and if chronology is uncertain
         local update_available=$(echo "$update_result" | python3 -c "
 import sys, json
 try:
@@ -90,8 +90,64 @@ except:
     print('false')
 ")
         
+        local chronology_uncertain=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print('true' if data.get('chronology_uncertain', False) else 'false')
+except:
+    print('false')
+")
+        
+        local requires_confirmation=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print('true' if data.get('requires_user_confirmation', False) else 'false')
+except:
+    print('false')
+")
+        
         if [ "$update_available" = "true" ]; then
-            echo "📦 Docker image update available - updating to latest version..."
+            if [ "$chronology_uncertain" = "true" ] && [ "$requires_confirmation" = "true" ]; then
+                # Extract warning message and reason
+                local warning_msg=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('warning', 'Chronology uncertain'))
+except:
+    print('Chronology uncertain')
+")
+                local reason=$(echo "$update_result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('reason', 'Unknown reason'))
+except:
+    print('Unknown reason')
+")
+                
+                echo "⚠️  **CHRONOLOGY WARNING**"
+                echo "   $reason"
+                echo "   $warning_msg"
+                echo ""
+                echo "The system cannot determine if your local Docker image is newer or older than the remote version."
+                echo "Proceeding with the update might overwrite a newer local version with an older remote version."
+                echo ""
+                printf "Do you want to proceed with the Docker image update? (y/N): "
+                read user_choice
+                user_choice=$(echo "$user_choice" | tr '[:upper:]' '[:lower:]' | xargs)
+                
+                if [ "$user_choice" != "y" ] && [ "$user_choice" != "yes" ]; then
+                    echo "❌ Docker image update cancelled by user"
+                    echo "✅ Continuing with current local Docker image"
+                    return 0
+                fi
+                echo "✅ User confirmed - proceeding with Docker image update..."
+            else
+                echo "📦 Docker image update available - updating to latest version..."
+            fi
             
             # Get current image ID before cleanup
             local old_image_id=$(docker images "$REMOTE_IMAGE_NAME" --format "{{.ID}}" 2>/dev/null)
