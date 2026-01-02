@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+# build/ - commented out to allow build scripts directory
 develop-eggs/
 dist/
 downloads/
@@ -99,8 +99,8 @@ test_project*/
 # Individual projects create their own .snapshots/ folders as needed
 .snapshots/
 
-# Build artifacts
-build/
+# Build artifacts (Python packages)
+# build/ - commented out to allow build scripts directory
 dist/
 *.pkg
 
