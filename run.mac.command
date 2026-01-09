@@ -228,21 +228,13 @@ production_auto_update() {
     # Check and update Docker image
     check_docker_updates
     
-    # Set up centralized scripts directory
-    local scripts_dir="$HOME/.sip_lims_workflow_manager/scripts"
-    
-    # Check and download/update scripts
-    check_and_download_scripts "$scripts_dir"
-    
-    # Set scripts path for production use
-    SCRIPTS_PATH="$scripts_dir"
-    export SCRIPTS_PATH
+    # Note: Script directory setup is now handled after workflow selection
+    # This function just sets the environment and Docker image
     export APP_ENV="production"
     
     # Use pre-built Docker image for production (branch-aware)
     export DOCKER_IMAGE="$REMOTE_IMAGE_NAME"
     
-    echo "📁 Using centralized scripts: $SCRIPTS_PATH"
     echo "🐳 Using pre-built Docker image: $DOCKER_IMAGE"
     echo "🌿 Branch: $(git branch --show-current)"
 }
@@ -358,6 +350,49 @@ stop_workflow_containers
 # Handle mode detection and updates
 handle_mode_and_updates
 
+# Workflow Selection Function
+select_workflow_type() {
+    echo ""
+    echo "🧪 Select workflow type:"
+    echo "1) SIP (Stable Isotope Probing)"
+    echo "2) SPS-CE (Single Particle Sorting - Cell Enrichment)"
+    echo ""
+    printf "Enter choice (1 or 2): "
+    read workflow_choice
+    workflow_choice=$(echo "$workflow_choice" | tr -d '\r\n' | xargs)
+    
+    case $workflow_choice in
+        1)
+            export WORKFLOW_TYPE="sip"
+            echo "✅ Selected: SIP workflow"
+            ;;
+        2)
+            export WORKFLOW_TYPE="sps-ce"
+            echo "✅ Selected: SPS-CE workflow"
+            ;;
+        *)
+            echo "❌ ERROR: Invalid choice '$workflow_choice'. Please enter 1 or 2."
+            echo "Exiting."
+            exit 1
+            ;;
+    esac
+    
+    # Update script path generation based on workflow type
+    if [ "$APP_ENV" = "production" ]; then
+        SCRIPT_PATH="$HOME/.sip_lims_workflow_manager/${WORKFLOW_TYPE}_scripts"
+        export SCRIPTS_PATH="$SCRIPT_PATH"
+        
+        # Check and download/update workflow-specific scripts
+        echo "🔍 Checking for workflow-specific script updates..."
+        check_and_download_scripts "$SCRIPTS_PATH"
+        
+        echo "📁 Using workflow-specific scripts: $SCRIPTS_PATH"
+    fi
+}
+
+# Select workflow type
+select_workflow_type
+
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then
     echo "Error: Docker is not running."
@@ -405,6 +440,7 @@ echo "PROJECT_PATH: $PROJECT_PATH"
 echo "PROJECT_NAME: $PROJECT_NAME"
 echo "SCRIPTS_PATH: $SCRIPTS_PATH"
 echo "APP_ENV: $APP_ENV"
+echo "WORKFLOW_TYPE: $WORKFLOW_TYPE"
 echo "--- Starting Container ---"
 
 # Use docker-compose for enhanced user ID mapping and volume management

@@ -9,9 +9,50 @@ from typing import Dict, Any, Optional, List
 import re
 import requests
 
+def get_repository_config(workflow_type: str = None) -> dict:
+    """
+    Get repository configuration based on workflow type.
+    
+    Args:
+        workflow_type: 'sip' or 'sps-ce' - determines which repository to use
+        
+    Returns:
+        Repository configuration dictionary
+    """
+    import os
+    
+    # Determine workflow type from environment if not provided
+    if workflow_type is None:
+        workflow_type = os.environ.get('WORKFLOW_TYPE', 'sip').lower()
+    
+    # Validate workflow type
+    if workflow_type not in ['sip', 'sps-ce']:
+        workflow_type = 'sip'  # Safe fallback for git_update_manager
+    
+    # Repository configurations for different workflow types
+    configs = {
+        'sip': {
+            "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git",
+            "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
+            "update_method": "releases",
+            "current_version_source": "git_tags",
+            "fallback_version_source": "commit_hash"
+        },
+        'sps-ce': {
+            "repo_url": "https://github.com/rrmalmstrom/SPS_library_creation_scripts.git",
+            "api_url": "https://api.github.com/repos/rrmalmstrom/SPS_library_creation_scripts",
+            "update_method": "releases",
+            "current_version_source": "git_tags",
+            "fallback_version_source": "commit_hash"
+        }
+    }
+    
+    return configs[workflow_type]
+
 def detect_script_repository_config(script_path: Path) -> dict:
     """
     Detect which script repository configuration to use based on script path.
+    This function is kept for backward compatibility but now uses workflow-aware logic.
     
     Args:
         script_path: Path to the script directory
@@ -21,25 +62,16 @@ def detect_script_repository_config(script_path: Path) -> dict:
     """
     script_path_str = str(script_path).lower()
     
-    # Check if this is the development repository
-    if "sip_scripts_dev" in script_path_str:
-        # This is the development repository
-        return {
-            "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git", # This should point to the dev remote
-            "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
-            "update_method": "releases",
-            "current_version_source": "git_tags",
-            "fallback_version_source": "commit_hash"
-        }
+    # Check for SPS-CE workflow indicators in path
+    if any(indicator in script_path_str for indicator in ['sps', 'sps-ce', 'sps_scripts']):
+        return get_repository_config('sps-ce')
     
-    # Default to production repository
-    return {
-        "repo_url": "https://github.com/rrmalmstrom/sip_scripts_workflow_gui.git", # This is the production remote
-        "api_url": "https://api.github.com/repos/rrmalmstrom/sip_scripts_workflow_gui",
-        "update_method": "releases",
-        "current_version_source": "git_tags",
-        "fallback_version_source": "commit_hash"
-    }
+    # Check if this is the development repository (SIP)
+    if "sip_scripts_dev" in script_path_str:
+        return get_repository_config('sip')
+    
+    # Default to SIP workflow for backward compatibility
+    return get_repository_config('sip')
 
 class GitUpdateManager:
     """Unified update manager using Git repositories and GitHub releases."""
@@ -476,13 +508,14 @@ class GitUpdateManager:
         self._cache.clear()
     
 # Factory function for easy instantiation
-def create_update_managers(base_path: Path = None, script_path: Path = None) -> Dict[str, GitUpdateManager]:
+def create_update_managers(base_path: Path = None, script_path: Path = None, workflow_type: str = None) -> Dict[str, GitUpdateManager]:
     """
     Create update manager instances for both the application and scripts.
     
     Args:
         base_path: Base path for the application (defaults to parent of this file).
         script_path: Path to the active scripts directory.
+        workflow_type: Required workflow type ('sip' or 'sps-ce') for script path generation.
         
     Returns:
         A dictionary containing 'app' and 'scripts' GitUpdateManager instances.
@@ -498,8 +531,17 @@ def create_update_managers(base_path: Path = None, script_path: Path = None) -> 
     if script_path:
         script_repo_path = script_path
     else:
-        # Default to the external production scripts directory if not provided
-        script_repo_path = base_path.parent / "sip_scripts_production"
+        # Require workflow_type to be explicitly provided
+        if workflow_type is None:
+            raise ValueError("workflow_type must be provided when script_path is not specified")
+        
+        # Validate workflow type
+        if workflow_type not in ['sip', 'sps-ce']:
+            raise ValueError(f"Invalid workflow_type: {workflow_type}. Must be 'sip' or 'sps-ce'")
+        
+        # Generate workflow-specific script path
+        script_dir_name = f"{workflow_type}_scripts"
+        script_repo_path = Path.home() / ".sip_lims_workflow_manager" / script_dir_name
         
     script_manager = GitUpdateManager("scripts", script_repo_path.resolve())
     

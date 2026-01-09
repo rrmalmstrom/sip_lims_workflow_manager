@@ -16,9 +16,9 @@ services:
         bind:
           create_host_path: true
       
-      # Scripts volume - centralized workflow scripts repository
+      # Scripts volume - path set by run scripts (workflow-specific in production, user-chosen in development)
       - type: bind
-        source: ${SCRIPTS_PATH:-~/.sip_lims_workflow_manager/scripts}
+        source: ${SCRIPTS_PATH}
         target: /workflow-scripts
         bind:
           create_host_path: true
@@ -28,6 +28,7 @@ services:
     environment:
       - APP_ENV=${APP_ENV:-production}
       - PROJECT_NAME=${PROJECT_NAME:-data}
+      - WORKFLOW_TYPE=${WORKFLOW_TYPE}
     
     # Health check to ensure container is ready
     healthcheck:

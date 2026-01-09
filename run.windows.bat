@@ -55,6 +55,9 @@ call :stop_workflow_containers
 REM Handle mode detection and updates
 call :handle_mode_and_updates
 
+REM Select workflow type
+call :select_workflow_type
+
 REM Check if Docker is running
 docker info >nul 2>&1
 if %errorlevel% neq 0 (
@@ -108,6 +111,7 @@ echo PROJECT_NAME: %PROJECT_NAME%
 echo SCRIPTS_PATH: %SCRIPTS_PATH%
 echo APP_ENV: %APP_ENV%
 echo DOCKER_IMAGE: %DOCKER_IMAGE%
+echo WORKFLOW_TYPE: %WORKFLOW_TYPE%
 echo --- Starting Container ---
 
 REM Use docker-compose for enhanced user ID mapping and volume management
@@ -267,20 +271,13 @@ echo 🏭 Production mode - performing automatic updates...
 REM Check and update Docker image
 call :check_docker_updates
 
-REM Set up centralized scripts directory
-set "SCRIPTS_DIR=%USERPROFILE%\.sip_lims_workflow_manager\scripts"
-
-REM Check and download/update scripts
-call :check_and_download_scripts "%SCRIPTS_DIR%" "main"
-
-REM Set scripts path for production use
-set "SCRIPTS_PATH=%SCRIPTS_DIR%"
+REM Note: Script directory setup is now handled after workflow selection
+REM This function just sets the environment and Docker image
 set "APP_ENV=production"
 
 REM Use pre-built Docker image for production (branch-aware)
 set "DOCKER_IMAGE=%REMOTE_IMAGE_NAME%"
 
-echo 📁 Using centralized scripts: %SCRIPTS_PATH%
 echo 🐳 Using pre-built Docker image: %DOCKER_IMAGE%
 echo 🌿 Branch: %DISPLAY_BRANCH%
 goto :eof
@@ -368,5 +365,39 @@ if "%MODE%"=="developer" (
 ) else (
     REM Regular production user - always use auto-updates
     call :production_auto_update
+)
+goto :eof
+
+:select_workflow_type
+echo.
+echo 🧪 Select workflow type:
+echo 1^) SIP (Stable Isotope Probing^)
+echo 2^) SPS-CE (Single Particle Sorting - Cell Enrichment^)
+echo.
+set /p "WORKFLOW_CHOICE=Enter choice (1 or 2): "
+
+if "%WORKFLOW_CHOICE%"=="1" (
+    set "WORKFLOW_TYPE=sip"
+    echo ✅ Selected: SIP workflow
+) else if "%WORKFLOW_CHOICE%"=="2" (
+    set "WORKFLOW_TYPE=sps-ce"
+    echo ✅ Selected: SPS-CE workflow
+) else (
+    echo ❌ ERROR: Invalid choice '%WORKFLOW_CHOICE%'. Please enter 1 or 2.
+    echo Exiting.
+    pause
+    exit /b 1
+)
+
+REM Update script path generation based on workflow type
+if "%APP_ENV%"=="production" (
+    set "SCRIPT_PATH=%USERPROFILE%\.sip_lims_workflow_manager\%WORKFLOW_TYPE%_scripts"
+    set "SCRIPTS_PATH=%SCRIPT_PATH%"
+    
+    REM Check and download/update workflow-specific scripts
+    echo 🔍 Checking for workflow-specific script updates...
+    call :check_and_download_scripts "%SCRIPTS_PATH%" "main"
+    
+    echo 📁 Using workflow-specific scripts: %SCRIPTS_PATH%
 )
 goto :eof

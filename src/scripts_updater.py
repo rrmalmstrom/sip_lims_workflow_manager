@@ -3,13 +3,14 @@
 Python Scripts Update System
 
 This module provides functionality to detect and manage updates for:
-- Python scripts from the sip_scripts_workflow_gui repository
+- Python scripts from workflow-specific repositories (SIP or SPS-CE)
 
 Key Features:
 - Uses git clone/pull for proper repository management
 - Uses git's built-in fetch/status to detect updates
-- Manages ~/.sip_lims_workflow_manager/scripts as a git repository
+- Manages workflow-specific script directories as git repositories
 - Provides script update recommendations and downloads
+- Supports both SIP and SPS-CE workflows
 """
 
 import json
@@ -22,15 +23,52 @@ from typing import Dict, Optional
 from pathlib import Path
 from datetime import datetime
 
+# Repository mapping for different workflow types
+WORKFLOW_REPOSITORIES = {
+    'sip': {
+        'repo_name': 'sip_scripts_workflow_gui',
+        'repo_owner': 'rrmalmstrom'
+    },
+    'sps-ce': {
+        'repo_name': 'SPS_library_creation_scripts',
+        'repo_owner': 'rrmalmstrom'
+    }
+}
+
 
 class ScriptsUpdater:
-    """Detects and manages updates for Python scripts."""
+    """Detects and manages updates for workflow-specific Python scripts."""
     
-    def __init__(self, repo_owner: str = "rrmalmstrom", scripts_repo_name: str = "sip_scripts_workflow_gui"):
-        self.repo_owner = repo_owner
-        self.scripts_repo_name = scripts_repo_name
+    def __init__(self, workflow_type: str = None, repo_owner: str = None, scripts_repo_name: str = None):
+        """
+        Initialize ScriptsUpdater with workflow-aware repository configuration.
+        
+        Args:
+            workflow_type: 'sip' or 'sps-ce' - determines which repository to use
+            repo_owner: Override default repository owner
+            scripts_repo_name: Override default repository name
+        """
+        # Determine workflow type from environment if not provided
+        if workflow_type is None:
+            workflow_type = os.environ.get('WORKFLOW_TYPE', 'sip').lower()
+        
+        # Validate workflow type
+        if workflow_type not in WORKFLOW_REPOSITORIES:
+            raise ValueError(f"Invalid workflow_type '{workflow_type}'. Must be one of: {list(WORKFLOW_REPOSITORIES.keys())}")
+        
+        self.workflow_type = workflow_type
+        
+        # Use provided values or get from workflow mapping
+        if repo_owner and scripts_repo_name:
+            self.repo_owner = repo_owner
+            self.scripts_repo_name = scripts_repo_name
+        else:
+            repo_config = WORKFLOW_REPOSITORIES[workflow_type]
+            self.repo_owner = repo_config['repo_owner']
+            self.scripts_repo_name = repo_config['repo_name']
+        
         self.github_api_base = "https://api.github.com"
-        self.scripts_repo_url = f"https://github.com/{repo_owner}/{scripts_repo_name}.git"
+        self.scripts_repo_url = f"https://github.com/{self.repo_owner}/{self.scripts_repo_name}.git"
         
     def check_scripts_update(self, scripts_dir: str, branch: str = "main") -> Dict[str, any]:
         """Check if there are script updates available using git."""
@@ -177,10 +215,15 @@ def main():
     parser.add_argument("--summary", action="store_true", help="Show scripts update summary")
     parser.add_argument("--scripts-dir", required=True, help="Directory for scripts repository")
     parser.add_argument("--branch", default="main", help="Git branch to check/download from")
+    parser.add_argument("--workflow-type", help="Workflow type (sip or sps-ce) - defaults to WORKFLOW_TYPE env var")
     
     args = parser.parse_args()
     
-    updater = ScriptsUpdater()
+    try:
+        updater = ScriptsUpdater(workflow_type=args.workflow_type)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     
     if args.check_scripts:
         result = updater.check_scripts_update(args.scripts_dir, args.branch)
