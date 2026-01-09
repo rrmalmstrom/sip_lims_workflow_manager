@@ -1,0 +1,25 @@
+workflow_name: "SPS-CE Library Creation Workflow"
+steps:
+  - id: make_library_input_files
+    name: "1. Make Library Creation Input Files"
+    script: "SPS_make_illumina_index_and_FA_files_NEW.py"
+
+  - id: first_fa_analysis
+    name: "2. First FA Output Analysis"
+    script: "SPS_first_FA_output_analysis_NEW.py"
+
+  - id: second_attempt_decision
+    name: "3. Decision: Second Attempt Needed?"
+    script: "decision_second_attempt.py"
+
+  - id: rework_first_attempt
+    name: "4. Rework First Attempt"
+    script: "SPS_rework_first_attempt_NEW.py"
+
+  - id: second_fa_analysis
+    name: "5. Second FA Output Analysis"
+    script: "SPS_second_FA_output_analysis_NEW.py"
+
+  - id: conclude_fa_analysis
+    name: "6. Conclude FA Analysis and Generate ESP Smear File"
+    script: "SPS_conclude_FA_analysis_generate_ESP_smear_file.py"
