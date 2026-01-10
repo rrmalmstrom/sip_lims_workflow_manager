@@ -1,0 +1,6 @@
+This is a dummy file created for testing the sync workflow.
+Created at: 2026-01-10T20:58:45Z
+Purpose: Test automatic sync updates between repository and Docker image.
+
+This file will be committed, pushed, used to build a Docker image,
+then removed via hard reset to test the automatic update mechanism.
