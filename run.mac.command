@@ -298,6 +298,14 @@ production_auto_update() {
     # Check and update Docker image
     check_docker_updates
     
+    # FATAL SYNC ERROR CHECK - ADD THIS
+    echo "🔍 Checking for fatal repository/Docker sync errors..."
+    python3 src/fatal_sync_checker.py
+    if [ $? -ne 0 ]; then
+        echo "💥 FATAL SYNC ERROR DETECTED - STOPPING EXECUTION"
+        exit 1
+    fi
+    
     # Set up workflow-specific scripts directory (RESTORED MISSING LOGIC)
     local scripts_dir="$HOME/.sip_lims_workflow_manager/${WORKFLOW_TYPE}_scripts"
     

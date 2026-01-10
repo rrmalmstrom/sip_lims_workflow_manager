@@ -2,6 +2,41 @@
 
 This document provides a detailed overview of the key features of the SIP LIMS Workflow Manager.
 
+## Multi-Workflow Support
+
+The SIP LIMS Workflow Manager now supports multiple laboratory workflow types:
+
+### Supported Workflows
+
+#### SIP (Stable Isotope Probing) - 21 Steps
+- **Purpose**: Complete SIP fractionation and library preparation workflow
+- **Steps**: 21 comprehensive steps from setup through final processing
+- **Scripts Repository**: `sip_scripts_workflow_gui`
+- **Template**: [`templates/sip_workflow.yml`](../../templates/sip_workflow.yml)
+
+#### SPS-CE (SPS-Capillary Electrophoresis) - 6 Steps
+- **Purpose**: SPS library creation with Fragment Analyzer integration
+- **Steps**: 6 focused steps for SPS-CE workflow execution
+- **Scripts Repository**: `SPS_library_creation_scripts`
+- **Template**: [`templates/sps_workflow.yml`](../../templates/sps_workflow.yml)
+
+### Workflow Selection
+
+When starting the application, you'll be prompted to select your workflow type:
+
+```
+Select workflow type:
+1) SIP (Stable Isotope Probing)
+2) SPS-CE (SPS-Capillary Electrophoresis)
+Enter choice (1 or 2):
+```
+
+### Backward Compatibility
+
+- **Existing SIP workflows**: Continue to work exactly as before with zero changes
+- **Default behavior**: If no workflow type is specified, defaults to SIP workflow
+- **All existing features**: Undo, snapshots, state management work identically for both workflows
+
 ## Interactive Workflow Checklist
 
 The main interface of the application is an interactive checklist that visually represents the steps of your laboratory workflow. Each step is displayed as a card with its current status.

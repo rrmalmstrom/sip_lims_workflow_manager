@@ -107,7 +107,7 @@ class UpdateDetector:
             return None
     
     def get_remote_docker_image_commit_sha(self, tag: str = "latest", branch: Optional[str] = None) -> Optional[str]:
-        """Get the commit SHA from REMOTE Docker image without pulling."""
+        """Get the commit SHA from REMOTE Docker image by checking actual image existence."""
         try:
             # If branch not specified, detect current branch
             if branch is None:
@@ -126,9 +126,62 @@ class UpdateDetector:
                     # Fallback to main if branch detection fails
                     branch = "main"
             
-            # Use GitHub API to get the latest commit SHA from the specified branch
-            return self.get_remote_commit_sha(branch)
-        except Exception:
+            # Check if there's actually a Docker image for this tag by inspecting remote manifest
+            # This uses docker manifest inspect which doesn't pull the image
+            result = subprocess.run(
+                ["docker", "manifest", "inspect", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                # No remote Docker image exists for this tag
+                return None
+                
+            # Parse the manifest to get image labels
+            manifest_data = json.loads(result.stdout)
+            
+            # For multi-arch images, check the config
+            if "manifests" in manifest_data:
+                # Multi-arch manifest - get the first architecture's config
+                for manifest in manifest_data["manifests"]:
+                    if manifest.get("platform", {}).get("architecture") == "amd64":
+                        # Get the config blob for this architecture
+                        config_digest = manifest["digest"]
+                        break
+                else:
+                    # Fallback to first manifest if no amd64 found
+                    config_digest = manifest_data["manifests"][0]["digest"]
+            else:
+                # Single-arch manifest
+                config_digest = manifest_data.get("config", {}).get("digest")
+            
+            if not config_digest:
+                return None
+                
+            # Get the config blob to extract labels
+            config_result = subprocess.run(
+                ["docker", "manifest", "inspect", f"{self.ghcr_image}@{config_digest}"],
+                capture_output=True,
+                text=True
+            )
+            
+            if config_result.returncode != 0:
+                return None
+                
+            config_data = json.loads(config_result.stdout)
+            labels = config_data.get("config", {}).get("Labels", {})
+            
+            # Try multiple label keys for commit SHA
+            for key in ["com.sip-lims.commit-sha", "org.opencontainers.image.revision"]:
+                if key in labels:
+                    return labels[key]
+            
+            return None
+            
+        except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, Exception):
+            # If we can't check the remote image, fall back to repository SHA
+            # but mark this as uncertain
             return None
     
     def get_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
@@ -138,18 +191,23 @@ class UpdateDetector:
         return self.get_local_docker_image_commit_sha(tag)
     
     def check_docker_update(self, tag: str = "latest", branch: Optional[str] = None) -> Dict[str, any]:
-        """Enhanced Docker update check with chronological validation."""
+        """Enhanced Docker update check with chronological validation and repository sync verification."""
         local_sha = self.get_local_docker_image_commit_sha(tag)
         remote_sha = self.get_remote_docker_image_commit_sha(tag, branch)
+        
+        # Also get the current repository commit SHA to check for sync issues
+        repo_sha = self.get_remote_commit_sha(branch or "main")
         
         result = {
             "update_available": False,
             "local_sha": local_sha,
             "remote_sha": remote_sha,
+            "repo_sha": repo_sha,
             "reason": None,
             "error": None,
             "chronology_uncertain": False,
-            "requires_user_confirmation": False
+            "requires_user_confirmation": False,
+            "sync_warning": None
         }
         
         # Handle missing local image
@@ -158,10 +216,39 @@ class UpdateDetector:
             result["update_available"] = True  # Need to pull if no local image
             return result
         
-        # Handle missing remote SHA
+        # Check for repository/Docker image sync issues - FATAL ERRORS
+        if repo_sha and not remote_sha:
+            # Repository has commits but no corresponding Docker image - FATAL
+            result["error"] = "FATAL: Repository has been updated but no corresponding Docker image exists"
+            result["sync_warning"] = f"Repository is at commit {repo_sha[:8]}... but no Docker image found for tag '{tag}'"
+            result["reason"] = "FATAL ERROR: Docker image build failed or is pending. Contact developer immediately."
+            result["requires_user_confirmation"] = False  # No confirmation - just fail
+            result["fatal_sync_error"] = True
+            return result
+        
+        # Handle missing remote SHA (both repo and image)
         if not remote_sha:
             result["error"] = "Could not determine remote Docker image commit SHA"
             return result
+        
+        # Check if repository and Docker image are out of sync - FATAL ERROR
+        if repo_sha and remote_sha and repo_sha != remote_sha:
+            # Check if Docker image is behind repository (most common case)
+            ancestry_check = self.is_commit_ancestor(remote_sha, repo_sha)
+            if ancestry_check:
+                # Docker image is behind repository - FATAL
+                result["error"] = "FATAL: Docker image is out of sync with repository"
+                result["sync_warning"] = f"Repository is at newer commit {repo_sha[:8]}... but Docker image is at older commit {remote_sha[:8]}..."
+                result["reason"] = "FATAL ERROR: Docker image build is required. Repository has newer commits than Docker image."
+                result["fatal_sync_error"] = True
+                return result
+            else:
+                # Docker image might be ahead or diverged - still fatal but different message
+                result["error"] = "FATAL: Repository and Docker image have diverged"
+                result["sync_warning"] = f"Repository ({repo_sha[:8]}...) and Docker image ({remote_sha[:8]}...) are out of sync"
+                result["reason"] = "FATAL ERROR: Repository and Docker image commits have diverged. Manual intervention required."
+                result["fatal_sync_error"] = True
+                return result
         
         # If SHAs are identical, no update needed
         if local_sha == remote_sha:

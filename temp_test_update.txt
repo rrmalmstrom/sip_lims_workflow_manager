@@ -1,4 +1,0 @@
-This is a temporary file to test the workflow manager update mechanism.
-Created at: 2026-01-10T01:14:30Z
-Purpose: Test automatic repository updates in production mode
-Will be deleted after successful test.

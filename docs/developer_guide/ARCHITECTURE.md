@@ -15,7 +15,7 @@ This document provides a high-level overview of the architecture, design princip
 -   **Backend & Core Logic**: Python 3
 -   **Environment Management**: Docker with Deterministic Builds
 -   **Package Management**: Conda + Pip with exact version lock files
--   **Configuration**: YAML (`workflow.yml`)
+-   **Configuration**: YAML (workflow templates: [`sip_workflow.yml`](../../templates/sip_workflow.yml), [`sps_workflow.yml`](../../templates/sps_workflow.yml))
 -   **State Management**: JSON (`workflow_state.json`)
 -   **Container Registry**: GitHub Container Registry (ghcr.io)
 -   **CI/CD**: GitHub Actions with deterministic Docker builds
@@ -137,3 +137,52 @@ For detailed workflow instructions, see [`DOCKER_DEVELOPMENT_WORKFLOW_GUIDE.md`]
 For technical details about the Docker Compose configuration, see [`DOCKER_COMPOSE_CONFIGURATION.md`](../Docker_docs/DOCKER_COMPOSE_CONFIGURATION.md).
 
 This Docker-based system ensures a standardized, reproducible environment for production use while providing complete flexibility for development and testing.
+
+## Workflow-Aware Architecture
+
+### Environment Variable Propagation
+
+The system uses the `WORKFLOW_TYPE` environment variable to determine which workflow to load:
+
+```
+User Selection → Run Scripts → Docker Environment → Application Logic
+```
+
+**Flow:**
+1. **Run Scripts** ([`run.mac.command`](../../run.mac.command), [`run.windows.bat`](../../run.windows.bat)): Set `WORKFLOW_TYPE` based on user selection
+2. **Docker Compose** ([`docker-compose.yml`](../../docker-compose.yml)): Passes `WORKFLOW_TYPE` to container
+3. **Application Logic** ([`app.py`](../../app.py)): Reads `WORKFLOW_TYPE` for template selection
+4. **Repository Management** ([`src/scripts_updater.py`](../../src/scripts_updater.py)): Uses `WORKFLOW_TYPE` for script repository selection
+
+### Template System
+
+**Template Selection Logic:**
+- `WORKFLOW_TYPE=sip` → [`templates/sip_workflow.yml`](../../templates/sip_workflow.yml)
+- `WORKFLOW_TYPE=sps-ce` → [`templates/sps_workflow.yml`](../../templates/sps_workflow.yml)
+- **Fallback**: Defaults to SIP workflow for invalid or missing workflow types
+
+**Template Structure:**
+Both templates follow the same YAML structure but contain different workflow steps appropriate for their respective laboratory processes.
+
+### Repository Management
+
+**Workflow-Specific Repositories:**
+- **SIP**: `sip_scripts_workflow_gui` (existing repository)
+- **SPS-CE**: `SPS_library_creation_scripts` (enhanced with success markers)
+
+**Script Paths:**
+- **SIP**: `~/.sip_lims_workflow_manager/sip_scripts`
+- **SPS-CE**: `~/.sip_lims_workflow_manager/sps-ce_scripts`
+
+### Success Marker Integration
+
+All workflow scripts create success markers in `.workflow_status/{script_name}.success` for workflow manager integration:
+
+**SIP Scripts**: Already had success markers
+**SPS-CE Scripts**: Enhanced with robust success marker pattern:
+- `SPS_make_illumina_index_and_FA_files_NEW.py`
+- `SPS_first_FA_output_analysis_NEW.py`
+- `SPS_rework_first_attempt_NEW.py`
+- `SPS_second_FA_output_analysis_NEW.py`
+- `SPS_conclude_FA_analysis_generate_ESP_smear_file.py`
+- `decision_second_attempt.py` (new decision script)

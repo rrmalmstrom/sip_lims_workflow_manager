@@ -200,15 +200,40 @@ This project uses an intelligent Docker-based update system that automatically m
 
 ## 5. Launching the Application
 
-### For All Users:
-1.  **Start the Application**:
-    - **macOS**: Double-click `run.mac.command`
-    - **Windows**: Double-click `run.windows.bat`
+### Step 1: Choose Workflow Type
+When you run the application, you'll first be asked to select your workflow type:
 
-2.  **First-Time Experience**:
-    - The application automatically downloads the latest Docker image from GitHub Container Registry
-    - You'll be prompted to drag and drop your project folder
-    - The application opens in your web browser at `http://127.0.0.1:8501`
+**macOS/Linux:**
+```bash
+./run.mac.command
+```
+
+**Windows:**
+```cmd
+./run.windows.bat
+```
+
+**Workflow Selection:**
+```
+Select workflow type:
+1) SIP (Stable Isotope Probing) - 21 step comprehensive workflow
+2) SPS-CE (SPS-Capillary Electrophoresis) - 6 step focused workflow
+Enter choice (1 or 2):
+```
+
+### Step 2: Choose Execution Mode
+After selecting your workflow type, choose how to run:
+
+- **Production Mode**: Uses pre-built Docker images and automatically managed scripts
+- **Development Mode**: Uses local script directories for development and testing
+
+### Step 3: Application Launch
+The application will start with your chosen workflow template loaded and ready for use.
+
+### First-Time Experience:
+- The application automatically downloads the latest Docker image from GitHub Container Registry
+- You'll be prompted to drag and drop your project folder
+- The application opens in your web browser at `http://127.0.0.1:8501`
 
 ### Automatic Features:
 -   **Automatic Docker Updates**: Checks and downloads the latest Docker images automatically

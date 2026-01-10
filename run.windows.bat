@@ -271,6 +271,14 @@ echo 🏭 Production mode - performing automatic updates...
 REM Check and update Docker image
 call :check_docker_updates
 
+REM FATAL SYNC ERROR CHECK - ADD THIS
+echo 🔍 Checking for fatal repository/Docker sync errors...
+python src/fatal_sync_checker.py
+if %ERRORLEVEL% neq 0 (
+    echo 💥 FATAL SYNC ERROR DETECTED - STOPPING EXECUTION
+    exit /b 1
+)
+
 REM Note: Script directory setup is now handled after workflow selection
 REM This function just sets the environment and Docker image
 set "APP_ENV=production"
