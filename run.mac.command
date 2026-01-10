@@ -182,6 +182,73 @@ except:
     fi
 }
 
+check_workflow_manager_updates() {
+    echo "🔍 Checking for workflow manager repository updates..."
+    
+    # Get current branch first for debugging
+    local current_branch=$(git branch --show-current)
+    echo "🔍 DEBUG: Current branch: '$current_branch'"
+    
+    # Fetch latest remote information
+    echo "🔍 DEBUG: Fetching from remote..."
+    if ! git fetch origin >/dev/null 2>&1; then
+        echo "⚠️  Warning: Could not fetch remote repository updates"
+        return 1
+    fi
+    echo "🔍 DEBUG: Fetch completed successfully"
+    
+    if [ -z "$current_branch" ]; then
+        echo "⚠️  Warning: Could not determine current branch"
+        return 1
+    fi
+    
+    # Check if local branch is behind remote
+    echo "🔍 DEBUG: Comparing HEAD with origin/$current_branch..."
+    local commits_behind=$(git rev-list --count HEAD..origin/$current_branch 2>/dev/null)
+    local compare_exit_code=$?
+    echo "🔍 DEBUG: Commits behind: '$commits_behind', exit code: $compare_exit_code"
+    
+    if [ $compare_exit_code -ne 0 ]; then
+        echo "⚠️  Warning: Could not compare with remote branch origin/$current_branch"
+        return 1
+    fi
+    
+    # Show local and remote commit info for debugging
+    local local_commit=$(git rev-parse HEAD)
+    local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null)
+    echo "🔍 DEBUG: Local commit:  ${local_commit:0:8}..."
+    echo "🔍 DEBUG: Remote commit: ${remote_commit:0:8}..."
+    
+    if [ "$commits_behind" -gt 0 ]; then
+        echo "📦 Workflow manager updates available ($commits_behind commit(s) behind) - updating repository..."
+        
+        # Check for local changes that might conflict
+        echo "🔍 DEBUG: Checking for local changes..."
+        if ! git diff-index --quiet HEAD --; then
+            echo "⚠️  Warning: Local changes detected - skipping automatic update"
+            echo "   Please commit or stash your changes and update manually"
+            echo "🔍 DEBUG: Local changes found, update skipped"
+            return 1
+        fi
+        echo "🔍 DEBUG: No conflicting local changes found"
+        
+        # Pull the updates
+        echo "🔍 DEBUG: Pulling updates from origin/$current_branch..."
+        if git pull origin "$current_branch" >/dev/null 2>&1; then
+            echo "✅ Workflow manager repository updated successfully"
+            echo "🔄 Note: Restart the script to use the updated version"
+            return 0
+        else
+            echo "❌ ERROR: Failed to update workflow manager repository"
+            return 1
+        fi
+    else
+        echo "✅ Workflow manager repository is up to date"
+        echo "🔍 DEBUG: No updates needed (commits_behind = $commits_behind)"
+        return 0
+    fi
+}
+
 check_and_download_scripts() {
     local scripts_dir="$1"
     local branch="${2:-main}"
@@ -225,16 +292,28 @@ except:
 production_auto_update() {
     echo "🏭 Production mode - performing automatic updates..."
     
+    # Check and update workflow manager repository (orchestration layer)
+    check_workflow_manager_updates
+    
     # Check and update Docker image
     check_docker_updates
     
-    # Note: Script directory setup is now handled after workflow selection
-    # This function just sets the environment and Docker image
+    # Set up workflow-specific scripts directory (RESTORED MISSING LOGIC)
+    local scripts_dir="$HOME/.sip_lims_workflow_manager/${WORKFLOW_TYPE}_scripts"
+    
+    # Check and download/update workflow-specific scripts
+    echo "🔍 Checking for workflow-specific script updates..."
+    check_and_download_scripts "$scripts_dir"
+    
+    # Set scripts path for production use
+    SCRIPTS_PATH="$scripts_dir"
+    export SCRIPTS_PATH
     export APP_ENV="production"
     
     # Use pre-built Docker image for production (branch-aware)
     export DOCKER_IMAGE="$REMOTE_IMAGE_NAME"
     
+    echo "📁 Using workflow-specific scripts: $SCRIPTS_PATH"
     echo "🐳 Using pre-built Docker image: $DOCKER_IMAGE"
     echo "🌿 Branch: $(git branch --show-current)"
 }
@@ -287,7 +366,7 @@ choose_developer_mode() {
 # Development Script Path Selection Function
 select_development_script_path() {
     echo ""
-    echo "Please drag and drop your development scripts folder here, then press Enter:"
+    echo "Please drag and drop your ${WORKFLOW_TYPE} workflow development scripts folder here, then press Enter:"
     printf "> "
     read SCRIPTS_PATH
     
@@ -341,16 +420,7 @@ handle_mode_and_updates() {
     fi
 }
 
-# Call user ID detection
-detect_user_ids
-
-# Stop any running workflow manager containers first
-stop_workflow_containers
-
-# Handle mode detection and updates
-handle_mode_and_updates
-
-# Workflow Selection Function
+# Workflow Selection Function (moved to beginning)
 select_workflow_type() {
     echo ""
     echo "🧪 Select workflow type:"
@@ -376,22 +446,19 @@ select_workflow_type() {
             exit 1
             ;;
     esac
-    
-    # Update script path generation based on workflow type
-    if [ "$APP_ENV" = "production" ]; then
-        SCRIPT_PATH="$HOME/.sip_lims_workflow_manager/${WORKFLOW_TYPE}_scripts"
-        export SCRIPTS_PATH="$SCRIPT_PATH"
-        
-        # Check and download/update workflow-specific scripts
-        echo "🔍 Checking for workflow-specific script updates..."
-        check_and_download_scripts "$SCRIPTS_PATH"
-        
-        echo "📁 Using workflow-specific scripts: $SCRIPTS_PATH"
-    fi
 }
 
-# Select workflow type
+# Call user ID detection
+detect_user_ids
+
+# Stop any running workflow manager containers first
+stop_workflow_containers
+
+# FIRST: Select workflow type
 select_workflow_type
+
+# THEN: Handle mode detection and updates (now workflow-aware)
+handle_mode_and_updates
 
 # Check if Docker is running
 if ! docker info > /dev/null 2>&1; then

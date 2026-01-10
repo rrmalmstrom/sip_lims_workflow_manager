@@ -52,11 +52,11 @@ echo    ✅ Remote image: %REMOTE_IMAGE_NAME%
 REM Container Management - Stop any running workflow manager containers
 call :stop_workflow_containers
 
-REM Handle mode detection and updates
-call :handle_mode_and_updates
-
-REM Select workflow type
+REM FIRST: Select workflow type
 call :select_workflow_type
+
+REM THEN: Handle mode detection and updates (now workflow-aware)
+call :handle_mode_and_updates
 
 REM Check if Docker is running
 docker info >nul 2>&1
@@ -315,7 +315,7 @@ goto :eof
 
 :select_development_script_path
 echo.
-echo Please drag and drop your development scripts folder here, then press Enter:
+echo Please drag and drop your %WORKFLOW_TYPE% workflow development scripts folder here, then press Enter:
 set /p "SCRIPTS_PATH="
 
 REM Clean up the path (remove quotes and trim)
