@@ -6,6 +6,11 @@ Checks for repository/Docker image sync issues and exits with fatal error if fou
 
 import sys
 import json
+import os
+
+# Add the project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.update_detector import UpdateDetector
 from utils.branch_utils import get_current_branch, sanitize_branch_for_docker_tag
 
