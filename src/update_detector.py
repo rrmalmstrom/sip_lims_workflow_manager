@@ -107,81 +107,231 @@ class UpdateDetector:
             return None
     
     def get_remote_docker_image_commit_sha(self, tag: str = "latest", branch: Optional[str] = None) -> Optional[str]:
-        """Get the commit SHA from REMOTE Docker image by checking actual image existence."""
-        try:
-            # If branch not specified, detect current branch
-            if branch is None:
-                try:
-                    import sys
-                    import os
-                    # Add project root to path for imports
-                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    sys.path.insert(0, project_root)
-                    from utils.branch_utils import get_current_branch
-                    branch = get_current_branch()
-                except ImportError:
-                    # Fallback to main if utils not available
-                    branch = "main"
-                except Exception:
-                    # Fallback to main if branch detection fails
-                    branch = "main"
+        """
+        Get the commit SHA from REMOTE Docker image using improved detection.
+        
+        Strategy:
+        1. Check if image already exists locally (no additional download)
+        2. Try buildx imagetools inspect (lightweight)
+        3. Try improved manifest inspect with better architecture handling
+        4. Fall back to minimal pull approach if needed
+        """
+        import platform
+        
+        # Method 1: Check if image already exists locally (no additional download)
+        commit_sha = self._try_local_image_check(tag)
+        if commit_sha:
+            return commit_sha
             
-            # Check if there's actually a Docker image for this tag by inspecting remote manifest
-            # This uses docker manifest inspect which doesn't pull the image
+        # Method 2: Try buildx imagetools inspect
+        commit_sha = self._try_buildx_imagetools_inspect(tag)
+        if commit_sha:
+            return commit_sha
+            
+        # Method 3: Try improved manifest inspect
+        commit_sha = self._try_improved_manifest_inspect(tag)
+        if commit_sha:
+            return commit_sha
+            
+        # Method 4: Minimal pull approach (only if really needed)
+        commit_sha = self._try_minimal_pull_approach(tag)
+        if commit_sha:
+            return commit_sha
+            
+        return None
+    
+    def _try_local_image_check(self, tag: str) -> Optional[str]:
+        """Check if we already have the image locally."""
+        try:
             result = subprocess.run(
-                ["docker", "manifest", "inspect", f"{self.ghcr_image}:{tag}"],
+                ["docker", "inspect", f"{self.ghcr_image}:{tag}"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=10
             )
             
             if result.returncode != 0:
-                # No remote Docker image exists for this tag
                 return None
                 
-            # Parse the manifest to get image labels
+            inspect_data = json.loads(result.stdout)
+            labels = inspect_data[0]["Config"]["Labels"]
+            
+            # Try multiple label keys for commit SHA
+            for key in ["com.sip-lims.commit-sha", "org.opencontainers.image.revision"]:
+                if key in labels:
+                    return labels[key]
+                    
+            return None
+            
+        except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError, Exception):
+            return None
+    
+    def _try_buildx_imagetools_inspect(self, tag: str) -> Optional[str]:
+        """Try to get commit SHA using docker buildx imagetools inspect."""
+        try:
+            import platform
+            
+            # First, get the multi-arch manifest
+            result = subprocess.run(
+                ["docker", "buildx", "imagetools", "inspect", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                return None
+                
+            # Parse the output to find platform-specific manifests
+            lines = result.stdout.split('\n')
+            current_arch = platform.machine().lower()
+            
+            # Look for our architecture or arm64/amd64
+            target_digest = None
+            for i, line in enumerate(lines):
+                if "Platform:" in line:
+                    platform_info = line.strip()
+                    if current_arch in platform_info.lower() or "arm64" in platform_info or "amd64" in platform_info:
+                        # Look for the digest in previous lines
+                        for j in range(i-1, max(i-5, 0), -1):
+                            if "sha256:" in lines[j]:
+                                target_digest = lines[j].split("@")[-1].strip()
+                                break
+                        if target_digest:
+                            break
+            
+            if not target_digest:
+                return None
+                
+            # Now inspect the specific platform manifest
+            return self._inspect_platform_manifest(target_digest)
+            
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, Exception):
+            return None
+    
+    def _try_improved_manifest_inspect(self, tag: str) -> Optional[str]:
+        """Try improved manifest inspection with better architecture handling."""
+        try:
+            import platform
+            
+            # Get the multi-arch manifest
+            result = subprocess.run(
+                ["docker", "manifest", "inspect", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                return None
+                
             manifest_data = json.loads(result.stdout)
             
-            # For multi-arch images, check the config
-            if "manifests" in manifest_data:
-                # Multi-arch manifest - get the first architecture's config
-                for manifest in manifest_data["manifests"]:
-                    if manifest.get("platform", {}).get("architecture") == "amd64":
-                        # Get the config blob for this architecture
-                        config_digest = manifest["digest"]
-                        break
-                else:
-                    # Fallback to first manifest if no amd64 found
-                    config_digest = manifest_data["manifests"][0]["digest"]
-            else:
-                # Single-arch manifest
-                config_digest = manifest_data.get("config", {}).get("digest")
+            if "manifests" not in manifest_data:
+                # Single-arch image
+                return self._extract_labels_from_manifest(manifest_data)
             
+            # Multi-arch image - find the best platform
+            current_arch = platform.machine().lower()
+            arch_priority = [current_arch, "arm64", "amd64", "x86_64"]
+            
+            selected_manifest = None
+            for arch in arch_priority:
+                for manifest in manifest_data["manifests"]:
+                    platform_info = manifest.get("platform", {})
+                    if platform_info.get("architecture", "").lower() == arch:
+                        selected_manifest = manifest
+                        break
+                if selected_manifest:
+                    break
+            
+            if not selected_manifest:
+                # Fallback to first non-attestation manifest
+                for manifest in manifest_data["manifests"]:
+                    if "attestation" not in manifest.get("annotations", {}).get("vnd.docker.reference.type", ""):
+                        selected_manifest = manifest
+                        break
+            
+            if not selected_manifest:
+                return None
+                
+            # Inspect the selected platform manifest
+            return self._inspect_platform_manifest(selected_manifest["digest"])
+            
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, json.JSONDecodeError, Exception):
+            return None
+    
+    def _inspect_platform_manifest(self, digest: str) -> Optional[str]:
+        """Inspect a specific platform manifest to extract labels."""
+        try:
+            result = subprocess.run(
+                ["docker", "manifest", "inspect", f"{self.ghcr_image}@{digest}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                return None
+                
+            manifest_data = json.loads(result.stdout)
+            return self._extract_labels_from_manifest(manifest_data)
+            
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, json.JSONDecodeError, Exception):
+            return None
+    
+    def _extract_labels_from_manifest(self, manifest_data: dict) -> Optional[str]:
+        """Extract commit SHA from manifest config labels."""
+        try:
+            config_digest = manifest_data.get("config", {}).get("digest")
             if not config_digest:
                 return None
                 
-            # Get the config blob to extract labels
-            config_result = subprocess.run(
+            # Try to get the config blob (this might not work without pulling)
+            result = subprocess.run(
                 ["docker", "manifest", "inspect", f"{self.ghcr_image}@{config_digest}"],
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=30
             )
             
-            if config_result.returncode != 0:
+            if result.returncode != 0:
                 return None
                 
-            config_data = json.loads(config_result.stdout)
+            config_data = json.loads(result.stdout)
             labels = config_data.get("config", {}).get("Labels", {})
             
             # Try multiple label keys for commit SHA
             for key in ["com.sip-lims.commit-sha", "org.opencontainers.image.revision"]:
                 if key in labels:
                     return labels[key]
-            
+                    
             return None
             
-        except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, Exception):
-            # If we can't check the remote image, fall back to repository SHA
-            # but mark this as uncertain
+        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception):
+            return None
+    
+    def _try_minimal_pull_approach(self, tag: str) -> Optional[str]:
+        """
+        Minimal pull approach - only pull if we really need to and don't have it locally.
+        This is the fallback when lightweight methods fail.
+        """
+        try:
+            # Pull the image (Docker will only download layers we don't have)
+            result = subprocess.run(
+                ["docker", "pull", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout for pull
+            )
+            
+            if result.returncode != 0:
+                return None
+                
+            # Now inspect the pulled image
+            return self._try_local_image_check(tag)
+            
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, Exception):
             return None
     
     def get_docker_image_commit_sha(self, tag: str = "latest") -> Optional[str]:
