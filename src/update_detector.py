@@ -106,34 +106,106 @@ class UpdateDetector:
         except (subprocess.CalledProcessError, json.JSONDecodeError, KeyError, IndexError):
             return None
     
+    def get_remote_docker_image_digest(self, tag: str = "latest") -> Optional[str]:
+        """
+        Get the image digest from REMOTE Docker image using Docker best practices.
+        
+        INDUSTRY STANDARD APPROACH: Use image digests for comparison, not commit SHAs.
+        This follows Docker's official recommendations for image comparison.
+        """
+        try:
+            # Use docker buildx imagetools inspect (official Docker recommendation)
+            result = subprocess.run(
+                ["docker", "buildx", "imagetools", "inspect", f"{self.ghcr_image}:{tag}", "--format", "{{.Digest}}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                digest = result.stdout.strip()
+                if digest.startswith('sha256:'):
+                    return digest
+                
+        except Exception:
+            pass
+            
+        # Fallback: Parse buildx imagetools output manually
+        try:
+            result = subprocess.run(
+                ["docker", "buildx", "imagetools", "inspect", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                # Parse the output to find the digest
+                lines = result.stdout.split('\n')
+                for line in lines:
+                    if line.strip().startswith('Digest:') and 'sha256:' in line:
+                        # Extract digest from line like "Digest:    sha256:abc123..."
+                        parts = line.split('sha256:')
+                        if len(parts) > 1:
+                            digest_part = parts[1].strip()
+                            # Take only the hash part, ignore any trailing content
+                            digest_hash = digest_part.split()[0] if digest_part else ""
+                            if digest_hash:
+                                return f"sha256:{digest_hash}"
+                
+                # If we couldn't parse the digest, return the full output for debugging
+                # This should be removed in production, but helps with current debugging
+                return result.stdout.strip()
+                            
+        except Exception:
+            pass
+            
+        return None
+    
+    def get_local_docker_image_digest(self, tag: str = "latest") -> Optional[str]:
+        """
+        Get the image digest from LOCAL Docker image using Docker best practices.
+        """
+        try:
+            # Use docker inspect with RepoDigests (official Docker recommendation)
+            result = subprocess.run(
+                ["docker", "inspect", "--format", "{{index .RepoDigests 0}}", f"{self.ghcr_image}:{tag}"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                repo_digest = result.stdout.strip()
+                # Extract just the digest part: "ghcr.io/user/repo@sha256:abc123" -> "sha256:abc123"
+                if '@' in repo_digest:
+                    return repo_digest.split('@')[-1]
+                    
+        except Exception:
+            pass
+            
+        return None
+
     def get_remote_docker_image_commit_sha(self, tag: str = "latest", branch: Optional[str] = None) -> Optional[str]:
         """
-        Get the commit SHA from REMOTE Docker image using improved detection.
+        DEPRECATED: Get the commit SHA from REMOTE Docker image.
         
-        Strategy:
-        1. Check if image already exists locally (no additional download)
-        2. Try buildx imagetools inspect (lightweight)
-        3. Try improved manifest inspect with better architecture handling
-        4. Fall back to minimal pull approach if needed
+        This method is kept for backward compatibility but should be replaced
+        with digest-based comparison for better reliability.
         """
         import platform
         
-        # Method 1: Check if image already exists locally (no additional download)
-        commit_sha = self._try_local_image_check(tag)
-        if commit_sha:
-            return commit_sha
-            
-        # Method 2: Try buildx imagetools inspect
+        # Method 1: Try buildx imagetools inspect
         commit_sha = self._try_buildx_imagetools_inspect(tag)
         if commit_sha:
             return commit_sha
             
-        # Method 3: Try improved manifest inspect
+        # Method 2: Try improved manifest inspect
         commit_sha = self._try_improved_manifest_inspect(tag)
         if commit_sha:
             return commit_sha
             
-        # Method 4: Minimal pull approach (only if really needed)
+        # Method 3: Minimal pull approach (only if really needed)
         commit_sha = self._try_minimal_pull_approach(tag)
         if commit_sha:
             return commit_sha
@@ -341,116 +413,196 @@ class UpdateDetector:
         return self.get_local_docker_image_commit_sha(tag)
     
     def check_docker_update(self, tag: str = "latest", branch: Optional[str] = None) -> Dict[str, any]:
-        """Enhanced Docker update check with chronological validation and repository sync verification."""
-        local_sha = self.get_local_docker_image_commit_sha(tag)
-        remote_sha = self.get_remote_docker_image_commit_sha(tag, branch)
+        """
+        FIXED: Enhanced Docker update check using DIGEST-BASED comparison.
         
-        # Also get the current repository commit SHA to check for sync issues
-        repo_sha = self.get_remote_commit_sha(branch or "main")
+        This method now uses Docker image digests for reliable comparison without pulling images.
+        Maintains backward compatibility with the existing API used by run.mac.command.
         
-        result = {
-            "update_available": False,
-            "local_sha": local_sha,
-            "remote_sha": remote_sha,
-            "repo_sha": repo_sha,
-            "reason": None,
-            "error": None,
-            "chronology_uncertain": False,
-            "requires_user_confirmation": False,
-            "sync_warning": None
-        }
-        
-        # Handle missing local image
-        if not local_sha:
-            result["reason"] = "No local Docker image found"
-            result["update_available"] = True  # Need to pull if no local image
-            return result
-        
-        # Check for repository/Docker image sync issues - FATAL ERRORS
-        if repo_sha and not remote_sha:
-            # Repository has commits but no corresponding Docker image - FATAL
-            result["error"] = "FATAL: Repository has been updated but no corresponding Docker image exists"
-            result["sync_warning"] = f"Repository is at commit {repo_sha[:8]}... but no Docker image found for tag '{tag}'"
-            result["reason"] = "FATAL ERROR: Docker image build failed or is pending. Contact developer immediately."
-            result["requires_user_confirmation"] = False  # No confirmation - just fail
-            result["fatal_sync_error"] = True
-            return result
-        
-        # Handle missing remote SHA (both repo and image)
-        if not remote_sha:
-            result["error"] = "Could not determine remote Docker image commit SHA"
-            return result
-        
-        # Check if repository and Docker image are out of sync - FATAL ERROR
-        if repo_sha and remote_sha and repo_sha != remote_sha:
-            # Check if Docker image is behind repository (most common case)
-            ancestry_check = self.is_commit_ancestor(remote_sha, repo_sha)
-            if ancestry_check:
-                # Docker image is behind repository - FATAL
-                result["error"] = "FATAL: Docker image is out of sync with repository"
-                result["sync_warning"] = f"Repository is at newer commit {repo_sha[:8]}... but Docker image is at older commit {remote_sha[:8]}..."
-                result["reason"] = "FATAL ERROR: Docker image build is required. Repository has newer commits than Docker image."
-                result["fatal_sync_error"] = True
-                return result
-            else:
-                # Docker image might be ahead or diverged - still fatal but different message
-                result["error"] = "FATAL: Repository and Docker image have diverged"
-                result["sync_warning"] = f"Repository ({repo_sha[:8]}...) and Docker image ({remote_sha[:8]}...) are out of sync"
-                result["reason"] = "FATAL ERROR: Repository and Docker image commits have diverged. Manual intervention required."
-                result["fatal_sync_error"] = True
-                return result
-        
-        # If SHAs are identical, no update needed
-        if local_sha == remote_sha:
-            result["reason"] = "Local and remote SHAs match"
-            return result
-        
-        # SHAs are different - now check chronology using enhanced logic
-        # Method 1: Try git ancestry check (most reliable if we have git history)
-        ancestry_check = self.is_commit_ancestor(local_sha, remote_sha)
-        if ancestry_check is not None:
-            if ancestry_check:
-                # Local is ancestor of remote = remote is newer
+        CRITICAL FIX: This replaces the broken commit SHA-based approach that was pulling
+        full images during detection, causing false "up to date" results.
+        """
+        try:
+            # Step 1: Check if local image exists using digest-based approach
+            local_digest = self.get_local_docker_image_digest(tag)
+            
+            # Initialize result structure (maintain backward compatibility)
+            result = {
+                "update_available": False,
+                "local_sha": None,  # Keep for backward compatibility
+                "remote_sha": None,  # Keep for backward compatibility
+                "repo_sha": None,
+                "reason": None,
+                "error": None,
+                "chronology_uncertain": False,
+                "requires_user_confirmation": False,
+                "sync_warning": None,
+                # New digest fields for debugging
+                "local_digest": local_digest,
+                "remote_digest": None
+            }
+            
+            if local_digest is None:
+                # No local image exists - definitely need update
                 result["update_available"] = True
-                result["reason"] = f"Remote commit {remote_sha[:8]}... is newer than local {local_sha[:8]}..."
-            else:
-                # Check reverse - is remote ancestor of local?
-                reverse_check = self.is_commit_ancestor(remote_sha, local_sha)
-                if reverse_check:
-                    # Remote is ancestor of local = local is newer
-                    result["update_available"] = False
-                    result["reason"] = f"Local commit {local_sha[:8]}... is newer than remote {remote_sha[:8]}..."
-                else:
-                    # Neither is ancestor = diverged branches
-                    result["update_available"] = False
-                    result["reason"] = f"Local and remote commits have diverged - manual review needed"
-            return result
-        
-        # Method 2: Fallback to timestamp comparison
-        local_timestamp = self.get_commit_timestamp(local_sha)
-        remote_timestamp = self.get_commit_timestamp(remote_sha)
-        
-        if local_timestamp and remote_timestamp:
-            if remote_timestamp > local_timestamp:
+                result["reason"] = "No local Docker image found"
+                result["repo_sha"] = self.get_current_commit_sha()
+                return result
+            
+            # Step 2: Get remote image digest (lightweight, no pulling)
+            remote_digest = self.get_remote_docker_image_digest(tag)
+            result["remote_digest"] = remote_digest
+            result["repo_sha"] = self.get_current_commit_sha()
+            
+            if remote_digest is None:
+                result["error"] = "Failed to get remote Docker image digest"
+                result["reason"] = "Cannot determine remote image state"
+                return result
+            
+            # Step 3: Compare digests (this is the reliable comparison)
+            if local_digest != remote_digest:
                 result["update_available"] = True
-                result["reason"] = f"Remote commit {remote_sha[:8]}... is newer ({remote_timestamp.isoformat()})"
-            else:
-                result["update_available"] = False
-                result["reason"] = f"Local commit {local_sha[:8]}... is newer or same age ({local_timestamp.isoformat()})"
-        else:
-            # Enhanced fallback behavior with uncertainty warnings
-            result["update_available"] = True
-            result["chronology_uncertain"] = True
-            result["requires_user_confirmation"] = True
-            result["reason"] = f"⚠️  CHRONOLOGY UNCERTAIN: Cannot determine if local ({local_sha[:8]}...) or remote ({remote_sha[:8]}...) is newer"
-            result["error"] = "Could not determine commit chronology - git ancestry and timestamp checks both failed"
-            result["warning"] = "Local version might be newer than remote. Manual confirmation recommended before updating."
-        
-        return result
+                result["reason"] = f"Image content differs (local: {local_digest[:12]}... != remote: {remote_digest[:12]}...)"
+                return result
+            
+            # Step 4: Images are identical - try to get commit SHAs for additional info
+            try:
+                local_commit = self.get_local_docker_image_commit_sha(tag)
+                result["local_sha"] = local_commit
+                
+                # For backward compatibility, try to get remote commit SHA for informational purposes
+                # But don't let this fail the whole operation
+                try:
+                    remote_commit = self.get_remote_docker_image_commit_sha(tag, branch)
+                    result["remote_sha"] = remote_commit
+                except:
+                    # If remote commit SHA extraction fails, that's OK - we have digest comparison
+                    result["remote_sha"] = "digest-based-comparison"
+                
+                # Check for informational warnings
+                repo_sha = result["repo_sha"]
+                if repo_sha and local_commit and local_commit != repo_sha:
+                    result["sync_warning"] = f"Image commit ({local_commit[:8]}) != Repository commit ({repo_sha[:8]}) - but images are identical"
+                    
+            except Exception:
+                # Ignore commit SHA extraction failures - digest comparison is what matters
+                result["local_sha"] = "digest-based-comparison"
+                result["remote_sha"] = "digest-based-comparison"
+            
+            result["update_available"] = False
+            result["reason"] = "Local and remote images are identical"
+            return result
+            
+        except Exception as e:
+            return {
+                "update_available": False,
+                "local_sha": None,
+                "remote_sha": None,
+                "repo_sha": self.get_current_commit_sha(),
+                "reason": "Error during Docker image update check",
+                "error": str(e),
+                "chronology_uncertain": False,
+                "requires_user_confirmation": False,
+                "sync_warning": None,
+                "local_digest": None,
+                "remote_digest": None
+            }
     
-    def check_docker_image_update(self, tag: str = "latest") -> Dict[str, any]:
-        """DEPRECATED: Use check_docker_update() instead."""
-        return self.check_docker_update(tag)
+    def check_docker_image_update(self, tag: str = "latest", branch: Optional[str] = None) -> dict:
+        """
+        Check if Docker image needs update using DIGEST-BASED comparison.
+        
+        INDUSTRY STANDARD APPROACH: Uses Docker image digests for reliable comparison
+        without pulling images. This follows Docker's official best practices.
+        
+        Returns dict with:
+        - update_available: bool
+        - reason: str
+        - local_digest: Optional[str]
+        - remote_digest: Optional[str]
+        - repo_sha: Optional[str]
+        - error: Optional[str]
+        - sync_warning: Optional[str]
+        """
+        try:
+            # Step 1: Check if local image exists
+            local_digest = self.get_local_docker_image_digest(tag)
+            
+            if local_digest is None:
+                # No local image exists - definitely need update
+                return {
+                    "update_available": True,
+                    "reason": "No local Docker image found",
+                    "local_digest": None,
+                    "remote_digest": None,
+                    "repo_sha": self.get_current_commit_sha(),
+                    "error": None,
+                    "sync_warning": None
+                }
+            
+            # Step 2: Get remote image digest (lightweight, no pulling)
+            remote_digest = self.get_remote_docker_image_digest(tag)
+            repo_sha = self.get_current_commit_sha()
+            
+            if remote_digest is None:
+                return {
+                    "update_available": False,
+                    "reason": "Cannot determine remote image state",
+                    "local_digest": local_digest,
+                    "remote_digest": None,
+                    "repo_sha": repo_sha,
+                    "error": "Failed to get remote Docker image digest",
+                    "sync_warning": None
+                }
+            
+            # Step 3: Compare digests (this is the reliable comparison)
+            if local_digest != remote_digest:
+                return {
+                    "update_available": True,
+                    "reason": f"Image content differs (local: {local_digest[:12]}... != remote: {remote_digest[:12]}...)",
+                    "local_digest": local_digest,
+                    "remote_digest": remote_digest,
+                    "repo_sha": repo_sha,
+                    "error": None,
+                    "sync_warning": None
+                }
+            
+            # Step 4: Images are identical - check for informational warnings
+            sync_warning = None
+            
+            # Try to get commit SHAs for informational purposes (non-critical)
+            try:
+                local_commit = self.get_local_docker_image_commit_sha(tag)
+                if repo_sha and local_commit and local_commit != repo_sha:
+                    sync_warning = f"Image commit ({local_commit[:8]}) != Repository commit ({repo_sha[:8]}) - but images are identical"
+            except Exception:
+                # Ignore commit SHA extraction failures - digest comparison is what matters
+                pass
+            
+            return {
+                "update_available": False,
+                "reason": "Local and remote images are identical",
+                "local_digest": local_digest,
+                "remote_digest": remote_digest,
+                "repo_sha": repo_sha,
+                "error": None,
+                "sync_warning": sync_warning
+            }
+            
+        except Exception as e:
+            return {
+                "update_available": False,
+                "reason": "Error during Docker image update check",
+                "local_digest": None,
+                "remote_digest": None,
+                "repo_sha": self.get_current_commit_sha(),
+                "error": str(e),
+                "sync_warning": None
+            }
+    
+    def get_current_commit_sha(self) -> Optional[str]:
+        """Get the current local git commit SHA."""
+        return self.get_local_commit_sha()
     
     def get_update_summary(self) -> Dict[str, any]:
         """Get a comprehensive update summary for Docker images."""

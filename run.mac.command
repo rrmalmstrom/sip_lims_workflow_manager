@@ -185,17 +185,14 @@ except:
 check_workflow_manager_updates() {
     echo "🔍 Checking for workflow manager repository updates..."
     
-    # Get current branch first for debugging
+    # Get current branch
     local current_branch=$(git branch --show-current)
-    echo "🔍 DEBUG: Current branch: '$current_branch'"
     
     # Fetch latest remote information
-    echo "🔍 DEBUG: Fetching from remote..."
     if ! git fetch origin >/dev/null 2>&1; then
         echo "⚠️  Warning: Could not fetch remote repository updates"
         return 1
     fi
-    echo "🔍 DEBUG: Fetch completed successfully"
     
     if [ -z "$current_branch" ]; then
         echo "⚠️  Warning: Could not determine current branch"
@@ -203,37 +200,25 @@ check_workflow_manager_updates() {
     fi
     
     # Check if local branch is behind remote
-    echo "🔍 DEBUG: Comparing HEAD with origin/$current_branch..."
     local commits_behind=$(git rev-list --count HEAD..origin/$current_branch 2>/dev/null)
     local compare_exit_code=$?
-    echo "🔍 DEBUG: Commits behind: '$commits_behind', exit code: $compare_exit_code"
     
     if [ $compare_exit_code -ne 0 ]; then
         echo "⚠️  Warning: Could not compare with remote branch origin/$current_branch"
         return 1
     fi
     
-    # Show local and remote commit info for debugging
-    local local_commit=$(git rev-parse HEAD)
-    local remote_commit=$(git rev-parse origin/$current_branch 2>/dev/null)
-    echo "🔍 DEBUG: Local commit:  ${local_commit:0:8}..."
-    echo "🔍 DEBUG: Remote commit: ${remote_commit:0:8}..."
-    
     if [ "$commits_behind" -gt 0 ]; then
         echo "📦 Workflow manager updates available ($commits_behind commit(s) behind) - updating repository..."
         
         # Check for local changes that might conflict
-        echo "🔍 DEBUG: Checking for local changes..."
         if ! git diff-index --quiet HEAD --; then
             echo "⚠️  Warning: Local changes detected - skipping automatic update"
             echo "   Please commit or stash your changes and update manually"
-            echo "🔍 DEBUG: Local changes found, update skipped"
             return 1
         fi
-        echo "🔍 DEBUG: No conflicting local changes found"
         
         # Pull the updates
-        echo "🔍 DEBUG: Pulling updates from origin/$current_branch..."
         if git pull origin "$current_branch" >/dev/null 2>&1; then
             echo "✅ Workflow manager repository updated successfully"
             echo "🔄 Note: Restart the script to use the updated version"
@@ -244,7 +229,6 @@ check_workflow_manager_updates() {
         fi
     else
         echo "✅ Workflow manager repository is up to date"
-        echo "🔍 DEBUG: No updates needed (commits_behind = $commits_behind)"
         return 0
     fi
 }
@@ -292,19 +276,20 @@ except:
 production_auto_update() {
     echo "🏭 Production mode - performing automatic updates..."
     
-    # Check and update workflow manager repository (orchestration layer)
-    check_workflow_manager_updates
-    
-    # Check and update Docker image
-    check_docker_updates
-    
-    # FATAL SYNC ERROR CHECK - ADD THIS
+    # FATAL SYNC ERROR CHECK - MOVED TO BEGINNING (CRITICAL FIX)
     echo "🔍 Checking for fatal repository/Docker sync errors..."
     python3 src/fatal_sync_checker.py
     if [ $? -ne 0 ]; then
         echo "💥 FATAL SYNC ERROR DETECTED - STOPPING EXECUTION"
         exit 1
     fi
+    echo "✅ No fatal sync errors detected - proceeding with updates..."
+    
+    # Check and update workflow manager repository (orchestration layer)
+    check_workflow_manager_updates
+    
+    # Check and update Docker image
+    check_docker_updates
     
     # Set up workflow-specific scripts directory (RESTORED MISSING LOGIC)
     local scripts_dir="$HOME/.sip_lims_workflow_manager/${WORKFLOW_TYPE}_scripts"

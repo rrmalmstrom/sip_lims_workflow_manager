@@ -233,6 +233,55 @@ REM Clean up temporary file
 if exist temp_update_result.json del temp_update_result.json
 goto :eof
 
+:check_workflow_manager_updates
+echo 🔍 Checking for workflow manager repository updates...
+
+REM Get current branch
+for /f "delims=" %%i in ('git branch --show-current 2^>nul') do set "CURRENT_BRANCH_NAME=%%i"
+
+REM Fetch latest remote information
+git fetch origin >nul 2>&1
+if %errorlevel% neq 0 (
+    echo ⚠️  Warning: Could not fetch remote repository updates
+    goto :eof
+)
+
+if "%CURRENT_BRANCH_NAME%"=="" (
+    echo ⚠️  Warning: Could not determine current branch
+    goto :eof
+)
+
+REM Check if local branch is behind remote
+for /f "delims=" %%i in ('git rev-list --count HEAD..origin/%CURRENT_BRANCH_NAME% 2^>nul') do set "COMMITS_BEHIND=%%i"
+if %errorlevel% neq 0 (
+    echo ⚠️  Warning: Could not compare with remote branch origin/%CURRENT_BRANCH_NAME%
+    goto :eof
+)
+
+if %COMMITS_BEHIND% gtr 0 (
+    echo 📦 Workflow manager updates available (%COMMITS_BEHIND% commit(s) behind) - updating repository...
+    
+    REM Check for local changes that might conflict
+    git diff-index --quiet HEAD -- >nul 2>&1
+    if %errorlevel% neq 0 (
+        echo ⚠️  Warning: Local changes detected - skipping automatic update
+        echo    Please commit or stash your changes and update manually
+        goto :eof
+    )
+    
+    REM Pull the updates
+    git pull origin "%CURRENT_BRANCH_NAME%" >nul 2>&1
+    if %errorlevel% equ 0 (
+        echo ✅ Workflow manager repository updated successfully
+        echo 🔄 Note: Restart the script to use the updated version
+    ) else (
+        echo ❌ ERROR: Failed to update workflow manager repository
+    )
+) else (
+    echo ✅ Workflow manager repository is up to date
+)
+goto :eof
+
 :check_and_download_scripts
 set "SCRIPTS_DIR_ARG=%~1"
 set "BRANCH_ARG=%~2"
@@ -268,24 +317,36 @@ goto :eof
 :production_auto_update
 echo 🏭 Production mode - performing automatic updates...
 
-REM Check and update Docker image
-call :check_docker_updates
-
-REM FATAL SYNC ERROR CHECK - ADD THIS
+REM FATAL SYNC ERROR CHECK - MOVED TO BEGINNING (CRITICAL FIX)
 echo 🔍 Checking for fatal repository/Docker sync errors...
-python src/fatal_sync_checker.py
+python3 src/fatal_sync_checker.py
 if %ERRORLEVEL% neq 0 (
     echo 💥 FATAL SYNC ERROR DETECTED - STOPPING EXECUTION
     exit /b 1
 )
+echo ✅ No fatal sync errors detected - proceeding with updates...
 
-REM Note: Script directory setup is now handled after workflow selection
-REM This function just sets the environment and Docker image
+REM Check and update workflow manager repository (orchestration layer)
+call :check_workflow_manager_updates
+
+REM Check and update Docker image
+call :check_docker_updates
+
+REM Set up workflow-specific scripts directory (RESTORED MISSING LOGIC)
+set "SCRIPTS_DIR=%USERPROFILE%\.sip_lims_workflow_manager\%WORKFLOW_TYPE%_scripts"
+
+REM Check and download/update workflow-specific scripts
+echo 🔍 Checking for workflow-specific script updates...
+call :check_and_download_scripts "%SCRIPTS_DIR%"
+
+REM Set scripts path for production use
+set "SCRIPTS_PATH=%SCRIPTS_DIR%"
 set "APP_ENV=production"
 
 REM Use pre-built Docker image for production (branch-aware)
 set "DOCKER_IMAGE=%REMOTE_IMAGE_NAME%"
 
+echo 📁 Using workflow-specific scripts: %SCRIPTS_PATH%
 echo 🐳 Using pre-built Docker image: %DOCKER_IMAGE%
 echo 🌿 Branch: %DISPLAY_BRANCH%
 goto :eof

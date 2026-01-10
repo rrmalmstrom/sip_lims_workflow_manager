@@ -115,6 +115,24 @@ This guide provides solutions to common issues you may encounter while using the
 
 ## Update Issues
 
+### Fatal Sync Error Detected
+
+-   **Cause**: The repository has been updated but the Docker image has not been rebuilt, creating a dangerous mismatch between code and container environment.
+-   **Error Message**:
+    ```
+    ❌ **FATAL SYNC ERROR DETECTED**
+       Repository commit: a1b2c3d4e5f6789012345678901234567890abcd
+       Docker image commit: f6e5d4c3b2a1098765432109876543210987fedc
+       
+       The repository has been updated but the Docker image has not been rebuilt.
+       Running with this mismatch could cause serious issues.
+    ```
+-   **Solution**: You must resolve the sync error before proceeding:
+    1.  **Build a new Docker image**: Run `./build/build_image_from_lock_files.sh`
+    2.  **Push the new image**: Run `./build/push_image_to_github.sh`
+    3.  **Or pull the latest image**: Run `docker pull ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main`
+    4.  **Then try running the application again**
+
 ### Update Check Fails
 
 -   **Cause**: The application cannot connect to GitHub to check for updates. This is usually due to network issues.
@@ -126,7 +144,7 @@ This guide provides solutions to common issues you may encounter while using the
 ### Script Update Fails
 
 -   **Cause**: The application was unable to pull the latest scripts from the Git repository, likely due to a network issue.
--   **Solution**: 
+-   **Solution**:
     1.  Ensure you have a stable internet connection and try the update again.
     2.  Verify that Git is properly installed and accessible.
     3.  Check that your firewall isn't blocking Git access to GitHub.

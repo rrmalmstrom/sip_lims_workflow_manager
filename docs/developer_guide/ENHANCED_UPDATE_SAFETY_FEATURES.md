@@ -2,11 +2,22 @@
 
 ## Overview
 
-The SIP LIMS Workflow Manager now includes enhanced safety features to prevent accidental overwrites of newer local Docker images with older remote versions. This document describes the chronology uncertainty detection and user confirmation system.
+The SIP LIMS Workflow Manager includes comprehensive safety features to prevent dangerous synchronization issues and accidental overwrites. This document describes the fatal sync error detection, chronology uncertainty detection, and user confirmation systems.
 
-## Problem Addressed
+## Problems Addressed
 
-Previously, when the system couldn't determine whether a local or remote Docker image was newer, it would default to updating (potentially overwriting a newer local version with an older remote version). This could happen in scenarios like:
+### 1. Fatal Sync Errors (Critical Safety Issue)
+
+The most critical safety issue occurs when the repository has been updated but the Docker image hasn't been rebuilt, creating a dangerous mismatch between code and container environment. This can lead to:
+
+- Running outdated Docker images with newer repository code
+- Inconsistent behavior between development and production environments
+- Silent failures due to missing dependencies or configuration changes
+- Data corruption from incompatible code/environment combinations
+
+### 2. Chronology Uncertainty (Update Safety Issue)
+
+When the system couldn't determine whether a local or remote Docker image was newer, it would default to updating (potentially overwriting a newer local version with an older remote version). This could happen in scenarios like:
 
 - No internet connection (can't check GitHub API)
 - Git not available or repository corrupted
@@ -14,7 +25,25 @@ Previously, when the system couldn't determine whether a local or remote Docker 
 - Commits from different forks/repositories
 - Network timeouts
 
-## Solution: Chronology Uncertainty Detection
+## Solutions
+
+### 1. Fatal Sync Error Detection (Primary Safety System)
+
+The [`FatalSyncChecker`](../src/fatal_sync_checker.py) class provides critical safety validation by comparing repository commits with Docker image commits to detect dangerous synchronization mismatches.
+
+**Key Features:**
+- **Repository Commit Detection**: Gets current repository HEAD commit SHA
+- **Docker Image Commit Detection**: Extracts commit SHA from Docker image labels
+- **Sync Validation**: Compares repository and Docker image commits for mismatches
+- **Fatal Error Prevention**: Blocks execution when dangerous sync errors are detected
+- **Clear Error Messages**: Provides actionable guidance for resolving sync issues
+
+**Integration Points:**
+- Integrated at the beginning of [`production_auto_update()`](../run.mac.command) in both Mac and Windows scripts
+- Runs before any Docker operations to prevent dangerous state execution
+- Provides immediate feedback with clear resolution instructions
+
+### 2. Chronology Uncertainty Detection (Secondary Safety System)
 
 ### New Update Detector Features
 
@@ -51,9 +80,34 @@ The system uses a 3-layer approach to determine chronology:
 
 ## User Experience
 
+### Fatal Sync Error Detection (Critical Safety Check)
+
+When a fatal sync error is detected, the system immediately blocks execution:
+
+```bash
+🔍 Checking for fatal sync errors...
+
+❌ **FATAL SYNC ERROR DETECTED**
+   Repository commit: a1b2c3d4e5f6789012345678901234567890abcd
+   Docker image commit: f6e5d4c3b2a1098765432109876543210987fedc
+   
+   The repository has been updated but the Docker image has not been rebuilt.
+   Running with this mismatch could cause serious issues.
+
+   REQUIRED ACTIONS:
+   1. Build a new Docker image: ./build/build_image_from_lock_files.sh
+   2. Push the new image: ./build/push_image_to_github.sh
+   3. Or pull the latest image: docker pull ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main
+
+❌ Execution blocked for safety. Please resolve the sync error and try again.
+```
+
 ### Normal Update (No Uncertainty)
 
 ```bash
+🔍 Checking for fatal sync errors...
+✅ No fatal sync errors detected
+
 🔍 Checking for Docker image updates...
 📦 Docker image update available - updating to latest version...
 🧹 Removing old Docker image before update...
@@ -64,6 +118,9 @@ The system uses a 3-layer approach to determine chronology:
 ### Uncertain Chronology (User Confirmation Required)
 
 ```bash
+🔍 Checking for fatal sync errors...
+✅ No fatal sync errors detected
+
 🔍 Checking for Docker image updates...
 
 ⚠️  **CHRONOLOGY WARNING**
@@ -73,7 +130,7 @@ The system uses a 3-layer approach to determine chronology:
 The system cannot determine if your local Docker image is newer or older than the remote version.
 Proceeding with the update might overwrite a newer local version with an older remote version.
 
-Do you want to proceed with the Docker image update? (y/N): 
+Do you want to proceed with the Docker image update? (y/N):
 ```
 
 ### User Response Options
@@ -94,20 +151,64 @@ Do you want to proceed with the Docker image update? (y/N):
 
 ## Implementation Details
 
-### Update Detector Changes
+### Fatal Sync Checker Implementation
 
-**New Result Fields:**
+**Core Class:** [`FatalSyncChecker`](../src/fatal_sync_checker.py)
+
+```python
+class FatalSyncChecker:
+    def check_fatal_sync_error(self, docker_tag: str) -> dict:
+        """
+        Check for fatal sync errors between repository and Docker image.
+        
+        Returns:
+            dict: {
+                "fatal_sync_error": bool,
+                "repo_commit": str,
+                "docker_commit": str,
+                "error_message": str,
+                "resolution_steps": list
+            }
+        """
+```
+
+**Key Methods:**
+- `get_repository_commit_sha()`: Gets current repository HEAD commit
+- `get_docker_image_commit_sha(tag)`: Extracts commit SHA from Docker image labels
+- `check_fatal_sync_error(tag)`: Compares commits and detects mismatches
+
+### Enhanced Update Detector Changes
+
+**New Result Fields for Docker Image Updates:**
 ```python
 {
     "update_available": bool,
+    "local_digest": str,                 # NEW - Docker image digest
+    "remote_digest": str,                # NEW - Remote image digest
     "local_sha": str,
     "remote_sha": str,
+    "repo_sha": str,                     # NEW - Current repository commit
     "reason": str,
     "error": str,
-    "chronology_uncertain": bool,        # NEW
-    "requires_user_confirmation": bool,  # NEW
-    "warning": str                       # NEW (when uncertain)
+    "sync_warning": str,                 # NEW - Fatal sync warnings
+    "chronology_uncertain": bool,        # Existing
+    "requires_user_confirmation": bool,  # Existing
+    "warning": str                       # Existing (when uncertain)
 }
+```
+
+**New Digest-Based Detection:**
+```python
+def check_docker_image_update(self, tag: str, branch: str = None) -> dict:
+    """
+    Enhanced Docker image update detection using digest comparison.
+    
+    Features:
+    - Digest-based comparison for reliable image matching
+    - Handles missing local images gracefully
+    - Integrates with fatal sync error detection
+    - Provides detailed error reporting
+    """
 ```
 
 **Enhanced Fallback Logic:**
@@ -171,6 +272,21 @@ fi
 
 ### Automated Tests
 
+#### Fatal Sync Error Tests
+- **Unit Tests**: [`test_fatal_sync_checker.py`](../tests/test_fatal_sync_checker.py)
+  - Tests fatal sync error detection logic
+  - Validates repository and Docker image commit extraction
+  - Verifies error message formatting and resolution steps
+  - Tests edge cases (missing images, invalid commits, etc.)
+
+#### Docker Update Detection Tests
+- **Digest-Based Tests**: Multiple test files validate the enhanced Docker update detection:
+  - [`test_comprehensive_validation.py`](../tests/test_comprehensive_validation.py) - End-to-end validation
+  - [`test_digest_fix.py`](../tests/test_digest_fix.py) - Digest comparison validation
+  - [`test_no_local_image.py`](../tests/test_no_local_image.py) - Missing local image scenarios
+  - [`test_scenario_3_different_images.py`](../tests/test_scenario_3_different_images.py) - Image mismatch detection
+
+#### Chronology Uncertainty Tests
 - **Unit Tests**: [`test_update_detector_uncertainty_warnings.py`](../tests/test_update_detector_uncertainty_warnings.py)
   - Tests uncertainty flag setting
   - Verifies warning messages
@@ -181,9 +297,11 @@ fi
   - Tests run script behavior
   - Validates user confirmation flow
 
-- **Integration Tests**: Existing branch-aware tests continue to pass
+#### Integration Tests
+- **Branch-Aware Tests**: Existing branch-aware tests continue to pass
   - Ensures backward compatibility
   - Verifies normal update flow unchanged
+  - Tests cross-platform script consistency
 
 ### Manual Testing
 
@@ -201,11 +319,14 @@ mv .git.backup .git
 
 ## Benefits
 
-1. **Prevents Data Loss**: No more accidental overwrites of newer local versions
-2. **User Control**: Users make informed decisions about uncertain updates
-3. **Clear Communication**: Detailed warnings explain risks and consequences
-4. **Safe Defaults**: System defaults to not updating when uncertain
-5. **Backward Compatibility**: Normal update flow unchanged for certain scenarios
+1. **Critical Safety Protection**: Fatal sync error detection prevents dangerous repository/Docker mismatches
+2. **Prevents Data Loss**: No more accidental overwrites of newer local versions
+3. **Enhanced Reliability**: Digest-based Docker image comparison provides accurate update detection
+4. **User Control**: Users make informed decisions about uncertain updates
+5. **Clear Communication**: Detailed warnings explain risks and consequences
+6. **Safe Defaults**: System defaults to not updating when uncertain
+7. **Cross-Platform Consistency**: Both Mac and Windows scripts provide identical safety features
+8. **Backward Compatibility**: Normal update flow unchanged for certain scenarios
 
 ## Migration Notes
 
