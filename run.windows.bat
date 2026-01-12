@@ -12,12 +12,21 @@ cd /d "%DIR%"
 
 echo 🌿 Detecting branch and generating Docker image names...
 
+REM Validate Git repository first (matches Mac version timing)
+call "%DIR%utils\branch_utils.bat" validate_git_repository
+if %errorlevel% neq 0 (
+    echo ❌ ERROR: Not in a valid Git repository
+    echo    Make sure you're on a proper branch (not detached HEAD)
+    pause
+    exit /b 1
+)
+
 REM Source branch utilities (Windows equivalent of bash source)
-REM This will validate Git repo and set CURRENT_BRANCH, LOCAL_IMAGE_NAME, REMOTE_IMAGE_NAME
+REM This will set CURRENT_BRANCH, LOCAL_IMAGE_NAME, REMOTE_IMAGE_NAME
 call "%DIR%utils\branch_utils.bat"
 if %errorlevel% neq 0 (
     echo ❌ ERROR: Branch utilities failed
-    echo    Make sure you're in a valid Git repository and Python utilities are available
+    echo    Make sure Python utilities are available
     pause
     exit /b 1
 )
@@ -97,9 +106,11 @@ REM Extract project name from the project path (Windows equivalent of basename)
 for %%f in ("%PROJECT_PATH%") do set "PROJECT_NAME=%%~nxf"
 echo ✅ Project name: %PROJECT_NAME%
 
+REM Auto-detect host user ID for proper file permissions (matches Mac behavior)
+call :detect_user_ids
+
 REM Set environment variables for docker-compose
-set "USER_ID=1000"
-set "GROUP_ID=1000"
+REM USER_ID and GROUP_ID are now set by detect_user_ids function
 
 REM Launch using docker-compose with user ID mapping
 echo Launching application with Docker Compose...
@@ -435,6 +446,33 @@ if "%MODE%"=="developer" (
     REM Regular production user - always use auto-updates
     call :production_auto_update
 )
+goto :eof
+
+:detect_user_ids
+REM Auto-detect host user ID for proper file permissions on shared drives (matches Mac version)
+REM Windows doesn't have direct equivalent to 'id -u', so we use a reasonable approach
+REM For most Windows Docker setups, using 1000:1000 is standard, but we can try to be smarter
+
+REM Try to get current user SID and convert to a numeric ID
+REM This is a simplified approach - in practice, Windows Docker usually maps to 1000:1000
+for /f "tokens=2 delims=\" %%i in ('whoami') do set "CURRENT_USER=%%i"
+
+REM For Windows Docker Desktop, the standard mapping is 1000:1000
+REM But we can make it configurable via environment variable
+if defined DOCKER_USER_ID (
+    set "USER_ID=%DOCKER_USER_ID%"
+) else (
+    set "USER_ID=1000"
+)
+
+if defined DOCKER_GROUP_ID (
+    set "GROUP_ID=%DOCKER_GROUP_ID%"
+) else (
+    set "GROUP_ID=1000"
+)
+
+echo Detected User ID: %USER_ID%, Group ID: %GROUP_ID%
+echo Note: Windows Docker typically uses 1000:1000. Set DOCKER_USER_ID/DOCKER_GROUP_ID to override.
 goto :eof
 
 :select_workflow_type

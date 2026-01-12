@@ -11,14 +11,8 @@ REM ============================================================================
 REM SIMPLE UTILITY FUNCTIONS (No complex function dispatch)
 REM ============================================================================
 
-REM Validate Git repository
-git rev-parse --git-dir >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Error: Not in a Git repository >&2
-    exit /b 1
-)
-
 REM Get current branch tag using Python utilities with fallback
+REM Note: Git validation moved to after directory setup to match Mac behavior
 for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_docker_tag_for_current_branch; print(get_docker_tag_for_current_branch())" 2^>nul') do set "CURRENT_BRANCH=%%i"
 if "%CURRENT_BRANCH%"=="" (
     REM Fallback to git command
@@ -55,6 +49,52 @@ endlocal & (
 )
 
 exit /b 0
+
+REM ============================================================================
+REM VALIDATION FUNCTIONS
+REM ============================================================================
+
+:validate_git_repository
+REM Validate if we're in a Git repository (matches Mac version behavior)
+git rev-parse --git-dir >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Error: Not in a Git repository >&2
+    exit /b 1
+)
+exit /b 0
+
+:get_current_branch
+REM Get current branch name (matches bash version)
+for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_current_branch; print(get_current_branch())" 2^>nul') do set "BRANCH_RESULT=%%i"
+if "%BRANCH_RESULT%"=="" (
+    REM Fallback to git command
+    for /f "delims=" %%i in ('git rev-parse --abbrev-ref HEAD 2^>nul') do set "BRANCH_RESULT=%%i"
+)
+echo %BRANCH_RESULT%
+exit /b 0
+
+:get_current_branch_tag
+REM Get Docker tag for current branch (matches bash version)
+for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_docker_tag_for_current_branch; print(get_docker_tag_for_current_branch())" 2^>nul') do set "TAG_RESULT=%%i"
+echo %TAG_RESULT%
+exit /b 0
+
+:get_local_image_name
+REM Get local Docker image name with branch tag (matches bash version)
+for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_local_image_name_for_current_branch; print(get_local_image_name_for_current_branch())" 2^>nul') do set "LOCAL_IMAGE_RESULT=%%i"
+echo %LOCAL_IMAGE_RESULT%
+exit /b 0
+
+:get_remote_image_name
+REM Get remote Docker image name with branch tag (matches bash version)
+for /f "delims=" %%i in ('python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_remote_image_name_for_current_branch; print(get_remote_image_name_for_current_branch())" 2^>nul') do set "REMOTE_IMAGE_RESULT=%%i"
+echo %REMOTE_IMAGE_RESULT%
+exit /b 0
+
+:get_branch_info
+REM Get comprehensive branch information (matches bash version)
+python3 -c "import sys; sys.path.insert(0, '%PROJECT_ROOT%'); from utils.branch_utils import get_branch_info; info = get_branch_info(); [print(f'{key}={value}') for key, value in info.items()]" 2>nul
+exit /b %errorlevel%
 
 REM ============================================================================
 REM FALLBACK FUNCTIONS (Pure Batch Implementation)
