@@ -42,6 +42,7 @@ This application uses **Docker** with deterministic builds to ensure a consisten
 **Prerequisites for Windows:**
 - Windows 10 version 2004 and higher (Build 19041 and higher) or Windows 11
 - WSL 2 feature enabled (required for Docker Desktop)
+- Network drive mapping (if using external network drives)
 
 1.  **Enable WSL 2 (if not already enabled):**
     - Open PowerShell as Administrator
@@ -50,25 +51,58 @@ This application uses **Docker** with deterministic builds to ensure a consisten
     - After restart, check WSL version: `wsl --version`
     - Update WSL if needed: `wsl --update`
 
-2.  **Download Docker Desktop:**
+2.  **Set up Network Drive Mapping (if using external network drives):**
+    
+    If your project data is stored on an external network drive (like `\\server\share\folder`), you must map it to a drive letter for Docker Desktop compatibility.
+    
+    **To create a persistent network drive mapping:**
+    - Open Command Prompt as Administrator
+    - Run the mapping command:
+      ```cmd
+      net use Z: \\your-server\your-share /persistent:yes
+      ```
+      Replace `Z:` with any available drive letter and `\\your-server\your-share` with your actual network path.
+    
+    **Example:**
+    ```cmd
+    net use Z: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE /persistent:yes
+    ```
+    
+    **To view current mappings:**
+    ```cmd
+    net use
+    ```
+    
+    **To remove a mapping (if needed):**
+    ```cmd
+    net use Z: /delete
+    ```
+    
+    **Important Notes:**
+    - The `/persistent:yes` flag ensures the mapping survives computer restarts
+    - Choose any available drive letter (Z:, Y:, X:, etc.)
+    - After mapping, use the drive letter path (e.g., `Z:\folder`) instead of the UNC path
+    - This is a one-time setup per network location
+
+3.  **Download Docker Desktop:**
     - Go to [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
     - Click **"Download for Windows"**
     - Save the `Docker Desktop Installer.exe` file
 
-3.  **Install Docker Desktop:**
+4.  **Install Docker Desktop:**
     - Double-click `Docker Desktop Installer.exe` to run the installer
     - When prompted, ensure **"Use WSL 2 instead of Hyper-V"** is **checked** (required)
     - Click **"OK"** to proceed with installation
     - Follow the installation wizard prompts
     - Click **"Close"** when installation completes
 
-4.  **Start Docker Desktop:**
+5.  **Start Docker Desktop:**
     - Docker Desktop should start automatically after installation
     - If not, search for "Docker Desktop" in the Start menu and launch it
     - Accept the service agreement when prompted
     - Wait for Docker to finish starting
 
-5.  **Verify Docker is running:**
+6.  **Verify Docker is running:**
     - Look for the Docker whale icon in your system tray (bottom-right corner)
     - The icon should be solid when Docker is ready
 

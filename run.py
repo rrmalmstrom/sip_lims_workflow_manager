@@ -159,29 +159,99 @@ class PlatformAdapter:
     
     @staticmethod
     def normalize_path(path_str: str) -> Path:
-        """Normalize path input across platforms."""
+        """Normalize path input across platforms with intelligent Windows UNC handling."""
         # Remove quotes and whitespace
         cleaned = path_str.strip().strip('"').strip("'")
         
-        # Handle drag-and-drop artifacts
-        if platform.system() == "Darwin":  # macOS
+        # Platform-specific path handling
+        if platform.system() == "Windows":
+            return PlatformAdapter._normalize_windows_path(cleaned)
+        elif platform.system() == "Darwin":  # macOS
             # Remove escape characters from drag-and-drop
             cleaned = cleaned.replace('\\ ', ' ')
+            return Path(cleaned).resolve()
+        else:  # Linux and other Unix-like systems
+            return Path(cleaned).resolve()
+    
+    @staticmethod
+    def _normalize_windows_path(cleaned: str) -> Path:
+        """Windows-specific path normalization with bidirectional UNC/drive letter detection."""
+        # Handle UNC paths by attempting to find existing mapped drives
+        if cleaned.startswith(('\\\\', '//')):
+            # UNC path detected - try to convert to mapped drive path
+            unc_path = cleaned.replace('/', '\\')
+            mapped_drive_path = PlatformAdapter._convert_unc_to_mapped_drive(unc_path)
+            if mapped_drive_path:
+                click.echo(f"🔄 Converted UNC path to mapped drive: {mapped_drive_path}")
+                return Path(mapped_drive_path).resolve()
+            else:
+                # No existing mapping found - provide helpful error
+                click.echo()
+                click.secho("❌ ERROR: UNC Network Path Not Supported by Docker Desktop", fg='red', bold=True)
+                click.echo(f"   Path: {unc_path}")
+                click.echo()
+                click.echo("Docker Desktop on Windows requires network drives to be mapped to drive letters.")
+                click.echo("Please map this network location to a drive letter first:")
+                click.echo()
+                click.secho("📋 Steps to fix:", fg='blue', bold=True)
+                click.echo("1. Open Command Prompt as Administrator")
+                click.echo("2. Run this command:")
+                
+                # Extract server and share for cleaner command
+                try:
+                    parts = unc_path.split('\\')
+                    if len(parts) >= 4:
+                        server = parts[2]
+                        share = parts[3]
+                        base_unc = f"\\\\{server}\\{share}"
+                        click.echo(f"   net use Z: \"{base_unc}\" /persistent:yes")
+                    else:
+                        click.echo(f"   net use Z: \"{unc_path}\" /persistent:yes")
+                except:
+                    click.echo(f"   net use Z: \"{unc_path}\" /persistent:yes")
+                
+                click.echo("3. Use Z:\\ instead of the UNC path in this application")
+                click.echo()
+                click.echo("The mapping will persist across reboots. You can use any available drive letter.")
+                click.echo()
+                raise ValueError(f"UNC network path requires drive mapping: {unc_path}")
         
-        # Try to resolve the path, but handle Windows network path issues gracefully
+        # Handle regular Windows paths (including already mapped drives)
         try:
             return Path(cleaned).resolve()
-        except (OSError, ValueError) as e:
-            # On Windows, if resolve() fails (common with UNC paths), fall back to unresolved path
-            # This preserves Docker compatibility for network drives while allowing resolve() to work
-            # for mapped drives and local paths where it's beneficial
-            if platform.system() == "Windows":
-                # Convert forward slashes to backslashes for Windows consistency
-                if cleaned.startswith(('\\\\', '//')):
-                    cleaned = cleaned.replace('/', '\\')
-                return Path(cleaned)
-            # Re-raise the exception on Mac/Linux as this indicates a real problem
-            raise
+        except (OSError, ValueError):
+            # Fallback for edge cases
+            cleaned = cleaned.replace('/', '\\')
+            return Path(cleaned)
+    
+    @staticmethod
+    def _convert_unc_to_mapped_drive(unc_path: str) -> Optional[str]:
+        """Convert UNC path to mapped drive path if mapping exists."""
+        try:
+            # Run 'net use' to get current drive mappings
+            result = subprocess.run(['net', 'use'], capture_output=True, text=True, check=True)
+            
+            # Parse the output to find mappings
+            for line in result.stdout.split('\n'):
+                if 'OK' in line and ':' in line:
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        drive_letter = parts[1]  # e.g., "Z:"
+                        mapped_unc = parts[2]    # e.g., "\\server\share"
+                        
+                        # Check if the UNC path starts with this mapped path
+                        if unc_path.lower().startswith(mapped_unc.lower()):
+                            # Convert the UNC path to use the mapped drive
+                            relative_path = unc_path[len(mapped_unc):].lstrip('\\')
+                            if relative_path:
+                                return f"{drive_letter}\\{relative_path}"
+                            else:
+                                return drive_letter
+            
+            return None
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # 'net use' command failed or not available
+            return None
     
     @staticmethod
     def get_docker_compose_command() -> List[str]:
