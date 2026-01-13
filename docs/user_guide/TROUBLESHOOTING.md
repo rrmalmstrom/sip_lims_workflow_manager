@@ -67,23 +67,47 @@ This guide provides solutions to common issues you may encounter while using the
     3.  **Use absolute paths**: Avoid relative paths that may not resolve correctly
     4.  **Fallback to production**: If local scripts fail, choose production mode instead
 
+## Unified Python Launcher Issues
+
+### `python3: command not found` or `python: command not found`
+-   **Cause**: Python is not installed or not in PATH.
+-   **Solution**:
+    1.  Install Python 3.10+ following the [Quick Setup Guide](QUICK_SETUP_GUIDE.md)
+    2.  Try `python run.py` instead of `python3 run.py` (common on Windows)
+    3.  Restart your terminal after installation
+
+### Import Errors when running `run.py`
+-   **Cause**: Running from wrong directory or missing dependencies.
+-   **Solution**:
+    1.  Ensure you're running from the project root directory
+    2.  Check that all required files are present (utils/, src/, etc.)
+    3.  Verify Git repository is properly cloned
+
+### Launcher Won't Start
+-   **Cause**: Missing dependencies or incorrect Python version.
+-   **Solution**:
+    1.  Verify Python 3.10+ is installed: `python3 --version`
+    2.  Ensure Docker Desktop is running
+    3.  Check that Git is installed and accessible
+    4.  Run from the correct directory (project root)
+
 ## Platform-Specific Issues
 
 ### macOS Issues
-
-#### Permission Denied when running `run.mac.command`
--   **Cause**: macOS Gatekeeper is blocking the script from running.
--   **Solution**: Right-click `run.mac.command` and select "Open" to bypass Gatekeeper security.
 
 #### Docker Desktop Won't Start
 -   **Cause**: Wrong Docker Desktop version for your Mac's processor.
 -   **Solution**: Ensure you downloaded the correct version (Apple Silicon vs Intel) from the Docker website.
 
+#### Python Command Issues
+-   **Cause**: macOS typically uses `python3` for Python 3.x.
+-   **Solution**: Always use `python3 run.py` on macOS instead of `python run.py`.
+
 ### Windows Issues
 
 #### WSL 2 Issues
 -   **Cause**: Windows Subsystem for Linux (WSL 2) is not properly configured.
--   **Solution**: 
+-   **Solution**:
     1.  Run `wsl --update` in Command Prompt as Administrator
     2.  Ensure WSL 2 is enabled in Windows Features
     3.  Restart your computer after making changes
@@ -92,9 +116,26 @@ This guide provides solutions to common issues you may encounter while using the
 -   **Cause**: Some antivirus software may block Docker operations.
 -   **Solution**: Add Docker Desktop to your antivirus exceptions list.
 
+#### Python Command Variations
+-   **Cause**: Windows may have Python installed as `python` or `python3`.
+-   **Solution**: Try both `python run.py` and `python3 run.py` to see which works.
+
 #### Path Issues
 -   **Cause**: Commands aren't found after installation.
 -   **Solution**: Restart your terminal after installing prerequisites to refresh the PATH environment variable.
+
+### Linux Issues
+
+#### Docker Permission Issues
+-   **Cause**: User not in docker group.
+-   **Solution**:
+    1.  Add user to docker group: `sudo usermod -aG docker $USER`
+    2.  Log out and log back in
+    3.  Verify with: `docker run hello-world`
+
+#### Python Version Issues
+-   **Cause**: System may have multiple Python versions.
+-   **Solution**: Use `python3 run.py` and ensure Python 3.10+ is installed.
 
 ## Project Loading Issues
 

@@ -2,6 +2,40 @@
 
 This document provides a detailed overview of the key features of the SIP LIMS Workflow Manager.
 
+## Unified Cross-Platform Launcher
+
+The SIP LIMS Workflow Manager uses a unified Python launcher ([`run.py`](../../run.py)) that provides a consistent experience across all operating systems.
+
+### Key Features
+- **Single Command**: `python3 run.py` works on Windows, macOS, and Linux
+- **Interactive Interface**: Rich CLI with colored output and user-friendly prompts
+- **Command-Line Arguments**: Full support for automation and scripting
+- **Enhanced Error Handling**: Clear error messages and graceful recovery
+- **Platform Detection**: Automatic adaptation to host operating system features
+- **Docker Integration**: Intelligent detection of Docker commands and container management
+
+### Usage Examples
+```bash
+# Interactive mode (recommended for first-time users)
+python3 run.py
+
+# Skip updates for faster startup
+python3 run.py --no-updates
+
+# Automated workflow launch
+python3 run.py --workflow-type sip --mode production --no-updates
+
+# Show all available options
+python3 run.py --help
+```
+
+### Migration from Legacy Scripts
+The unified launcher replaces the previous platform-specific scripts:
+- **Previous**: `run.mac.command` (macOS) and `run.windows.bat` (Windows)
+- **Current**: `python3 run.py` (all platforms)
+
+This change provides better reliability, enhanced features, and easier maintenance while maintaining full backward compatibility with existing workflows.
+
 ## Multi-Workflow Support
 
 The SIP LIMS Workflow Manager now supports multiple laboratory workflow types:

@@ -35,18 +35,15 @@ The SIP LIMS Workflow Manager has been upgraded to a **branch-aware Docker syste
 All scripts are now branch-aware:
 - `build/build_image_from_lock_files.sh` - Builds branch-specific images
 - `build/push_image_to_github.sh` - Pushes to branch-specific registry locations
-- Platform-specific run scripts - Use branch-specific images and update detection:
-  - **macOS**: `run.mac.command`
-  - **Windows**: `run.windows.bat`
+- **Unified Python launcher** - Cross-platform launcher with branch-specific images and update detection:
+  - **All Platforms**: `python3 run.py` (replaces platform-specific scripts)
 
 ## 🚀 Getting Started
 
 1. **Read the new workflow guide**: [Branch-Aware Docker Workflow](BRANCH_AWARE_DOCKER_WORKFLOW.md)
 2. **Switch to your desired branch**: `git checkout your-branch`
 3. **Build branch-specific image**: `./build/build_image_from_lock_files.sh`
-4. **Test locally**:
-   - **macOS**: `./run.mac.command` (choose development mode)
-   - **Windows**: `./run.windows.bat` (choose development mode)
+4. **Test locally**: `python3 run.py` (choose development mode)
 5. **Push when ready**: `./build/push_image_to_github.sh`
 
 ## 🔍 Key Concepts

@@ -7,11 +7,11 @@ Welcome to the central documentation for the SIP LIMS Workflow Manager. This gui
 **Multi-Workflow Support**: The SIP LIMS Workflow Manager now supports multiple laboratory workflow types:
 
 - **SIP (Stable Isotope Probing)**: 21-step comprehensive fractionation workflow
-- **SPS-CE (SPS-Capillary Electrophoresis)**: 6-step focused library creation workflow
+- **SPS-CE (Single Particle Sorts & Cell Enrichments)**: 6-step focused library creation workflow
 
 ### Quick Start
 
-1. Run the application: `./run.mac.command` (macOS/Linux) or `./run.windows.bat` (Windows)
+1. Run the application: `python3 run.py` or `python run.py`(all platforms)
 2. Select your workflow type when prompted
 3. Choose production or development mode
 4. Start managing your laboratory workflow!

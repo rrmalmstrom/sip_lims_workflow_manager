@@ -30,7 +30,7 @@ The application uses a **deterministic Docker build strategy** to ensure 100% re
     -   `conda-lock.txt`: Exact conda package versions with build hashes
     -   `requirements-lock.txt`: Exact pip package versions
 -   **Docker-Only Workflow**: No local Conda installation required for end users
--   **Automatic Updates**: Docker images and scripts updated automatically via [`run.command`](../../run.command)
+-   **Automatic Updates**: Docker images and scripts updated automatically via [`run.py`](../../run.py)
 -   **Pinned System Dependencies**: All system packages use exact version numbers
 -   **Reproducible Builds**: Same exact environment every time, regardless of when/where built
 
@@ -145,14 +145,24 @@ This Docker-based system ensures a standardized, reproducible environment for pr
 The system uses the `WORKFLOW_TYPE` environment variable to determine which workflow to load:
 
 ```
-User Selection → Run Scripts → Docker Environment → Application Logic
+User Selection → Unified Python Launcher → Docker Environment → Application Logic
 ```
 
 **Flow:**
-1. **Run Scripts** ([`run.mac.command`](../../run.mac.command), [`run.windows.bat`](../../run.windows.bat)): Set `WORKFLOW_TYPE` based on user selection
+1. **Unified Python Launcher** ([`run.py`](../../run.py)): Interactive workflow selection and `WORKFLOW_TYPE` environment variable setup
 2. **Docker Compose** ([`docker-compose.yml`](../../docker-compose.yml)): Passes `WORKFLOW_TYPE` to container
 3. **Application Logic** ([`app.py`](../../app.py)): Reads `WORKFLOW_TYPE` for template selection
 4. **Repository Management** ([`src/scripts_updater.py`](../../src/scripts_updater.py)): Uses `WORKFLOW_TYPE` for script repository selection
+
+### Unified Python Launcher Features
+
+The [`run.py`](../../run.py) script provides:
+- **Cross-Platform Compatibility**: Single script works on Windows, macOS, and Linux
+- **Interactive Workflow Selection**: Rich CLI interface with colored output
+- **Command-Line Arguments**: Support for automation and scripting
+- **Enhanced Error Handling**: Graceful error messages and recovery
+- **Platform Detection**: Automatic adaptation to host operating system
+- **Docker Integration**: Intelligent Docker command detection and container management
 
 ### Template System
 

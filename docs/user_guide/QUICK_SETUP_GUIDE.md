@@ -200,22 +200,25 @@ This project uses an intelligent Docker-based update system that automatically m
 
 ## 5. Launching the Application
 
+### Unified Python Launcher
+The application now uses a single, cross-platform Python launcher that works on all operating systems:
+
+**All Platforms (macOS, Windows, Linux):**
+```bash
+python3 run.py
+```
+
+Or on Windows, you might use:
+```cmd
+python run.py
+```
+
 ### Step 1: Choose Workflow Type
 When you run the application, you'll first be asked to select your workflow type:
 
-**macOS/Linux:**
-```bash
-./run.mac.command
-```
-
-**Windows:**
-```cmd
-./run.windows.bat
-```
-
 **Workflow Selection:**
 ```
-Select workflow type:
+🧪 Select workflow type:
 1) SIP (Stable Isotope Probing) - 21 step comprehensive workflow
 2) SPS-CE (SPS-Capillary Electrophoresis) - 6 step focused workflow
 Enter choice (1 or 2):
@@ -227,8 +230,17 @@ After selecting your workflow type, choose how to run:
 - **Production Mode**: Uses pre-built Docker images and automatically managed scripts
 - **Development Mode**: Uses local script directories for development and testing
 
-### Step 3: Application Launch
+### Step 3: Project Folder Selection
+You'll be prompted to drag and drop your project folder:
+```
+📁 Project Folder Selection
+Please drag and drop your project folder here, then press Enter:
+Project path:
+```
+
+### Step 4: Application Launch
 The application will start with your chosen workflow template loaded and ready for use.
+
 
 ### First-Time Experience:
 - The application automatically downloads the latest Docker image from GitHub Container Registry
@@ -282,8 +294,8 @@ The application will start with your chosen workflow template loaded and ready f
 ### Platform-Specific Issues
 
 **macOS:**
--   **Permission Denied**: Right-click `run.mac.command` and select "Open" to bypass Gatekeeper
 -   **Docker Desktop Won't Start**: Check that you downloaded the correct version (Apple Silicon vs Intel)
+-   **Python Command Issues**: Use `python3 run.py` instead of `python run.py` on macOS
 
 **Windows:**
 -   **WSL 2 Issues**: Ensure WSL 2 is enabled and updated. Run `wsl --update` in Command Prompt as Administrator
