@@ -404,28 +404,39 @@ class UpdateManager:
         self.branch_info = branch_info
         self.update_detector = UpdateDetector()
     
-    def perform_updates(self, workflow_type: str, mode_config: dict):
-        """Perform all necessary updates before container launch."""
+    def perform_updates(self, workflow_type: str, mode_config: dict, perform_all_updates: bool = False):
+        """Perform updates before container launch based on mode and flags."""
         if mode_config["app_env"] == "production":
-            self.production_auto_update(workflow_type, mode_config)
+            self.production_auto_update(workflow_type, mode_config, perform_all_updates)
         else:
             click.secho("🔧 Development mode - skipping auto-updates", fg='blue')
     
-    def production_auto_update(self, workflow_type: str, mode_config: dict):
-        """Production mode automatic updates."""
-        click.secho("🏭 Production mode - performing automatic updates...", fg='blue', bold=True)
-        
-        # 1. Fatal sync error check
-        self.check_fatal_sync_errors()
-        
-        # 2. Workflow manager repository updates
-        self.check_repository_updates()
-        
-        # 3. Docker image updates
-        self.check_docker_updates()
-        
-        # 4. Scripts updates
-        self.check_scripts_updates(workflow_type, mode_config["scripts_path"])
+    def production_auto_update(self, workflow_type: str, mode_config: dict, perform_all_updates: bool = False):
+        """Production mode automatic updates with configurable behavior."""
+        if perform_all_updates:
+            click.secho("🏭 Production mode - performing all updates...", fg='blue', bold=True)
+            
+            # Perform all updates (same as current default behavior)
+            self.check_fatal_sync_errors()
+            self.check_repository_updates()
+            self.check_docker_updates()
+            self.check_scripts_updates(workflow_type, mode_config["scripts_path"])
+        else:
+            click.secho("🏭 Production mode - performing scripts updates only...", fg='blue', bold=True)
+            self.display_skipped_updates_message()
+            
+            # Only perform scripts updates
+            self.check_scripts_updates(workflow_type, mode_config["scripts_path"])
+    
+    def display_skipped_updates_message(self):
+        """Display informational message about skipped updates."""
+        click.echo()
+        click.secho("ℹ️  Update Information:", fg='blue', bold=True)
+        click.echo("   • Core system updates are skipped by default in production mode")
+        click.echo("   • Skipping: Fatal sync check, repository updates, Docker image updates")
+        click.echo("   • Performing: Scripts updates (always enabled)")
+        click.echo("   • To enable all updates, use the --updates flag")
+        click.echo()
     
     def check_fatal_sync_errors(self):
         """Check for fatal repository/Docker sync errors."""
@@ -669,8 +680,8 @@ class DockerLauncher:
             "docker_image": self.branch_info['local_image']
         }
     
-    def launch(self, workflow_type: Optional[str] = None, project_path: Optional[Path] = None, 
-               scripts_path: Optional[Path] = None, mode: Optional[str] = None, skip_updates: bool = False):
+    def launch(self, workflow_type: Optional[str] = None, project_path: Optional[Path] = None,
+               scripts_path: Optional[Path] = None, mode: Optional[str] = None, perform_all_updates: bool = False):
         """Main launcher workflow."""
         try:
             click.secho("--- Starting SIP LIMS Workflow Manager (Docker) ---", fg='blue', bold=True)
@@ -705,8 +716,7 @@ class DockerLauncher:
                 project_path = UserInterface.select_project_path()
             
             # 7. Update management
-            if not skip_updates:
-                self.update_manager.perform_updates(workflow_type, mode_config)
+            self.update_manager.perform_updates(workflow_type, mode_config, perform_all_updates)
             
             # 8. Launch Docker container
             self.container_manager.launch_container(project_path, workflow_type, mode_config)
@@ -736,9 +746,9 @@ def create_argument_parser():
                        help='Scripts folder path (for development mode)')
     parser.add_argument('--mode', choices=['production', 'development'],
                        help='Execution mode (auto-detected if not provided)')
-    parser.add_argument('--no-updates', action='store_true',
-                       help='Skip update checks')
-    parser.add_argument('--version', action='version', version='1.0.0')
+    parser.add_argument('--updates', action='store_true',
+                       help='Perform all updates (fatal sync, repository, Docker, and scripts)')
+    parser.add_argument('--version', action='version', version='1.1.0')
     
     return parser
 
@@ -753,9 +763,9 @@ if HAS_CLICK:
                   help='Scripts folder path (for development mode)')
     @click.option('--mode', type=click.Choice(['production', 'development']),
                   help='Execution mode (auto-detected if not provided)')
-    @click.option('--no-updates', is_flag=True, help='Skip update checks')
-    @click.version_option(version="1.0.0", prog_name="SIP LIMS Workflow Manager Docker Launcher")
-    def main(workflow_type, project_path, scripts_path, mode, no_updates):
+    @click.option('--updates', is_flag=True, help='Perform all updates (fatal sync, repository, Docker, and scripts)')
+    @click.version_option(version="1.1.0", prog_name="SIP LIMS Workflow Manager Docker Launcher")
+    def main(workflow_type, project_path, scripts_path, mode, updates):
         """
         SIP LIMS Workflow Manager Docker Launcher
         
@@ -769,7 +779,7 @@ if HAS_CLICK:
                 project_path=project_path,
                 scripts_path=scripts_path,
                 mode=mode,
-                skip_updates=no_updates
+                perform_all_updates=updates
             )
             
         except KeyboardInterrupt:
@@ -797,7 +807,7 @@ else:
                 project_path=args.project_path,
                 scripts_path=args.scripts_path,
                 mode=args.mode,
-                skip_updates=args.no_updates
+                perform_all_updates=args.updates
             )
             
         except KeyboardInterrupt:

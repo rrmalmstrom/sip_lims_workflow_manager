@@ -200,8 +200,19 @@ This project uses an intelligent Docker-based update system that automatically m
 
 ## 5. Launching the Application
 
-### Unified Python Launcher
-The application now uses a single, cross-platform Python launcher that works on all operating systems:
+### Easy-Click Launchers (Recommended)
+For the easiest experience, use the platform-specific launchers that you can simply double-click:
+
+**macOS Users:**
+- Double-click **`run.mac.command`** in the project folder
+- This will automatically launch the workflow with default settings
+
+**Windows Users:**
+- Double-click **`run.windows.bat`** in the project folder
+- This will automatically launch the workflow with default settings
+
+### Advanced: Command Line Launcher
+For advanced users or automation, you can use the Python launcher directly:
 
 **All Platforms (macOS, Windows, Linux):**
 ```bash
@@ -212,6 +223,11 @@ Or on Windows, you might use:
 ```cmd
 python run.py
 ```
+
+**Command Line Options:**
+- `python3 run.py` - Default behavior (scripts updates only)
+- `python3 run.py --updates` - Enable all updates (fatal sync, repository, Docker, scripts)
+- `python3 run.py --help` - Show all available options
 
 ### Step 1: Choose Workflow Type
 When you run the application, you'll first be asked to select your workflow type:
@@ -264,10 +280,22 @@ The application will start with your chosen workflow template loaded and ready f
 
 ## 6. Updating the Application
 
+### New Update Behavior (v1.1.0+)
+Starting with version 1.1.0, the update behavior has been optimized for production users:
+
+**Default Behavior (Recommended):**
+- **Scripts Updates**: Always performed automatically (safe and fast)
+- **Core System Updates**: Skipped by default (Docker images, repository updates, fatal sync checks)
+- **User-Friendly**: Clear messaging about what updates are being performed
+
+**Full Updates (When Needed):**
+- Use `python3 run.py --updates` to enable all updates
+- Or use the `--updates` flag when you want the latest Docker images and system updates
+
 ### Automatic Updates (Production Users)
--   **Docker Images**: Automatically updated every time you run the application
--   **Python Scripts**: Automatically updated every time you run the application
--   **No Manual Action Required**: Updates happen automatically in the background
+-   **Python Scripts**: Always updated automatically for latest workflow improvements
+-   **Docker Images**: Updated only when using `--updates` flag (prevents unnecessary downloads)
+-   **Smart Updates**: Only downloads what you need, when you need it
 -   **Reproducible Updates**: Each update uses exact package versions for consistency
 
 
