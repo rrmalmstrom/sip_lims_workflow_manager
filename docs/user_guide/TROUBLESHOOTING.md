@@ -2,6 +2,23 @@
 
 This guide provides solutions to common issues you may encounter while using the SIP LIMS Workflow Manager.
 
+## Docker Platform Issues
+
+### Error: "no matching manifest for linux/amd64"
+
+**Problem**: Windows users may see this error when trying to run the workflow manager.
+
+**Root Cause**: The Docker image was built for ARM64 architecture (Apple Silicon Macs) but Windows Docker Desktop was trying to pull an AMD64 version.
+
+**Solution**: The workflow manager now forces ARM64 platform for all users to ensure identical behavior. Windows Docker Desktop will automatically use emulation.
+
+**What this means**:
+- ✅ **Identical behavior** across all platforms (Windows, Mac, Linux)
+- ✅ **Deterministic results** - same packages, same versions, same outputs
+- ⚠️ **Slightly slower performance** on Windows due to emulation (but identical results)
+
+**No action required** - this is handled automatically by the updated docker-compose.yml configuration.
+
 ## Installation and Setup Issues
 
 ### `docker: command not found`

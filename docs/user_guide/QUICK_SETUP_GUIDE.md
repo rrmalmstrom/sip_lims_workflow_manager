@@ -38,25 +38,37 @@ This application uses **Docker** with deterministic builds to ensure a consisten
     - The icon should be solid (not animated) when Docker is ready
 
 ### On Windows:
-1.  **Download Docker Desktop:**
+
+**Prerequisites for Windows:**
+- Windows 10 version 2004 and higher (Build 19041 and higher) or Windows 11
+- WSL 2 feature enabled (required for Docker Desktop)
+
+1.  **Enable WSL 2 (if not already enabled):**
+    - Open PowerShell as Administrator
+    - Run: `wsl --install`
+    - Restart your computer when prompted
+    - After restart, check WSL version: `wsl --version`
+    - Update WSL if needed: `wsl --update`
+
+2.  **Download Docker Desktop:**
     - Go to [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
     - Click **"Download for Windows"**
     - Save the `Docker Desktop Installer.exe` file
 
-2.  **Install Docker Desktop:**
+3.  **Install Docker Desktop:**
     - Double-click `Docker Desktop Installer.exe` to run the installer
-    - When prompted, ensure **"Use WSL 2 instead of Hyper-V"** is **checked** (recommended)
+    - When prompted, ensure **"Use WSL 2 instead of Hyper-V"** is **checked** (required)
     - Click **"OK"** to proceed with installation
     - Follow the installation wizard prompts
     - Click **"Close"** when installation completes
 
-3.  **Start Docker Desktop:**
+4.  **Start Docker Desktop:**
     - Docker Desktop should start automatically after installation
     - If not, search for "Docker Desktop" in the Start menu and launch it
     - Accept the service agreement when prompted
     - Wait for Docker to finish starting
 
-4.  **Verify Docker is running:**
+5.  **Verify Docker is running:**
     - Look for the Docker whale icon in your system tray (bottom-right corner)
     - The icon should be solid when Docker is ready
 
@@ -133,17 +145,17 @@ Python 3.10 or higher is required for the application's setup and update detecti
     
     **Option A: Download from Python.org (Recommended)**
     - Go to [https://www.python.org/downloads/](https://www.python.org/downloads/)
-    - Click **"Download Python 3.x.x"** (ensure it's 3.10 or higher)
+    - Click **"Download Python 3.x.x"** (ensure it's 3.10 or higher - current latest is 3.13)
     - Double-click the downloaded `.pkg` file
     - Follow the installer prompts:
         * Click **"Continue"** through the introduction screens
         * Click **"Install"** (may require your password)
-        * **Important:** Check **"Add Python to PATH"** if prompted
+        * Python is automatically added to PATH on macOS
     - Click **"Close"** when installation completes
     
     **Option B: Install via Homebrew (Advanced users)**
     - First install Homebrew: [https://brew.sh](https://brew.sh)
-    - Then run: `brew install python@3.11`
+    - Then run: `brew install python@3.12` or `brew install python@3.13`
 
 ### On Windows:
 1.  **Check if Python 3.10+ is already installed:**
@@ -155,18 +167,20 @@ Python 3.10 or higher is required for the application's setup and update detecti
     
     **Option A: Download from Python.org (Recommended)**
     - Go to [https://www.python.org/downloads/windows/](https://www.python.org/downloads/windows/)
-    - Click **"Download Python 3.x.x"** (ensure it's 3.10 or higher)
+    - Click **"Download Python 3.x.x"** (ensure it's 3.10 or higher - current latest is 3.13)
     - Double-click the downloaded `python-3.x.x-amd64.exe` file
     - **CRITICAL:** Check **"Add python.exe to PATH"** at the bottom of the first screen
     - Choose **"Install Now"** for standard installation
     - Click **"Yes"** if Windows asks for permission
     - Wait for installation to complete
     - Click **"Close"** when finished
+    - **Restart your terminal/command prompt** to refresh PATH
     
     **Option B: Microsoft Store (Alternative)**
     - Open **Microsoft Store**
-    - Search for "Python 3.11" or "Python 3.12"
+    - Search for "Python 3.12" or "Python 3.13"
     - Click **"Get"** to install
+    - Note: Microsoft Store version automatically handles PATH configuration
 
 ### Verify Python Installation
 Open a new terminal/command prompt and type:

@@ -3,6 +3,11 @@ services:
     # Use pre-built deterministic image for production, local deterministic build for development
     image: ${DOCKER_IMAGE:-ghcr.io/rrmalmstrom/sip_lims_workflow_manager:latest}
     
+    # Force ARM64 platform for deterministic behavior across all systems
+    # This ensures identical package versions and behavior on Windows/Mac/Linux
+    # Windows Docker Desktop will use QEMU emulation for ARM64 compatibility
+    platform: linux/arm64
+    
     container_name: sip-lims-workflow-manager
     
     ports:
