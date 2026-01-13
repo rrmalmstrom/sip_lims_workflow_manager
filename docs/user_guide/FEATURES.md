@@ -129,9 +129,12 @@ The application features a unified update system that manages both application a
 
 ## Fragment Analyzer (FA) Results Archiving
 
-The workflow manager includes an intelligent archiving system for Fragment Analyzer results that preserves valuable data while maintaining workflow flexibility.
+The workflow manager includes an intelligent archiving system for Fragment Analyzer results that preserves valuable data while maintaining workflow flexibility across both SIP and SPS-CE workflows.
 
 -   **Automatic Archiving**: When FA analysis scripts complete successfully, they automatically move FA result directories to a permanent archive location (`archived_files/`).
+-   **Multi-Workflow Support**:
+    -   **SIP Workflow**: Supports first, second, and emergency third attempt archiving
+    -   **SPS-CE Workflow**: Supports first and second attempt archiving
 -   **Persistent Archives**: Archived FA results are excluded from the undo system, ensuring that valuable experimental data is never lost during workflow operations.
 -   **Smart Directory Management**:
     -   FA result directories are moved to organized archive folders (`first_lib_attempt_fa_results/`, `second_lib_attempt_fa_results/`, `third_lib_attempt_fa_results/`)
@@ -144,13 +147,25 @@ The workflow manager includes an intelligent archiving system for Fragment Analy
 ```
 archived_files/
 ├── first_lib_attempt_fa_results/
-│   ├── PLATE1F 10-05-53/
+│   ├── PLATE1F 10-05-53/          # SIP or SPS-CE first attempt results
 │   └── PLATE2F 12-34-56/
 ├── second_lib_attempt_fa_results/
-│   ├── PLATE1F 14-22-11/
+│   ├── PLATE1F 14-22-11/          # SIP or SPS-CE second attempt results
 │   └── PLATE2F 15-45-33/
-└── third_lib_attempt_fa_results/
+└── third_lib_attempt_fa_results/   # SIP only - emergency third attempt
     └── PLATE1F 16-12-45/
 ```
 
-This feature ensures that your Fragment Analyzer data is always preserved, even when using the workflow manager's powerful undo capabilities to iterate on your analysis parameters.
+### Workflow-Specific Features
+
+#### SPS-CE Workflow
+- **Steps 2 & 5**: [`SPS_first_FA_output_analysis_NEW.py`](../../templates/sps_workflow.yml) and [`SPS_second_FA_output_analysis_NEW.py`](../../templates/sps_workflow.yml)
+- **Archive Integration**: Automatic archiving after successful FA analysis completion
+- **Directory Structure**: `B_first_attempt_fa_result/` → `first_lib_attempt_fa_results/`, `D_second_attempt_fa_result/` → `second_lib_attempt_fa_results/`
+
+#### SIP Workflow
+- **Steps 8, 11, & 14**: First, second, and emergency third FA analysis scripts
+- **Archive Integration**: Complete three-tier archiving system
+- **Directory Structure**: `B_first_attempt_fa_result/` → `first_lib_attempt_fa_results/`, etc.
+
+This feature ensures that your Fragment Analyzer data is always preserved across both SIP and SPS-CE workflows, even when using the workflow manager's powerful undo capabilities to iterate on your analysis parameters.

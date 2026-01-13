@@ -166,6 +166,74 @@ The implementation has been thoroughly tested with:
 - Robust cleanup logic that handles edge cases
 - Clear error reporting in console output
 
+## SPS-CE Workflow Integration
+
+The FA Results Archiving system has been extended to support the SPS-CE (SPS-Capillary Electrophoresis) workflow alongside the existing SIP workflow.
+
+### SPS-CE Archive Structure
+
+```
+archived_files/
+├── first_lib_attempt_fa_results/     # First attempt FA results (both SIP and SPS-CE)
+└── second_lib_attempt_fa_results/    # Second attempt FA results (both SIP and SPS-CE)
+```
+
+### SPS-CE Script Modifications
+
+#### Enhanced `getFAfiles()` Function
+Both SPS-CE FA analysis scripts have been modified with enhanced `getFAfiles()` functions:
+
+**SPS_first_FA_output_analysis_NEW.py**:
+```python
+def getFAfiles(first_dir):
+    fa_files = []
+    fa_result_dirs_to_archive = []  # Track directories for archiving
+    
+    for direct in first_dir.iterdir():
+        if direct.is_dir():
+            nxt_dir = direct
+            for fa in nxt_dir.iterdir():
+                if fa.is_dir():
+                    # Process FA directories and track them
+                    for file_path in fa.iterdir():
+                        if file_path.name.endswith('Smear Analysis Result.csv'):
+                            # Track this directory for archiving
+                            fa_result_dirs_to_archive.append(Path(fa.path))
+                            # ... existing processing logic
+    
+    return fa_files, fa_result_dirs_to_archive
+```
+
+#### Archive Function Integration
+```python
+def archive_fa_results(fa_result_dirs, archive_subdir_name):
+    """Archive FA result directories to permanent storage"""
+    # Same implementation as SIP workflow
+    # Moves entire FA result directories to archived_files/{archive_subdir_name}/
+```
+
+#### Main Program Integration
+```python
+# Archive FA results before creating success marker
+if fa_result_dirs_to_archive:
+    archive_fa_results(fa_result_dirs_to_archive, "first_lib_attempt_fa_results")
+
+# Create success marker
+create_success_marker()
+```
+
+### Cross-Workflow Compatibility
+
+The SPS-CE implementation uses the same archive directory names as SIP for the first two attempts:
+- `first_lib_attempt_fa_results` (shared between SIP and SPS-CE)
+- `second_lib_attempt_fa_results` (shared between SIP and SPS-CE)
+- `third_lib_attempt_fa_results` (SIP only - emergency third attempt)
+
+This design ensures:
+1. **Unified exclusion patterns**: Workflow manager exclusions work for both workflows
+2. **Consistent user experience**: Same archive structure across workflows
+3. **No conflicts**: Different workflows can coexist in the same project
+
 ## Future Considerations
 
 - Archive size management for long-running projects
