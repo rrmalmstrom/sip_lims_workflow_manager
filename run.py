@@ -168,7 +168,20 @@ class PlatformAdapter:
             # Remove escape characters from drag-and-drop
             cleaned = cleaned.replace('\\ ', ' ')
         
-        return Path(cleaned).resolve()
+        # Try to resolve the path, but handle Windows network path issues gracefully
+        try:
+            return Path(cleaned).resolve()
+        except (OSError, ValueError) as e:
+            # On Windows, if resolve() fails (common with UNC paths), fall back to unresolved path
+            # This preserves Docker compatibility for network drives while allowing resolve() to work
+            # for mapped drives and local paths where it's beneficial
+            if platform.system() == "Windows":
+                # Convert forward slashes to backslashes for Windows consistency
+                if cleaned.startswith(('\\\\', '//')):
+                    cleaned = cleaned.replace('/', '\\')
+                return Path(cleaned)
+            # Re-raise the exception on Mac/Linux as this indicates a real problem
+            raise
     
     @staticmethod
     def get_docker_compose_command() -> List[str]:

@@ -124,6 +124,18 @@ This guide provides solutions to common issues you may encounter while using the
 -   **Cause**: Commands aren't found after installation.
 -   **Solution**: Restart your terminal after installing prerequisites to refresh the PATH environment variable.
 
+#### Windows Network Drive Issues
+-   **Cause**: Docker fails to mount UNC network paths (e.g., `\\server\share\folder`) with error "is not a valid Windows path".
+-   **Error Message**:
+    ```
+    Error response from daemon: \\server\share\folder is not a valid Windows path
+    ```
+-   **Solution**: This issue has been fixed in the unified Python launcher (`run.py`). The launcher now automatically handles Windows UNC paths correctly for Docker compatibility. If you encounter this error:
+    1.  **Use the unified launcher**: Run `python run.py` instead of the old batch files
+    2.  **Verify path format**: Ensure your network path uses backslashes (`\\server\share`) not forward slashes
+    3.  **Check network access**: Verify you can access the network drive in Windows Explorer
+    4.  **Try mapped drives**: If UNC paths still fail, consider mapping the network drive to a letter (e.g., Z:) and using that instead
+
 ### Linux Issues
 
 #### Docker Permission Issues
