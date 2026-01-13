@@ -16,6 +16,23 @@ from src.workflow_utils import get_workflow_template_path, get_workflow_type_dis
 from utils.docker_validation import validate_docker_environment, display_environment_status
 import argparse
 
+def get_dynamic_title() -> str:
+    """
+    Generate dynamic title based on WORKFLOW_TYPE environment variable.
+    
+    Returns:
+        str: Dynamic title showing the specific workflow type
+    """
+    workflow_type = os.environ.get('WORKFLOW_TYPE', '').strip().upper()
+    
+    if workflow_type == 'SIP':
+        return "🧪 SIP LIMS Workflow Manager"
+    elif workflow_type == 'SPS-CE':
+        return "🧪 SPS-CE LIMS Workflow Manager"
+    else:
+        # Fallback to generic title if workflow type is not set or unknown
+        return "🧪 SIP LIMS Workflow Manager"
+
 def get_project_display_name(project_path: Path) -> str:
     """
     Get the display name for the project.
@@ -421,7 +438,7 @@ def start_script_thread(project, step_id, user_inputs):
 
 # --- Main Application ---
 def main():
-    st.title("🧪 SIP LIMS Workflow Manager")
+    st.title(get_dynamic_title())
 
     # --- Docker Environment Validation ---
     # Validate Docker environment on startup if running in container
