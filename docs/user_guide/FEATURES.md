@@ -35,7 +35,7 @@ For advanced users and automation, use the unified Python launcher ([`run.py`](.
 # Default behavior (scripts updates only - fast and safe)
 python3 run.py
 
-# Enable all updates (Docker images, repository, scripts)
+# Perform core updates and terminate with restart instructions
 python3 run.py --updates
 
 # Automated workflow launch with all updates
@@ -48,7 +48,7 @@ python3 run.py --help
 #### Update Behavior (v1.1.0+)
 The launcher now uses optimized update logic:
 - **Default**: Scripts updates only (fast, safe, always current workflows)
-- **With `--updates`**: All updates including Docker images and repository
+- **With `--updates`**: Core updates (fatal sync, repository, Docker) then terminate with restart instructions
 - **Clear Messaging**: Informative output about what updates are being performed
 
 ## Multi-Workflow Support
@@ -139,7 +139,7 @@ The application features an intelligent update system optimized for production u
 
 ### Launcher Update Behavior (v1.1.0+)
 -   **Default Mode**: Scripts updates only - ensures you always have the latest workflow improvements without unnecessary downloads
--   **Full Updates**: Use `--updates` flag when you need the latest Docker images and system updates
+-   **Updates Mode**: Use `--updates` flag to perform core updates (fatal sync, repository, Docker) and terminate with restart instructions
 -   **Clear Messaging**: Informative output shows exactly what updates are being performed and what's being skipped
 -   **User Choice**: Easy-click launchers use default mode, command-line provides full control
 

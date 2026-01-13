@@ -705,6 +705,13 @@ class DockerLauncher:
             # 2. Display branch information
             self.display_branch_info()
             
+            # Special handling for --updates flag: perform core updates only and terminate
+            if perform_all_updates:
+                click.echo()
+                click.secho("🔄 Updates Mode: Performing core system updates...", fg='blue', bold=True)
+                self.perform_updates_only_workflow()
+                return  # Terminate after updates
+            
             # 3. Container cleanup
             self.container_manager.cleanup_existing_containers()
             
@@ -728,8 +735,8 @@ class DockerLauncher:
             if not project_path:
                 project_path = UserInterface.select_project_path()
             
-            # 7. Update management
-            self.update_manager.perform_updates(workflow_type, mode_config, perform_all_updates)
+            # 7. Update management (normal mode - scripts updates only)
+            self.update_manager.perform_updates(workflow_type, mode_config, perform_all_updates=False)
             
             # 8. Launch Docker container
             self.container_manager.launch_container(project_path, workflow_type, mode_config)
@@ -739,6 +746,95 @@ class DockerLauncher:
             sys.exit(1)
         except Exception as e:
             click.secho(f"❌ FATAL ERROR: {e}", fg='red', bold=True)
+            sys.exit(1)
+    
+    def perform_updates_only_workflow(self):
+        """Perform core updates only and terminate with restart instructions."""
+        try:
+            # Perform core updates only (no workflow-specific scripts)
+            click.echo("🔍 Performing core system updates...")
+            click.echo("   • Fatal sync error check")
+            click.echo("   • Repository updates")
+            click.echo("   • Docker image updates")
+            click.echo()
+            
+            # Track if any updates occurred
+            updates_occurred = False
+            
+            # 1. Fatal sync check
+            self.update_manager.check_fatal_sync_errors()
+            
+            # 2. Repository updates - capture current commit before update
+            try:
+                pre_update_commit = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    capture_output=True, text=True, check=True
+                ).stdout.strip()
+            except subprocess.CalledProcessError:
+                pre_update_commit = None
+            
+            self.update_manager.check_repository_updates()
+            
+            # Check if repository was updated
+            try:
+                post_update_commit = subprocess.run(
+                    ["git", "rev-parse", "HEAD"],
+                    capture_output=True, text=True, check=True
+                ).stdout.strip()
+                repository_updated = pre_update_commit != post_update_commit
+            except subprocess.CalledProcessError:
+                repository_updated = False
+            
+            if repository_updated:
+                updates_occurred = True
+            
+            # 3. Docker image updates - capture image ID before update
+            try:
+                remote_image_name = self.update_manager.branch_info['remote_image']
+                pre_update_image = subprocess.run([
+                    "docker", "images", remote_image_name, "--format", "{{.ID}}"
+                ], capture_output=True, text=True).stdout.strip()
+            except subprocess.CalledProcessError:
+                pre_update_image = None
+            
+            self.update_manager.check_docker_updates()
+            
+            # Check if Docker image was updated
+            try:
+                post_update_image = subprocess.run([
+                    "docker", "images", remote_image_name, "--format", "{{.ID}}"
+                ], capture_output=True, text=True).stdout.strip()
+                docker_updated = pre_update_image != post_update_image
+            except subprocess.CalledProcessError:
+                docker_updated = False
+            
+            if docker_updated:
+                updates_occurred = True
+            
+            # Display completion message and restart instructions
+            click.echo()
+            click.secho("✅ Core system updates completed successfully!", fg='green', bold=True)
+            
+            if updates_occurred:
+                click.echo()
+                click.secho("🔄 RESTART REQUIRED", fg='yellow', bold=True)
+                click.echo("The workflow manager code and/or Docker image have been updated.")
+                click.echo("Please restart the script to launch with the latest version:")
+                click.echo()
+                click.secho("   python run.py", fg='blue', bold=True)
+                click.echo()
+                click.echo("This ensures you're running the most up-to-date version of the workflow manager.")
+            else:
+                click.echo()
+                click.secho("ℹ️  No updates were needed", fg='blue', bold=True)
+                click.echo("Your workflow manager is already up to date.")
+                click.echo("You can now launch normally:")
+                click.echo()
+                click.secho("   python run.py", fg='blue', bold=True)
+            
+        except Exception as e:
+            click.secho(f"❌ ERROR during updates: {e}", fg='red', bold=True)
+            click.echo("Please resolve the error and try again.")
             sys.exit(1)
 
 
@@ -760,7 +856,7 @@ def create_argument_parser():
     parser.add_argument('--mode', choices=['production', 'development'],
                        help='Execution mode (auto-detected if not provided)')
     parser.add_argument('--updates', action='store_true',
-                       help='Perform all updates (fatal sync, repository, Docker, and scripts)')
+                       help='Perform core updates (fatal sync, repository, Docker) and terminate with restart instructions')
     parser.add_argument('--version', action='version', version='1.1.0')
     
     return parser
@@ -776,7 +872,7 @@ if HAS_CLICK:
                   help='Scripts folder path (for development mode)')
     @click.option('--mode', type=click.Choice(['production', 'development']),
                   help='Execution mode (auto-detected if not provided)')
-    @click.option('--updates', is_flag=True, help='Perform all updates (fatal sync, repository, Docker, and scripts)')
+    @click.option('--updates', is_flag=True, help='Perform core updates (fatal sync, repository, Docker) and terminate with restart instructions')
     @click.version_option(version="1.1.0", prog_name="SIP LIMS Workflow Manager Docker Launcher")
     def main(workflow_type, project_path, scripts_path, mode, updates):
         """

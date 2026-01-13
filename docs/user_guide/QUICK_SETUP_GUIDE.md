@@ -240,7 +240,7 @@ python run.py
 
 **Command Line Options:**
 - `python3 run.py` - Default behavior (scripts updates only)
-- `python3 run.py --updates` - Enable all updates (fatal sync, repository, Docker, scripts)
+- `python3 run.py --updates` - Perform core updates (fatal sync, repository, Docker) and terminate with restart instructions
 - `python3 run.py --help` - Show all available options
 
 ### Step 1: Choose Workflow Type
@@ -303,8 +303,9 @@ Starting with version 1.1.0, the update behavior has been optimized for producti
 - **User-Friendly**: Clear messaging about what updates are being performed
 
 **Full Updates (When Needed):**
-- Use `python3 run.py --updates` to enable all updates
-- Or use the `--updates` flag when you want the latest Docker images and system updates
+- Use `python3 run.py --updates` to perform core system updates and get restart instructions
+- The `--updates` flag performs fatal sync checks, repository updates, and Docker image updates, then terminates
+- After updates complete, restart with `python3 run.py` to launch with the latest version
 
 ### Automatic Updates (Production Users)
 -   **Python Scripts**: Always updated automatically for latest workflow improvements
