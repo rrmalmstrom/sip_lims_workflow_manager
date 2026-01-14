@@ -183,7 +183,23 @@ class PlatformAdapter:
             mapped_drive_path = PlatformAdapter._convert_unc_to_mapped_drive(unc_path)
             if mapped_drive_path:
                 click.echo(f"🔄 Converted UNC path to mapped drive: {mapped_drive_path}")
-                return Path(mapped_drive_path).resolve()
+                
+                # CRITICAL FIX: Create Path object from the converted string, not the original UNC
+                # This ensures the Path object contains the drive letter path, not the UNC path
+                try:
+                    converted_path = Path(mapped_drive_path)
+                    
+                    # Validate the converted path exists and is accessible
+                    if converted_path.exists():
+                        # CRITICAL FIX: Do NOT call .resolve() on converted mapped drive paths!
+                        # .resolve() will convert the drive letter back to UNC path
+                        return converted_path
+                    else:
+                        # Mapped drive exists but path doesn't - return as-is for Docker to handle
+                        return converted_path
+                except (OSError, ValueError):
+                    # If Path creation fails, return the string as a Path anyway
+                    return Path(mapped_drive_path)
             else:
                 # No existing mapping found - provide helpful error
                 click.echo()
@@ -218,7 +234,19 @@ class PlatformAdapter:
         
         # Handle regular Windows paths (including already mapped drives)
         try:
-            return Path(cleaned).resolve()
+            path_obj = Path(cleaned)
+            
+            # CRITICAL FIX: Do NOT call .resolve() on mapped drive paths on Windows!
+            # .resolve() converts drive letters back to UNC paths on Windows
+            # Check if this is a Windows mapped drive (starts with drive letter like C:, Z:, etc.)
+            import re
+            is_drive_letter_path = re.match(r'^[A-Za-z]:', cleaned)
+            
+            if is_drive_letter_path:
+                # Detected Windows mapped drive path - skipping .resolve() to prevent UNC conversion
+                return path_obj
+            else:
+                return path_obj.resolve()
         except (OSError, ValueError):
             # Fallback for edge cases
             cleaned = cleaned.replace('/', '\\')
