@@ -2,14 +2,14 @@
 
 ## 🎯 **Overview**
 
-This document provides step-by-step instructions for testing the Smart Sync Layer implementation on actual Windows systems with network drives, including how to get the latest code with comprehensive debugging capabilities.
+This document provides step-by-step instructions for testing the Smart Sync Layer implementation on actual Windows systems with network drives. The Smart Sync system automatically detects Windows + network drive scenarios and creates local staging to bypass Docker Desktop's network drive limitations.
 
 ## 🚀 **Step 1: Getting the Smart Sync Code**
 
 You currently have the main branch. The Smart Sync implementation is on the `feature/smart-sync-layer` branch. Here's how to get it:
 
 ```cmd
-# Navigate to your repository
+# Navigate to your workflow manager installation directory
 cd C:\path\to\your\sip_lims_workflow_manager
 
 # Fetch the new feature branch from remote
@@ -72,90 +72,74 @@ your_project_directory\
    - **Contains**: Session summaries, performance analysis, recommendations
    - **Created**: When running the debug log analyzer tool
 
-## 🧪 **Step 3: Enable Debug Logging**
+## 🧪 **Step 3: Understanding Debug Logging**
 
-Before running any tests, enable comprehensive debug logging:
+Debug logging will be enabled automatically using the `--debug` flag when running the workflow manager. This provides comprehensive logging of all Smart Sync operations without requiring manual environment variable setup.
 
-```cmd
-# Set debug environment variables (these persist for your current session)
-set SMART_SYNC_DEBUG=true
-set SMART_SYNC_DEBUG_LEVEL=DEBUG
+**Debug logging automatically:**
+- Creates `.debug_output\smart_sync_debug.log` in your project directory
+- Tracks all Smart Sync operations with timestamps and performance metrics
+- Provides detailed error information if issues occur
+- Can be turned off by simply running without the `--debug` flag
 
-# Verify they're set correctly
-echo %SMART_SYNC_DEBUG%
-echo %SMART_SYNC_DEBUG_LEVEL%
-```
+## 🗂️ **Step 4: Navigate to Your Project on Network Drive**
 
-**Expected Output:**
-```
-true
-DEBUG
-```
 
-## 🗂️ **Step 4: Prepare Test Project on Network Drive**
-
-### **Step 4.1: Set Up Test Project**
+### **Step 4.1: Verify Your Project Setup**
 
 ```cmd
-# Create a test project on your network drive (replace Z: with your network drive)
-mkdir Z:\smart_sync_test_project
-cd Z:\smart_sync_test_project
+# Navigate to your actual project on the network drive (replace Z: with your network drive)
+cd Z:\path\to\your\real\project
 
-# Create a simple workflow file
-echo workflow_name: "Smart Sync Test" > workflow.yml
-echo steps: >> workflow.yml
-echo   - id: "test_step" >> workflow.yml
-echo     name: "Test Step" >> workflow.yml
-echo     script: "test_script.py" >> workflow.yml
+# Verify you have a workflow file (workflow.yml, sip_workflow.yml, or sps_workflow.yml)
+dir *.yml
 
-# Create test data
-mkdir data
-echo Test data content > data\test_file.txt
-
-# Create scripts directory
-mkdir scripts
-echo print("Test script executed successfully") > scripts\test_script.py
-```
-
-### **Step 4.2: Copy Workflow Manager**
-
-```cmd
-# Option A: Copy the entire workflow manager to your project
-xcopy /E /I C:\path\to\sip_lims_workflow_manager Z:\smart_sync_test_project\workflow_manager
-
-# Option B: Create a symbolic link (requires admin privileges)
-mklink /D Z:\smart_sync_test_project\workflow_manager C:\path\to\sip_lims_workflow_manager
-
-# Option C: Just copy the run.py file and reference the full path
-copy C:\path\to\sip_lims_workflow_manager\run.py Z:\smart_sync_test_project\
+# Note the full path to your project - you'll need this
+echo %CD%
 ```
 
 ## 🏃 **Step 5: Run Smart Sync Test**
 
-### **Step 5.1: Execute Test**
+### **Step 5.1: Execute Test from Workflow Manager Directory**
+
+**CRITICAL**: Run the workflow manager from its installation directory, NOT from your project directory.
 
 ```cmd
-# Navigate to your test project on the network drive
-cd Z:\smart_sync_test_project
+# Navigate to your workflow manager installation directory
+cd C:\path\to\sip_lims_workflow_manager
 
-# Run the workflow manager (adjust path as needed based on Step 4.2)
-# Option A: If you copied the entire workflow manager
-python workflow_manager\run.py
-
-# Option B: If you copied just run.py
-python run.py
-
-# Option C: Reference the full path
-python C:\path\to\sip_lims_workflow_manager\run.py
+# Run the workflow manager with debug logging enabled
+python run.py --debug
 ```
 
-### **Step 5.2: What to Look For During Execution**
+### **Step 5.2: Follow the Interactive Prompts**
+
+The workflow manager will guide you through:
+
+1. **Workflow Type Selection**:
+   ```
+   🧪 Select workflow type:
+   1) SIP (Stable Isotope Probing)
+   2) SPS-CE (Single Particle Sorting - Cell Enrichment)
+   Enter choice (1 or 2):
+   ```
+
+2. **Project Folder Selection**:
+   ```
+   📁 Project Folder Selection
+   Please drag and drop your project folder here, then press Enter:
+   Project path:
+   ```
+   **Enter your network drive project path**: `Z:\path\to\your\real\project`
+   ```
+
+### **Step 5.3: What to Look For During Execution**
 
 You should see console output like:
 
 ```
 🔍 Smart Sync: Windows network drive detected (Z:)
-📁 Smart Sync: Creating local staging at C:\temp\sip_workflow\smart_sync_test_project
+📁 Smart Sync: Creating local staging at C:\temp\sip_workflow\your_project_name
 📥 Smart Sync: Initial sync starting...
 📥 Smart Sync: Initial sync completed (X files copied)
 🐳 Launching Docker container...
@@ -165,21 +149,26 @@ You should see console output like:
 🧹 Smart Sync: Cleanup completed
 ```
 
-### **Step 5.3: Verify Debug Files Were Created**
+### **Step 5.4: Verify Debug Files Were Created**
+
+After running, check that debug files were created in your project directory:
 
 ```cmd
-# Check that debug output directory was created
-dir Z:\smart_sync_test_project\.debug_output
+# Navigate back to your project directory
+cd Z:\path\to\your\real\project
+
+# Check that debug output directory was created in your project
+dir .debug_output
 
 # Verify main debug log exists and has content
-dir Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log
-type Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log | more
+dir .debug_output\smart_sync_debug.log
+type .debug_output\smart_sync_debug.log | more
 
-# Check local staging area was created
-dir C:\temp\sip_workflow\smart_sync_test_project
+# Check local staging area was created (replace your_project_name with your actual project folder name)
+dir C:\temp\sip_workflow\your_project_name
 
 # Verify sync log in staging area
-dir C:\temp\sip_workflow\smart_sync_test_project\.sync_log.json
+dir C:\temp\sip_workflow\your_project_name\.sync_log.json
 ```
 
 ## 📊 **Step 6: Analyze Debug Results**
@@ -187,11 +176,9 @@ dir C:\temp\sip_workflow\smart_sync_test_project\.sync_log.json
 ### **Step 6.1: Quick Analysis**
 
 ```cmd
-# Navigate back to the workflow manager directory
+# Run quick analysis on the debug log from your workflow manager directory
 cd C:\path\to\sip_lims_workflow_manager
-
-# Run quick analysis on the debug log
-python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log --summary-only
+python debug_log_analyzer.py Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log --summary-only
 ```
 
 **Expected Output:**
@@ -199,7 +186,7 @@ python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync
 ============================================================
 🔍 SMART SYNC DEBUG LOG ANALYSIS SUMMARY
 ============================================================
-📁 Log File: Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log
+📁 Log File: Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log
 📊 Total Entries: XX
 🔄 Total Sessions: 1
 
@@ -215,13 +202,13 @@ python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync
 
 ```cmd
 # Generate detailed analysis report
-python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log --format txt --output test_results.txt
+python debug_log_analyzer.py Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log --format txt --output test_results.txt
 
 # View the report
 type test_results.txt | more
 
 # Generate JSON analysis for sharing
-python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log --format json --output detailed_analysis.json
+python debug_log_analyzer.py Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log --format json --output detailed_analysis.json
 ```
 
 ## ✅ **Step 7: Verify Success Criteria**
@@ -231,20 +218,20 @@ python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync
 1. **Smart Sync Detection**:
    ```cmd
    # Look for this in the console output or debug log
-   findstr "Smart Sync.*detected" Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log
+   findstr "Smart Sync.*detected" Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log
    ```
 
 2. **Local Staging Created**:
    ```cmd
-   # Verify staging directory exists
-   dir C:\temp\sip_workflow\smart_sync_test_project
+   # Verify staging directory exists (replace your_project_name)
+   dir C:\temp\sip_workflow\your_project_name
    ```
 
 3. **Files Synchronized**:
    ```cmd
-   # Compare network and local staging
-   dir Z:\smart_sync_test_project\data
-   dir C:\temp\sip_workflow\smart_sync_test_project\data
+   # Compare network and local staging (replace paths with your actual paths)
+   dir Z:\path\to\your\real\project\data
+   dir C:\temp\sip_workflow\your_project_name\data
    ```
 
 4. **Docker Used Local Path**:
@@ -256,7 +243,7 @@ python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync
 5. **Final Sync Completed**:
    ```cmd
    # Look for final sync messages
-   findstr "Final sync completed" Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log
+   findstr "Final sync completed" Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log
    ```
 
 ## 🚨 **Step 8: Troubleshooting Common Issues**
@@ -271,10 +258,11 @@ python debug_log_analyzer.py Z:\smart_sync_test_project\.debug_output\smart_sync
 python -c "import platform; print('Platform:', platform.system())"
 
 # Verify project is on network drive
+cd Z:\path\to\your\real\project
 echo %CD%
 
 # Check debug log for detection details
-findstr "detection" Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log
+findstr "detection" .debug_output\smart_sync_debug.log
 ```
 
 ### **Issue: Permission Errors**
@@ -285,7 +273,7 @@ findstr "detection" Z:\smart_sync_test_project\.debug_output\smart_sync_debug.lo
 1. Run Command Prompt as Administrator
 2. Check network drive permissions:
    ```cmd
-   icacls Z:\smart_sync_test_project
+   icacls Z:\path\to\your\real\project
    ```
 3. Verify Docker Desktop has access to C:\ drive
 
@@ -316,40 +304,35 @@ ping your-network-server
 # Verify disk space
 dir C:\temp
 
-# Check for file locks
-handle.exe Z:\smart_sync_test_project (if you have Sysinternals tools)
+# Check for file locks (if you have Sysinternals tools)
+handle.exe Z:\path\to\your\real\project
 ```
 
 ## 📤 **Step 9: Collecting Results for Analysis**
 
 ### **Files to Collect and Share**
 
-1. **Main debug log**:
-   ```cmd
-   copy Z:\smart_sync_test_project\.debug_output\smart_sync_debug.log debug_results\
-   ```
+```cmd
+# Create results directory
+mkdir debug_results
 
-2. **Analysis report**:
-   ```cmd
-   copy test_results.txt debug_results\
-   copy detailed_analysis.json debug_results\
-   ```
+# 1. Main debug log
+copy Z:\path\to\your\real\project\.debug_output\smart_sync_debug.log debug_results\
 
-3. **Workflow logs**:
-   ```cmd
-   copy Z:\smart_sync_test_project\.workflow_logs\workflow_debug.log debug_results\
-   ```
+# 2. Analysis reports
+copy test_results.txt debug_results\
+copy detailed_analysis.json debug_results\
 
-4. **Sync details**:
-   ```cmd
-   copy C:\temp\sip_workflow\smart_sync_test_project\.sync_log.json debug_results\
-   ```
+# 3. Workflow logs
+copy Z:\path\to\your\real\project\.workflow_logs\workflow_debug.log debug_results\
 
-5. **System information**:
-   ```cmd
-   systeminfo > debug_results\system_info.txt
-   docker version > debug_results\docker_info.txt
-   ```
+# 4. Sync details (replace your_project_name)
+copy C:\temp\sip_workflow\your_project_name\.sync_log.json debug_results\
+
+# 5. System information
+systeminfo > debug_results\system_info.txt
+docker version > debug_results\docker_info.txt
+```
 
 ### **Create Summary Report**
 
@@ -363,7 +346,8 @@ echo Windows Version: >> debug_results\test_summary.txt
 systeminfo | findstr "OS Name" >> debug_results\test_summary.txt
 systeminfo | findstr "OS Version" >> debug_results\test_summary.txt
 echo. >> debug_results\test_summary.txt
-echo Network Drive: %CD% >> debug_results\test_summary.txt
+echo Network Drive Project: Z:\path\to\your\real\project >> debug_results\test_summary.txt
+echo Workflow Manager: C:\path\to\sip_lims_workflow_manager >> debug_results\test_summary.txt
 echo. >> debug_results\test_summary.txt
 echo Test Results: >> debug_results\test_summary.txt
 echo - Smart Sync Detected: [YES/NO] >> debug_results\test_summary.txt
@@ -394,5 +378,15 @@ echo - Final Cleanup Completed: [YES/NO] >> debug_results\test_summary.txt
 - ✅ `C:\temp\sip_workflow\project_name\` staging area
 - ✅ Synchronized files in both locations
 - ✅ Cleanup of staging area after completion
+
+## 🔑 **Key Understanding: How run.py Works**
+
+**IMPORTANT**: The workflow manager (`run.py`) is designed to:
+
+1. **Run from its installation directory** (`C:\path\to\sip_lims_workflow_manager`)
+2. **Prompt you to select your project folder** (which can be on a network drive like `Z:\`)
+3. **Automatically detect if Smart Sync is needed** based on the project path you provide
+4. **Create local staging and sync** if Windows + network drive is detected
+5. **Launch Docker with the appropriate path** (local staging or original path)
 
 This comprehensive testing will validate that Smart Sync works correctly on your Windows system and provide detailed debugging information for any issues encountered.

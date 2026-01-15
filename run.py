@@ -1134,6 +1134,8 @@ def create_argument_parser():
                        help='Execution mode (auto-detected if not provided)')
     parser.add_argument('--updates', action='store_true',
                        help='Perform core updates (fatal sync, repository, Docker) and terminate with restart instructions')
+    parser.add_argument('--debug', action='store_true',
+                       help='Enable Smart Sync debug logging (sets SMART_SYNC_DEBUG=true)')
     parser.add_argument('--version', action='version', version='1.1.0')
     
     return parser
@@ -1150,8 +1152,9 @@ if HAS_CLICK:
     @click.option('--mode', type=click.Choice(['production', 'development']),
                   help='Execution mode (auto-detected if not provided)')
     @click.option('--updates', is_flag=True, help='Perform core updates (fatal sync, repository, Docker) and terminate with restart instructions')
+    @click.option('--debug', is_flag=True, help='Enable Smart Sync debug logging (sets SMART_SYNC_DEBUG=true)')
     @click.version_option(version="1.1.0", prog_name="SIP LIMS Workflow Manager Docker Launcher")
-    def main(workflow_type, project_path, scripts_path, mode, updates):
+    def main(workflow_type, project_path, scripts_path, mode, updates, debug):
         """
         SIP LIMS Workflow Manager Docker Launcher
         
@@ -1159,6 +1162,12 @@ if HAS_CLICK:
         Replaces run.mac.command and run.windows.bat with unified Python implementation.
         """
         try:
+            # Set debug environment variable if flag is provided
+            if debug:
+                os.environ["SMART_SYNC_DEBUG"] = "true"
+                os.environ["SMART_SYNC_DEBUG_LEVEL"] = "DEBUG"
+                click.secho("🔍 Smart Sync debug logging enabled", fg='cyan')
+            
             launcher = DockerLauncher()
             launcher.launch(
                 workflow_type=workflow_type,
@@ -1187,6 +1196,12 @@ else:
         args = parser.parse_args()
         
         try:
+            # Set debug environment variable if flag is provided
+            if args.debug:
+                os.environ["SMART_SYNC_DEBUG"] = "true"
+                os.environ["SMART_SYNC_DEBUG_LEVEL"] = "DEBUG"
+                print("🔍 Smart Sync debug logging enabled")
+            
             launcher = DockerLauncher()
             launcher.launch(
                 workflow_type=args.workflow_type,
