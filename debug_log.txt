@@ -1,0 +1,161 @@
+[2026-01-14 08:12:24.280] ================================================================================
+[2026-01-14 08:12:24.283] DEBUG SESSION STARTED
+[2026-01-14 08:12:24.402] Platform: Windows 11
+[2026-01-14 08:12:24.404] Python: 3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 16:37:03) [MSC v.1929 64 bit (AMD64)]
+[2026-01-14 08:12:24.405] Working Directory: C:\Users\WBKauffman\sip_lims_workflow_manager
+[2026-01-14 08:12:24.405] ================================================================================
+[2026-01-14 08:12:24.448] Click library imported successfully
+[2026-01-14 08:12:24.449] Attempting to import required modules...
+[2026-01-14 08:12:24.509] All required modules imported successfully
+[2026-01-14 08:12:24.510] Main function started
+[2026-01-14 08:12:24.513] Initializing DockerLauncher...
+[2026-01-14 08:12:24.514] Raw platform system: Windows
+[2026-01-14 08:12:24.516] Normalized platform: windows
+[2026-01-14 08:12:24.517] Platform: windows
+[2026-01-14 08:12:24.518] Project root: C:\Users\WBKauffman\sip_lims_workflow_manager
+[2026-01-14 08:12:24.519] Getting branch info...
+[2026-01-14 08:12:24.648] Branch info: {'branch': 'main', 'tag': 'main', 'local_image': 'sip-lims-workflow-manager:main', 'remote_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:12:24.649] Initializing container manager...
+[2026-01-14 08:12:24.651] Initializing ContainerManager with branch_info: {'branch': 'main', 'tag': 'main', 'local_image': 'sip-lims-workflow-manager:main', 'remote_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:12:24.652] Getting docker-compose command...
+[2026-01-14 08:12:24.653] Trying command: ['docker', 'compose']
+[2026-01-14 08:12:25.333] Command ['docker', 'compose'] successful, returncode: 0
+[2026-01-14 08:12:25.334] Docker compose command: ['docker', 'compose']
+[2026-01-14 08:12:25.336] Starting main launch workflow...
+[2026-01-14 08:12:25.337] Parameters: workflow_type=None, project_path=None, scripts_path=None, mode=None, perform_all_updates=False
+[2026-01-14 08:12:25.351] Step 1: Environment validation
+[2026-01-14 08:12:25.353] Validating environment...
+[2026-01-14 08:12:25.354] Validating Docker availability...
+[2026-01-14 08:12:26.235] Docker validation result: returncode=0, running=True
+[2026-01-14 08:12:26.237] Docker validation successful
+[2026-01-14 08:12:26.241] Step 4: Workflow type selection
+[2026-01-14 08:12:26.242] Selecting workflow type...
+[2026-01-14 08:12:32.933] Workflow choice: '1'
+[2026-01-14 08:12:32.938] Selected SIP workflow
+[2026-01-14 08:12:32.940] Final workflow type: sip
+[2026-01-14 08:12:32.941] Step 5: Mode configuration (using production mode)
+[2026-01-14 08:12:32.941] Setting up production mode for workflow: sip
+[2026-01-14 08:12:32.942] Production mode config: {'scripts_path': 'C:\\Users\\WBKauffman\\.sip_lims_workflow_manager\\sip_scripts', 'app_env': 'production', 'docker_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:12:32.944] Step 6: Project path selection
+[2026-01-14 08:12:32.945] Selecting project path...
+[2026-01-14 08:14:56.753] ================================================================================
+[2026-01-14 08:14:56.755] DEBUG SESSION STARTED
+[2026-01-14 08:14:57.136] Platform: Windows 11
+[2026-01-14 08:14:57.138] Python: 3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 16:37:03) [MSC v.1929 64 bit (AMD64)]
+[2026-01-14 08:14:57.139] Working Directory: C:\Users\WBKauffman\sip_lims_workflow_manager
+[2026-01-14 08:14:57.140] ================================================================================
+[2026-01-14 08:14:57.198] Click library imported successfully
+[2026-01-14 08:14:57.199] Attempting to import required modules...
+[2026-01-14 08:14:57.260] All required modules imported successfully
+[2026-01-14 08:14:57.262] Main function started
+[2026-01-14 08:14:57.263] Initializing DockerLauncher...
+[2026-01-14 08:14:57.264] Raw platform system: Windows
+[2026-01-14 08:14:57.265] Normalized platform: windows
+[2026-01-14 08:14:57.267] Platform: windows
+[2026-01-14 08:14:57.268] Project root: C:\Users\WBKauffman\sip_lims_workflow_manager
+[2026-01-14 08:14:57.269] Getting branch info...
+[2026-01-14 08:14:57.391] Branch info: {'branch': 'main', 'tag': 'main', 'local_image': 'sip-lims-workflow-manager:main', 'remote_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:14:57.393] Initializing container manager...
+[2026-01-14 08:14:57.394] Initializing ContainerManager with branch_info: {'branch': 'main', 'tag': 'main', 'local_image': 'sip-lims-workflow-manager:main', 'remote_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:14:57.395] Getting docker-compose command...
+[2026-01-14 08:14:57.396] Trying command: ['docker', 'compose']
+[2026-01-14 08:14:57.786] Command ['docker', 'compose'] successful, returncode: 0
+[2026-01-14 08:14:57.788] Docker compose command: ['docker', 'compose']
+[2026-01-14 08:14:57.790] Starting main launch workflow...
+[2026-01-14 08:14:57.791] Parameters: workflow_type=None, project_path=None, scripts_path=None, mode=None, perform_all_updates=False
+[2026-01-14 08:14:57.803] Step 1: Environment validation
+[2026-01-14 08:14:57.804] Validating environment...
+[2026-01-14 08:14:57.806] Validating Docker availability...
+[2026-01-14 08:14:58.357] Docker validation result: returncode=0, running=True
+[2026-01-14 08:14:58.358] Docker validation successful
+[2026-01-14 08:14:58.361] Step 4: Workflow type selection
+[2026-01-14 08:14:58.362] Selecting workflow type...
+[2026-01-14 08:15:00.901] Workflow choice: '1'
+[2026-01-14 08:15:00.905] Selected SIP workflow
+[2026-01-14 08:15:00.907] Final workflow type: sip
+[2026-01-14 08:15:00.908] Step 5: Mode configuration (using production mode)
+[2026-01-14 08:15:00.909] Setting up production mode for workflow: sip
+[2026-01-14 08:15:00.911] Production mode config: {'scripts_path': 'C:\\Users\\WBKauffman\\.sip_lims_workflow_manager\\sip_scripts', 'app_env': 'production', 'docker_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:15:00.912] Step 6: Project path selection
+[2026-01-14 08:15:00.913] Selecting project path...
+[2026-01-14 08:15:16.076] Raw project path input: 'Z:\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.078] NORMALIZE_PATH called with: 'Z:\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.079] After cleaning: 'Z:\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.080] Current platform: Windows
+[2026-01-14 08:15:16.082] Using Windows path normalization
+[2026-01-14 08:15:16.083] WINDOWS_NORMALIZE called with: 'Z:\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.086] Regular Windows path (not UNC)
+[2026-01-14 08:15:16.137] Successfully resolved regular Windows path: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.139] Windows normalization result: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.139] Normalized project path: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.238] Successfully selected project path: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.239] Final project path: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.241] Step 8: Launching Docker container
+[2026-01-14 08:15:16.247] Launching Docker container...
+[2026-01-14 08:15:16.250] Preparing environment variables...
+[2026-01-14 08:15:16.252] Project path: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.255] Workflow type: sip
+[2026-01-14 08:15:16.257] Mode config: {'scripts_path': 'C:\\Users\\WBKauffman\\.sip_lims_workflow_manager\\sip_scripts', 'app_env': 'production', 'docker_image': 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'}
+[2026-01-14 08:15:16.259] Getting user IDs for Docker volume mapping...
+[2026-01-14 08:15:16.260] Windows user IDs: {'USER_ID': '1000', 'GROUP_ID': '1000'}
+[2026-01-14 08:15:16.261] User IDs: {'USER_ID': '1000', 'GROUP_ID': '1000'}
+[2026-01-14 08:15:16.263] Final environment variables:
+[2026-01-14 08:15:16.264]   PROJECT_PATH: '\\\\storage.jgi.lbl.gov\\gentech\\Microscale_Application_STORAGE\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.267]   PROJECT_NAME: '511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.268]   SCRIPTS_PATH: 'C:\\Users\\WBKauffman\\.sip_lims_workflow_manager\\sip_scripts'
+[2026-01-14 08:15:16.269]   WORKFLOW_TYPE: 'sip'
+[2026-01-14 08:15:16.269]   APP_ENV: 'production'
+[2026-01-14 08:15:16.270]   DOCKER_IMAGE: 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'
+[2026-01-14 08:15:16.271]   USER_ID: '1000'
+[2026-01-14 08:15:16.272]   GROUP_ID: '1000'
+[2026-01-14 08:15:16.273] Displaying environment summary...
+[2026-01-14 08:15:16.274] Displayed: PROJECT_PATH: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE\SIP_STORAGE\511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.275] Displayed: PROJECT_NAME: 511816_Chakraborty_second_batch
+[2026-01-14 08:15:16.276] Displayed: SCRIPTS_PATH: C:\Users\WBKauffman\.sip_lims_workflow_manager\sip_scripts
+[2026-01-14 08:15:16.277] Displayed: WORKFLOW_TYPE: sip
+[2026-01-14 08:15:16.278] Displayed: APP_ENV: production
+[2026-01-14 08:15:16.279] Displayed: DOCKER_IMAGE: ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main
+[2026-01-14 08:15:16.280] Displayed: USER_ID: 1000
+[2026-01-14 08:15:16.281] Displayed: GROUP_ID: 1000
+[2026-01-14 08:15:16.284] About to run docker-compose command...
+[2026-01-14 08:15:16.286] Command: ['docker', 'compose', 'up']
+[2026-01-14 08:15:16.286] Working directory: C:\Users\WBKauffman\sip_lims_workflow_manager
+[2026-01-14 08:15:16.287] Environment variables being passed to docker-compose:
+[2026-01-14 08:15:16.288]   PROJECT_PATH: '\\\\storage.jgi.lbl.gov\\gentech\\Microscale_Application_STORAGE\\SIP_STORAGE\\511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.289]   PROJECT_NAME: '511816_Chakraborty_second_batch'
+[2026-01-14 08:15:16.290]   SCRIPTS_PATH: 'C:\\Users\\WBKauffman\\.sip_lims_workflow_manager\\sip_scripts'
+[2026-01-14 08:15:16.291]   WORKFLOW_TYPE: 'sip'
+[2026-01-14 08:15:16.292]   APP_ENV: 'production'
+[2026-01-14 08:15:16.293]   DOCKER_IMAGE: 'ghcr.io/rrmalmstrom/sip_lims_workflow_manager:main'
+[2026-01-14 08:15:16.293]   USER_ID: '1000'
+[2026-01-14 08:15:16.294]   GROUP_ID: '1000'
+[2026-01-14 08:15:16.873] Docker-compose failed with CalledProcessError: Command '['docker', 'compose', 'up']' returned non-zero exit status 1.
+[2026-01-14 08:15:16.874] Return code: 1
+[2026-01-14 08:15:16.876] Command: ['docker', 'compose', 'up']
+[2026-01-14 08:15:16.877] Raising RuntimeError: Docker container launch failed: Command '['docker', 'compose', 'up']' returned non-zero exit status 1.
+[2026-01-14 08:15:16.878] Container launch finished
+[2026-01-14 08:15:16.880] FATAL ERROR in launch: Docker container launch failed: Command '['docker', 'compose', 'up']' returned non-zero exit status 1.
+[2026-01-14 08:15:16.888] Traceback: Traceback (most recent call last):
+  File "C:\Users\WBKauffman\sip_lims_workflow_manager\run_debug.py", line 547, in launch_container
+    result = subprocess.run(
+        self.compose_cmd + ["up"],
+    ...<2 lines>...
+        check=True
+    )
+  File "C:\ProgramData\anaconda3\Lib\subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['docker', 'compose', 'up']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\WBKauffman\sip_lims_workflow_manager\run_debug.py", line 663, in launch
+    self.container_manager.launch_container(project_path, workflow_type, mode_config)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\WBKauffman\sip_lims_workflow_manager\run_debug.py", line 565, in launch_container
+    raise RuntimeError(error_msg)
+RuntimeError: Docker container launch failed: Command '['docker', 'compose', 'up']' returned non-zero exit status 1.
+
+[2026-01-14 08:15:16.890] Main function finished
+[2026-01-14 08:15:16.892] ================================================================================

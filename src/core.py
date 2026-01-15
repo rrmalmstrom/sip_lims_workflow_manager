@@ -1,7 +1,13 @@
 import yaml
+import os
 from pathlib import Path
 from typing import List, Dict, Any
 from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult
+from src.smart_sync import get_smart_sync_manager
+from src.debug_logger import (
+    debug_context, log_info, log_error, log_warning,
+    log_smart_sync_detection, debug_enabled
+)
 
 class Workflow:
     """
@@ -45,6 +51,45 @@ class Project:
         self.snapshot_manager = SnapshotManager(self.path, self.path / ".snapshots")
         # Roo-Fix: Pass the script_path to the ScriptRunner.
         self.script_runner = ScriptRunner(self.path, script_path=self.script_path)
+        
+        # Initialize Smart Sync if enabled
+        self.smart_sync_manager = None
+        smart_sync_enabled = os.getenv("SMART_SYNC_ENABLED") == "true"
+        
+        if debug_enabled():
+            log_info("Project initialization: Smart Sync check",
+                    smart_sync_enabled=smart_sync_enabled,
+                    project_path=str(project_path))
+        
+        if smart_sync_enabled:
+            network_path = os.getenv("NETWORK_PROJECT_PATH")
+            local_path = os.getenv("LOCAL_PROJECT_PATH")
+            
+            if debug_enabled():
+                log_info("Project initialization: Smart Sync environment variables",
+                        network_path=network_path,
+                        local_path=local_path)
+            
+            if network_path and local_path:
+                try:
+                    self.smart_sync_manager = get_smart_sync_manager(network_path, local_path)
+                    print(f"Smart Sync enabled: {network_path} <-> {local_path}")
+                    
+                    log_info("Project initialization: Smart Sync manager created successfully",
+                            network_path=network_path,
+                            local_path=local_path,
+                            manager_type=type(self.smart_sync_manager).__name__)
+                    
+                except Exception as e:
+                    log_error("Project initialization: Smart Sync manager creation failed",
+                             error=str(e),
+                             network_path=network_path,
+                             local_path=local_path)
+                    print(f"Smart Sync initialization failed: {e}")
+            else:
+                log_warning("Project initialization: Smart Sync enabled but missing environment variables",
+                           network_path=network_path,
+                           local_path=local_path)
         
         if load_workflow:
             if not self.workflow_file_path.is_file():
@@ -115,12 +160,60 @@ class Project:
         This method is used by the UI for scripts that require user interaction.
         The UI must handle the result and call handle_step_result() when complete.
         """
-        if user_inputs is None:
-            user_inputs = {}
+        with debug_context("workflow_step_execution",
+                          step_id=step_id,
+                          user_inputs=user_inputs) as debug_logger:
             
-        step = self.workflow.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step '{step_id}' not found in workflow.")
+            if user_inputs is None:
+                user_inputs = {}
+                
+            step = self.workflow.get_step_by_id(step_id)
+            if not step:
+                raise ValueError(f"Step '{step_id}' not found in workflow.")
+
+            if debug_logger:
+                debug_logger.info("Starting workflow step execution",
+                                step_id=step_id,
+                                step_name=step.get('name', 'Unknown'),
+                                step_script=step.get('script', 'No script'),
+                                user_inputs=user_inputs,
+                                smart_sync_enabled=self.smart_sync_manager is not None)
+
+            # Smart Sync: Pre-step sync (network -> local)
+            if self.smart_sync_manager:
+                print(f"Smart Sync: Syncing latest changes before step '{step_id}'...")
+                
+                if debug_logger:
+                    debug_logger.info("Starting pre-step Smart Sync (network -> local)",
+                                    step_id=step_id)
+                
+                try:
+                    sync_success = self.smart_sync_manager.incremental_sync_down()
+                    if sync_success:
+                        print("Smart Sync: Pre-step sync completed successfully")
+                        
+                        log_info("Workflow pre-step sync completed successfully",
+                                step_id=step_id,
+                                sync_direction="network_to_local")
+                        
+                    else:
+                        print("Smart Sync: Pre-step sync failed, continuing with step execution")
+                        
+                        log_warning("Workflow pre-step sync failed, continuing execution",
+                                   step_id=step_id,
+                                   sync_direction="network_to_local")
+                        
+                except Exception as e:
+                    print(f"Smart Sync: Pre-step sync error: {e}, continuing with step execution")
+                    
+                    log_error("Workflow pre-step sync error, continuing execution",
+                             step_id=step_id,
+                             sync_direction="network_to_local",
+                             error=str(e))
+            else:
+                if debug_logger:
+                    debug_logger.info("No Smart Sync manager - skipping pre-step sync",
+                                    step_id=step_id)
 
         is_first_run = self.get_state(step_id) == "pending"
         snapshot_items = step.get("snapshot_items", [])
@@ -156,48 +249,125 @@ class Project:
         Handles the result of an asynchronously executed step.
         This should be called by the UI when the script completes.
         """
-        step = self.workflow.get_step_by_id(step_id)
-        if not step:
-            raise ValueError(f"Step '{step_id}' not found in workflow.")
-
-        is_first_run = self.get_state(step_id) == "pending"
-        snapshot_items = step.get("snapshot_items", [])
-
-        # Enhanced success detection: check both exit code AND success marker
-        exit_code_success = result.success
-        script_name = step.get("script", "")
-        marker_file_success = self._check_success_marker(script_name)
-        
-        # Both conditions must be true for actual success
-        actual_success = exit_code_success and marker_file_success
-        
-        # Log what happened for debugging
-        if exit_code_success and not marker_file_success:
-            debug_msg = f"Script {script_name} exited with code 0 but no success marker found - treating as failure"
-            print(debug_msg)
-            try:
-                # Create hidden log directory if it doesn't exist
-                log_dir = self.path / ".workflow_logs"
-                log_dir.mkdir(exist_ok=True)
-                debug_file = log_dir / "workflow_debug.log"
-                with open(debug_file, "a") as f:
-                    import datetime
-                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    f.write(f"[{timestamp}] {debug_msg}\n")
-            except:
-                pass
-
-        # Handle the result based on our enhanced success detection
-        if actual_success:
-            self.update_state(step_id, "completed")
+        with debug_context("workflow_step_result_handling",
+                          step_id=step_id,
+                          result_success=result.success) as debug_logger:
             
-            # Note: "after" snapshots removed for simplified undo system
-            # Only "before" snapshots are now used for undo functionality
-        else:
-            # If this was the first run and it failed, restore the snapshot
-            if is_first_run:
-                rollback_msg = f"ROLLBACK: Restoring snapshot for failed step '{step_id}'"
-                print(rollback_msg)
+            step = self.workflow.get_step_by_id(step_id)
+            if not step:
+                raise ValueError(f"Step '{step_id}' not found in workflow.")
+
+            is_first_run = self.get_state(step_id) == "pending"
+            snapshot_items = step.get("snapshot_items", [])
+
+            # Enhanced success detection: check both exit code AND success marker
+            exit_code_success = result.success
+            script_name = step.get("script", "")
+            marker_file_success = self._check_success_marker(script_name)
+            
+            # Both conditions must be true for actual success
+            actual_success = exit_code_success and marker_file_success
+            
+            if debug_logger:
+                debug_logger.info("Processing step result",
+                                step_id=step_id,
+                                step_name=step.get('name', 'Unknown'),
+                                script_name=script_name,
+                                exit_code_success=exit_code_success,
+                                marker_file_success=marker_file_success,
+                                actual_success=actual_success,
+                                is_first_run=is_first_run)
+            
+            # Log what happened for debugging
+            if exit_code_success and not marker_file_success:
+                debug_msg = f"Script {script_name} exited with code 0 but no success marker found - treating as failure"
+                print(debug_msg)
+                
+                log_warning("Step result: Exit code success but no marker file",
+                           step_id=step_id,
+                           script_name=script_name,
+                           exit_code_success=exit_code_success,
+                           marker_file_success=marker_file_success)
+                
+                try:
+                    # Create hidden log directory if it doesn't exist
+                    log_dir = self.path / ".workflow_logs"
+                    log_dir.mkdir(exist_ok=True)
+                    debug_file = log_dir / "workflow_debug.log"
+                    with open(debug_file, "a") as f:
+                        import datetime
+                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"[{timestamp}] {debug_msg}\n")
+                except:
+                    pass
+
+            # Handle the result based on our enhanced success detection
+            if actual_success:
+                self.update_state(step_id, "completed")
+                
+                log_info("Workflow step completed successfully",
+                        step_id=step_id,
+                        step_name=step.get('name', 'Unknown'),
+                        exit_code_success=exit_code_success,
+                        marker_file_success=marker_file_success)
+                
+                # Smart Sync: Post-step sync (local -> network) on successful completion
+                if self.smart_sync_manager:
+                    print(f"Smart Sync: Syncing results after successful step '{step_id}'...")
+                    
+                    if debug_logger:
+                        debug_logger.info("Starting post-step Smart Sync (local -> network)",
+                                        step_id=step_id,
+                                        step_name=step.get('name', 'Unknown'))
+                    
+                    try:
+                        sync_success = self.smart_sync_manager.incremental_sync_up()
+                        if sync_success:
+                            print("Smart Sync: Post-step sync completed successfully")
+                            
+                            log_info("Workflow post-step sync completed successfully",
+                                    step_id=step_id,
+                                    sync_direction="local_to_network")
+                            
+                        else:
+                            print("Smart Sync: Post-step sync failed, but step marked as completed")
+                            
+                            log_warning("Workflow post-step sync failed, but step marked as completed",
+                                       step_id=step_id,
+                                       sync_direction="local_to_network")
+                            
+                    except Exception as e:
+                        print(f"Smart Sync: Post-step sync error: {e}, but step marked as completed")
+                        
+                        log_error("Workflow post-step sync error, but step marked as completed",
+                                 step_id=step_id,
+                                 sync_direction="local_to_network",
+                                 error=str(e))
+                else:
+                    if debug_logger:
+                        debug_logger.info("No Smart Sync manager - skipping post-step sync",
+                                        step_id=step_id)
+                
+                # Note: "after" snapshots removed for simplified undo system
+                # Only "before" snapshots are now used for undo functionality
+            else:
+                # Step failed - log the failure
+                log_error("Workflow step failed",
+                         step_id=step_id,
+                         step_name=step.get('name', 'Unknown'),
+                         exit_code_success=exit_code_success,
+                         marker_file_success=marker_file_success,
+                         is_first_run=is_first_run)
+                
+                # If this was the first run and it failed, restore the snapshot
+                if is_first_run:
+                    rollback_msg = f"ROLLBACK: Restoring snapshot for failed step '{step_id}'"
+                    print(rollback_msg)
+                    
+                    log_info("Starting automatic rollback for failed step",
+                            step_id=step_id,
+                            step_name=step.get('name', 'Unknown'),
+                            is_first_run=is_first_run)
                 try:
                     # Create hidden log directory if it doesn't exist
                     log_dir = self.path / ".workflow_logs"
@@ -324,3 +494,59 @@ class Project:
         status_dir = self.path / ".workflow_status"
         success_file = status_dir / f"{script_filename}.success"
         return success_file.exists()
+
+    def finalize_smart_sync(self):
+        """
+        Perform final sync and cleanup when workflow is complete.
+        Should be called when the project is done or being destroyed.
+        """
+        with debug_context("smart_sync_finalization") as debug_logger:
+            
+            if self.smart_sync_manager:
+                print("Smart Sync: Performing final sync and cleanup...")
+                
+                if debug_logger:
+                    debug_logger.info("Starting Smart Sync finalization",
+                                    project_path=str(self.path))
+                
+                try:
+                    # Final sync to ensure all changes are saved to network
+                    sync_success = self.smart_sync_manager.final_sync()
+                    if sync_success:
+                        print("Smart Sync: Final sync completed successfully")
+                        
+                        log_info("Smart Sync final sync completed successfully",
+                                project_path=str(self.path))
+                        
+                    else:
+                        print("Smart Sync: Final sync failed")
+                        
+                        log_error("Smart Sync final sync failed",
+                                 project_path=str(self.path))
+                    
+                    # Cleanup local staging directory
+                    self.smart_sync_manager.cleanup()
+                    print("Smart Sync: Cleanup completed")
+                    
+                    log_info("Smart Sync cleanup completed",
+                            project_path=str(self.path))
+                    
+                except Exception as e:
+                    print(f"Smart Sync: Error during finalization: {e}")
+                    
+                    log_error("Smart Sync finalization error",
+                             project_path=str(self.path),
+                             error=str(e))
+            else:
+                if debug_logger:
+                    debug_logger.info("No Smart Sync manager - skipping finalization",
+                                    project_path=str(self.path))
+
+    def __del__(self):
+        """
+        Destructor to ensure Smart Sync cleanup happens even if finalize_smart_sync() isn't called.
+        """
+        try:
+            self.finalize_smart_sync()
+        except:
+            pass  # Ignore errors during destruction

@@ -34,6 +34,10 @@ services:
       - APP_ENV=${APP_ENV:-production}
       - PROJECT_NAME=${PROJECT_NAME:-data}
       - WORKFLOW_TYPE=${WORKFLOW_TYPE}
+      # Smart Sync environment variables (set by run.py when needed)
+      - SMART_SYNC_ENABLED=${SMART_SYNC_ENABLED:-false}
+      - NETWORK_PROJECT_PATH=${NETWORK_PROJECT_PATH:-}
+      - LOCAL_PROJECT_PATH=${LOCAL_PROJECT_PATH:-}
     
     # Health check to ensure container is ready
     healthcheck:

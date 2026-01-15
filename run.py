@@ -110,6 +110,10 @@ try:
     from src.update_detector import UpdateDetector
     from src.scripts_updater import ScriptsUpdater
     from src.fatal_sync_checker import check_fatal_sync_errors
+    from src.debug_logger import (
+        debug_context, log_smart_sync_detection, log_info, log_error,
+        log_warning, debug_enabled, get_debug_logger
+    )
 except ImportError as e:
     click.secho(f"❌ ERROR: Failed to import required modules: {e}", fg='red', bold=True)
     click.echo("Make sure you're running from the project root directory.")
@@ -293,6 +297,90 @@ class PlatformAdapter:
                 continue
         
         raise RuntimeError("Neither 'docker compose' nor 'docker-compose' found")
+    
+    @staticmethod
+    def detect_smart_sync_scenario(project_path: Path) -> bool:
+        """Detect if Smart Sync is needed for Windows network drives."""
+        platform_name = platform.system()
+        
+        if platform_name != "Windows":
+            log_smart_sync_detection(project_path, False,
+                                   platform=platform_name,
+                                   reason="Non-Windows platform (run.py)")
+            return False
+        
+        try:
+            # CRITICAL FIX: Use original path string, NOT .resolve()
+            # .resolve() converts drive letters back to UNC paths on Windows
+            path_str = str(project_path)
+            detected = False
+            detection_reason = ""
+            
+            # Check if path is on a network drive (D: through Z:, excluding C:)
+            if len(path_str) >= 2 and path_str[1] == ':':
+                drive_letter = path_str[0].upper()
+                # Network drives are typically D: through Z: (excluding C: which is usually local)
+                if drive_letter in 'DEFGHIJKLMNOPQRSTUVWXYZ':
+                    detected = True
+                    detection_reason = f"Network drive detected in run.py: {drive_letter}:"
+                else:
+                    detection_reason = f"Local drive detected in run.py: {drive_letter}:"
+            
+            # Check for UNC paths (should have been converted to mapped drives by PlatformAdapter)
+            elif path_str.startswith(('\\\\', '//')):
+                detected = True
+                detection_reason = "UNC path detected in run.py"
+            else:
+                detection_reason = "No network drive pattern detected in run.py"
+            
+            log_smart_sync_detection(project_path, detected,
+                                   platform=platform_name,
+                                   reason=detection_reason, path_str=path_str,
+                                   source="run.py PlatformAdapter")
+            
+            return detected
+            
+        except Exception as e:
+            # If we can't determine the path type, assume no Smart Sync needed
+            log_smart_sync_detection(project_path, False,
+                                   platform=platform_name,
+                                   reason="Exception during detection in run.py",
+                                   error=str(e), source="run.py PlatformAdapter")
+            return False
+    
+    @staticmethod
+    def setup_smart_sync_environment(network_path: Path) -> Dict[str, str]:
+        """Set up Smart Sync environment and perform initial sync."""
+        with debug_context("run_py_setup_smart_sync_environment",
+                          network_path=str(network_path)) as debug_logger:
+            
+            try:
+                if debug_logger:
+                    debug_logger.info("Setting up Smart Sync environment from run.py",
+                                    network_path=str(network_path))
+                
+                log_info("run.py: Setting up Smart Sync environment",
+                        network_path=str(network_path))
+                
+                from src.smart_sync import setup_smart_sync_environment
+                env_vars = setup_smart_sync_environment(network_path)
+                
+                if debug_logger:
+                    debug_logger.info("Smart Sync environment setup completed from run.py",
+                                    environment_variables=env_vars)
+                
+                log_info("run.py: Smart Sync environment setup completed",
+                        environment_variables=env_vars)
+                
+                return env_vars
+                
+            except Exception as e:
+                click.secho(f"❌ Failed to setup Smart Sync environment: {e}", fg='red')
+                
+                log_error("run.py: Smart Sync environment setup failed",
+                         error=str(e), network_path=str(network_path))
+                
+                raise
 
 
 class UserInterface:
@@ -457,31 +545,121 @@ class ContainerManager:
             click.secho(f"⚠️  Warning: Could not check containers: {e}", fg='yellow')
     
     def launch_container(self, project_path: Path, workflow_type: str, mode_config: dict):
-        """Launch the Docker container using docker-compose."""
-        click.echo()
-        click.secho("🐳 Launching Docker container...", fg='blue', bold=True)
-        
-        # Prepare environment variables
-        env = self.prepare_environment(project_path, workflow_type, mode_config)
-        
-        # Display environment summary
-        self.display_environment_summary(env)
-        
-        # Launch container
-        try:
-            click.echo("--- Starting Container ---")
-            subprocess.run(
-                self.compose_cmd + ["up"],
-                cwd=Path.cwd(),
-                env={**os.environ, **env},
-                check=True
-            )
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Docker container launch failed: {e}")
-        except KeyboardInterrupt:
-            click.echo("\n🛑 Container stopped by user")
-        finally:
-            click.echo("Application has been shut down.")
+        """Launch the Docker container using docker-compose with Smart Sync support."""
+        with debug_context("container_launch",
+                          project_path=str(project_path),
+                          workflow_type=workflow_type) as debug_logger:
+            
+            click.echo()
+            click.secho("🐳 Launching Docker container...", fg='blue', bold=True)
+            
+            if debug_logger:
+                debug_logger.info("Starting container launch",
+                                project_path=str(project_path),
+                                workflow_type=workflow_type,
+                                mode_config=mode_config)
+            
+            # Check if Smart Sync is needed
+            docker_project_path = project_path
+            sync_env = {}
+            smart_sync_detected = PlatformAdapter.detect_smart_sync_scenario(project_path)
+            
+            if debug_logger:
+                debug_logger.info(f"Smart Sync detection result: {smart_sync_detected}")
+            
+            if smart_sync_detected:
+                try:
+                    if debug_logger:
+                        debug_logger.info("Setting up Smart Sync environment")
+                    
+                    sync_env = PlatformAdapter.setup_smart_sync_environment(project_path)
+                    docker_project_path = Path(sync_env["PROJECT_PATH"])
+                    click.secho("✅ Smart Sync enabled for Windows network drive", fg='green')
+                    
+                    log_info("Container launch: Smart Sync enabled",
+                            original_path=str(project_path),
+                            docker_path=str(docker_project_path),
+                            sync_environment=sync_env)
+                    
+                except Exception as e:
+                    click.secho(f"❌ Smart Sync setup failed: {e}", fg='red')
+                    click.echo("Falling back to direct network drive access (may fail on Windows)")
+                    sync_env = {"SMART_SYNC_ENABLED": "false"}
+                    
+                    log_error("Container launch: Smart Sync setup failed",
+                             error=str(e), project_path=str(project_path))
+            else:
+                sync_env = {"SMART_SYNC_ENABLED": "false"}
+                
+                log_info("Container launch: Smart Sync not needed",
+                        project_path=str(project_path))
+            
+            # Prepare environment variables
+            env = self.prepare_environment(docker_project_path, workflow_type, mode_config)
+            env.update(sync_env)
+            
+            if debug_logger:
+                debug_logger.info("Environment prepared for container",
+                                environment_variables=env)
+            
+            # Display environment summary
+            self.display_environment_summary(env)
+            
+            # Launch container
+            try:
+                click.echo("--- Starting Container ---")
+                
+                if debug_logger:
+                    debug_logger.info("Executing docker-compose up",
+                                    compose_command=self.compose_cmd + ["up"])
+                
+                subprocess.run(
+                    self.compose_cmd + ["up"],
+                    cwd=Path.cwd(),
+                    env={**os.environ, **env},
+                    check=True
+                )
+                
+                log_info("Container launch completed successfully")
+                
+            except subprocess.CalledProcessError as e:
+                log_error("Docker container launch failed",
+                         error=str(e), compose_command=self.compose_cmd)
+                raise RuntimeError(f"Docker container launch failed: {e}")
+                
+            except KeyboardInterrupt:
+                click.echo("\n🛑 Container stopped by user")
+                
+                log_info("Container stopped by user interrupt")
+                
+                # Perform final sync if Smart Sync was enabled
+                if sync_env.get("SMART_SYNC_ENABLED") == "true":
+                    click.echo("🔄 Performing final sync to network drive...")
+                    
+                    if debug_logger:
+                        debug_logger.info("Performing final Smart Sync on container shutdown")
+                    
+                    try:
+                        from src.smart_sync import SmartSyncManager
+                        sync_manager = SmartSyncManager(
+                            Path(sync_env["NETWORK_PROJECT_PATH"]),
+                            Path(sync_env["LOCAL_PROJECT_PATH"])
+                        )
+                        sync_manager.final_sync()
+                        click.secho("✅ Final sync completed", fg='green')
+                        
+                        log_info("Final sync completed on container shutdown")
+                        
+                    except Exception as e:
+                        click.secho(f"⚠️ Final sync failed: {e}", fg='yellow')
+                        
+                        log_error("Final sync failed on container shutdown",
+                                 error=str(e))
+            finally:
+                click.echo("Application has been shut down.")
+                
+                if debug_logger:
+                    debug_logger.info("Container launch process completed")
     
     def prepare_environment(self, project_path: Path, workflow_type: str, mode_config: dict) -> Dict[str, str]:
         """Prepare environment variables for Docker container."""
@@ -494,6 +672,7 @@ class ContainerManager:
             "WORKFLOW_TYPE": workflow_type,
             "APP_ENV": mode_config["app_env"],
             "DOCKER_IMAGE": mode_config["docker_image"],
+            "SYNC_SCRIPTS_PATH": str(Path.cwd() / "sync_scripts"),
             **user_ids
         }
         
