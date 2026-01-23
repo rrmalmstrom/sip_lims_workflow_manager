@@ -37,7 +37,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 from src.debug_logger import (
     SmartSyncDebugLogger, DebugTestValidator, LogLevel,
     debug_context, log_info, log_error, log_warning,
-    debug_enabled, get_debug_level, close_debug_logger
+    debug_enabled, get_debug_level, close_debug_logger,
+    log_fail_fast_trigger, log_three_factor_validation,
+    log_cleanup_operation, log_sync_pattern
 )
 
 
@@ -415,6 +417,248 @@ steps:
             self.test_results["failures"].append(f"Performance monitoring: {e}")
             print(f"❌ Performance monitoring test failed: {e}")
     
+    def test_fail_fast_scenarios(self):
+        """Test fail-fast behavior logging and validation."""
+        self.test_results["tests_run"] += 1
+        
+        try:
+            # Test Excel file lock scenario
+            with debug_context("fail_fast_excel_test") as debug_logger:
+                log_fail_fast_trigger(
+                    trigger_type="excel_file_locked",
+                    file_path=str(self.network_drive_path / "data.xlsx"),
+                    error_details="File is locked by another process",
+                    recovery_suggestion="Close Excel and retry"
+                )
+                
+                log_info("Fail-fast: Excel lock detected",
+                        file_path=str(self.network_drive_path / "data.xlsx"),
+                        action="abort_workflow")
+            
+            # Test permission denied scenario
+            with debug_context("fail_fast_permission_test") as debug_logger:
+                log_fail_fast_trigger(
+                    trigger_type="permission_denied",
+                    file_path=str(self.network_drive_path / "protected_file.txt"),
+                    error_details="Access denied to network drive",
+                    recovery_suggestion="Check network drive permissions"
+                )
+            
+            # Test network disconnection scenario
+            with debug_context("fail_fast_network_test") as debug_logger:
+                log_fail_fast_trigger(
+                    trigger_type="network_disconnected",
+                    file_path=str(self.network_drive_path),
+                    error_details="Network drive Z: is no longer accessible",
+                    recovery_suggestion="Reconnect to network drive and retry"
+                )
+            
+            self.test_results["tests_passed"] += 1
+            print("✅ Fail-fast scenarios test passed")
+            
+        except Exception as e:
+            self.test_results["tests_failed"] += 1
+            self.test_results["failures"].append(f"Fail-fast scenarios: {e}")
+            print(f"❌ Fail-fast scenarios test failed: {e}")
+    
+    def test_three_factor_validation(self):
+        """Test three-factor success validation logging."""
+        self.test_results["tests_run"] += 1
+        
+        try:
+            # Test successful three-factor validation
+            with debug_context("three_factor_success_test") as debug_logger:
+                log_three_factor_validation(
+                    step_id="test_step_1",
+                    exit_code=0,
+                    marker_file_present=True,
+                    sync_successful=True,
+                    validation_result="success",
+                    details={
+                        "marker_file_path": str(self.local_staging_path / ".step_complete"),
+                        "sync_files_count": 15,
+                        "sync_duration": 2.3
+                    }
+                )
+                
+                log_info("Three-factor validation: All checks passed",
+                        step_id="test_step_1",
+                        validation_status="success")
+            
+            # Test failed three-factor validation (missing marker file)
+            with debug_context("three_factor_failure_test") as debug_logger:
+                log_three_factor_validation(
+                    step_id="test_step_2",
+                    exit_code=0,
+                    marker_file_present=False,
+                    sync_successful=True,
+                    validation_result="failure",
+                    details={
+                        "marker_file_path": str(self.local_staging_path / ".step_complete"),
+                        "marker_file_missing": True,
+                        "failure_reason": "Step completed but marker file not created"
+                    }
+                )
+                
+                log_error("Three-factor validation: Marker file missing",
+                         step_id="test_step_2",
+                         validation_status="failure")
+            
+            # Test failed three-factor validation (sync failure)
+            with debug_context("three_factor_sync_failure_test") as debug_logger:
+                log_three_factor_validation(
+                    step_id="test_step_3",
+                    exit_code=0,
+                    marker_file_present=True,
+                    sync_successful=False,
+                    validation_result="failure",
+                    details={
+                        "sync_error": "Network timeout during sync",
+                        "files_synced": 8,
+                        "files_failed": 3
+                    }
+                )
+            
+            self.test_results["tests_passed"] += 1
+            print("✅ Three-factor validation test passed")
+            
+        except Exception as e:
+            self.test_results["tests_failed"] += 1
+            self.test_results["failures"].append(f"Three-factor validation: {e}")
+            print(f"❌ Three-factor validation test failed: {e}")
+    
+    def test_cleanup_operations(self):
+        """Test cleanup operation logging and validation."""
+        self.test_results["tests_run"] += 1
+        
+        try:
+            # Test successful cleanup
+            with debug_context("cleanup_success_test") as debug_logger:
+                log_cleanup_operation(
+                    operation_type="temp_folder_cleanup",
+                    target_path=str(self.local_staging_path),
+                    success=True,
+                    files_removed=25,
+                    space_freed="150MB",
+                    details={
+                        "cleanup_duration": 1.2,
+                        "folders_removed": 3,
+                        "preserved_files": ["important_log.txt"]
+                    }
+                )
+                
+                log_info("Cleanup: Temporary folder cleaned successfully",
+                        path=str(self.local_staging_path),
+                        files_removed=25)
+            
+            # Test failed cleanup (permission denied)
+            with debug_context("cleanup_failure_test") as debug_logger:
+                log_cleanup_operation(
+                    operation_type="temp_folder_cleanup",
+                    target_path=str(self.local_staging_path / "locked_folder"),
+                    success=False,
+                    files_removed=0,
+                    space_freed="0MB",
+                    details={
+                        "error": "Permission denied",
+                        "locked_files": ["file1.txt", "file2.txt"],
+                        "cleanup_partial": True
+                    }
+                )
+                
+                log_error("Cleanup: Failed to remove locked files",
+                         path=str(self.local_staging_path / "locked_folder"),
+                         error="Permission denied")
+            
+            # Test orphaned directory cleanup
+            with debug_context("orphaned_cleanup_test") as debug_logger:
+                orphaned_path = self.test_dir / "orphaned_project_123"
+                log_cleanup_operation(
+                    operation_type="orphaned_directory_cleanup",
+                    target_path=str(orphaned_path),
+                    success=True,
+                    files_removed=50,
+                    space_freed="500MB",
+                    details={
+                        "directory_age_days": 7,
+                        "last_accessed": "2026-01-16T10:30:00Z",
+                        "cleanup_reason": "Project folder abandoned"
+                    }
+                )
+            
+            self.test_results["tests_passed"] += 1
+            print("✅ Cleanup operations test passed")
+            
+        except Exception as e:
+            self.test_results["tests_failed"] += 1
+            self.test_results["failures"].append(f"Cleanup operations: {e}")
+            print(f"❌ Cleanup operations test failed: {e}")
+    
+    def test_sync_pattern_analysis(self):
+        """Test sync pattern logging for performance analysis."""
+        self.test_results["tests_run"] += 1
+        
+        try:
+            # Test different sync patterns
+            with debug_context("sync_pattern_test") as debug_logger:
+                
+                # Initial sync pattern
+                log_sync_pattern(
+                    pattern_type="initial_sync",
+                    source_path=str(self.network_drive_path),
+                    dest_path=str(self.local_staging_path),
+                    files_count=100,
+                    total_size="250MB",
+                    duration=15.5,
+                    throughput="16.1MB/s"
+                )
+                
+                # Incremental sync down pattern
+                log_sync_pattern(
+                    pattern_type="incremental_sync_down",
+                    source_path=str(self.network_drive_path),
+                    dest_path=str(self.local_staging_path),
+                    files_count=5,
+                    total_size="12MB",
+                    duration=2.1,
+                    throughput="5.7MB/s"
+                )
+                
+                # Incremental sync up pattern
+                log_sync_pattern(
+                    pattern_type="incremental_sync_up",
+                    source_path=str(self.local_staging_path),
+                    dest_path=str(self.network_drive_path),
+                    files_count=8,
+                    total_size="45MB",
+                    duration=8.3,
+                    throughput="5.4MB/s"
+                )
+                
+                # Final sync pattern
+                log_sync_pattern(
+                    pattern_type="final_sync",
+                    source_path=str(self.local_staging_path),
+                    dest_path=str(self.network_drive_path),
+                    files_count=15,
+                    total_size="78MB",
+                    duration=12.7,
+                    throughput="6.1MB/s"
+                )
+                
+                log_info("Sync pattern analysis: All patterns tested",
+                        patterns_tested=4,
+                        total_files=128,
+                        total_data="385MB")
+            
+            self.test_results["tests_passed"] += 1
+            print("✅ Sync pattern analysis test passed")
+            
+        except Exception as e:
+            self.test_results["tests_failed"] += 1
+            self.test_results["failures"].append(f"Sync pattern analysis: {e}")
+            print(f"❌ Sync pattern analysis test failed: {e}")
+    
     def generate_debug_report(self):
         """Generate a comprehensive debug validation report."""
         report = {
@@ -489,6 +733,13 @@ steps:
         self.test_container_launch_logging()
         self.test_error_scenario_logging()
         self.test_performance_monitoring()
+        
+        # New Smart Sync behavior tests
+        self.test_fail_fast_scenarios()
+        self.test_three_factor_validation()
+        self.test_cleanup_operations()
+        self.test_sync_pattern_analysis()
+        
         self.validate_log_file_structure()
         
         # Generate report

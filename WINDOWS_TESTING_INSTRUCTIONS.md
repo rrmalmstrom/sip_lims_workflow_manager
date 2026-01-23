@@ -74,13 +74,14 @@ your_project_directory\
 
 ## 🧪 **Step 3: Understanding Debug Logging**
 
-Debug logging will be enabled automatically using the `--debug` flag when running the workflow manager. This provides comprehensive logging of all Smart Sync operations without requiring manual environment variable setup.
+Debug logging will be enabled automatically when using the `run_debug.py` script. This provides comprehensive logging of all Smart Sync operations without requiring manual environment variable setup.
 
 **Debug logging automatically:**
 - Creates `.debug_output\smart_sync_debug.log` in your project directory
 - Tracks all Smart Sync operations with timestamps and performance metrics
 - Provides detailed error information if issues occur
-- Can be turned off by simply running without the `--debug` flag
+- Includes enhanced console output with real-time operation tracking
+- Can be turned off by using the regular `run.py` script instead
 
 ## 🗂️ **Step 4: Navigate to Your Project on Network Drive**
 
@@ -108,8 +109,8 @@ echo %CD%
 # Navigate to your workflow manager installation directory
 cd C:\path\to\sip_lims_workflow_manager
 
-# Run the workflow manager with debug logging enabled
-python run.py --debug
+# Run the DEBUG version of the workflow manager (comprehensive logging enabled)
+python run_debug.py
 ```
 
 ### **Step 5.2: Follow the Interactive Prompts**
@@ -379,14 +380,20 @@ echo - Final Cleanup Completed: [YES/NO] >> debug_results\test_summary.txt
 - ✅ Synchronized files in both locations
 - ✅ Cleanup of staging area after completion
 
-## 🔑 **Key Understanding: How run.py Works**
+## 🔑 **Key Understanding: How run_debug.py Works**
 
-**IMPORTANT**: The workflow manager (`run.py`) is designed to:
+**IMPORTANT**: The debug workflow manager (`run_debug.py`) is designed to:
 
 1. **Run from its installation directory** (`C:\path\to\sip_lims_workflow_manager`)
-2. **Prompt you to select your project folder** (which can be on a network drive like `Z:\`)
-3. **Automatically detect if Smart Sync is needed** based on the project path you provide
-4. **Create local staging and sync** if Windows + network drive is detected
-5. **Launch Docker with the appropriate path** (local staging or original path)
+2. **Automatically enable comprehensive debug logging** without requiring environment variables
+3. **Prompt you to select your project folder** (which can be on a network drive like `Z:\`)
+4. **Automatically detect if Smart Sync is needed** based on the project path you provide
+5. **Create local staging and sync** if Windows + network drive is detected
+6. **Launch Docker with the appropriate path** (local staging or original path)
+7. **Generate detailed debug logs** in `.debug_output\smart_sync_debug.log`
+
+**Script Comparison:**
+- **`run.py`**: Normal operation, minimal logging
+- **`run_debug.py`**: Enhanced operation with comprehensive debug logging for troubleshooting
 
 This comprehensive testing will validate that Smart Sync works correctly on your Windows system and provide detailed debugging information for any issues encountered.
