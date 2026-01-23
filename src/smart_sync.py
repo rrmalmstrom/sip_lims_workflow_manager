@@ -270,9 +270,32 @@ class SmartSyncManager:
             shutil.copy2(source, dest)
             return True
             
-        except (OSError, PermissionError, shutil.Error) as e:
+        except PermissionError as e:
+            # Handle file permission errors (e.g., locked Excel files)
+            if source.suffix.lower() in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
+                if HAS_CLICK:
+                    click.secho(f"📊 Excel file locked (likely open in Excel): {source.name}", fg='yellow')
+                    click.echo(f"   Please close {source.name} in Excel and try again")
+                    click.echo(f"   Skipping this file for now - workflow will continue")
+                
+                log_file_operation("copy_skipped_locked", source, dest, False,
+                                 error=f"Excel file locked: {str(e)}")
+            else:
+                if HAS_CLICK:
+                    click.secho(f"🔒 File permission denied: {source.name}", fg='yellow')
+                    click.echo(f"   Error: {e}")
+                    click.echo(f"   Skipping this file - workflow will continue")
+                
+                log_file_operation("copy_skipped_permission", source, dest, False,
+                                 error=f"Permission denied: {str(e)}")
+            
+            return False
+            
+        except (OSError, shutil.Error) as e:
             if HAS_CLICK:
                 click.secho(f"⚠️  Warning: Could not copy {source} to {dest}: {e}", fg='yellow')
+            
+            log_file_operation("copy_failed", source, dest, False, error=str(e))
             return False
     
     def _delete_file_safe(self, file_path: Path) -> bool:
@@ -295,6 +318,29 @@ class SmartSyncManager:
                 click.secho(f"⚠️  Warning: Could not delete {file_path}: {e}", fg='yellow')
             return False
     
+    def _display_sync_summary(self, operation: str, files_copied: int, files_deleted: int, failed_operations: int, duration: float):
+        """
+        Display a comprehensive sync summary with user guidance for failed operations.
+        
+        Args:
+            operation: Type of sync operation
+            files_copied: Number of files successfully copied
+            files_deleted: Number of files successfully deleted
+            failed_operations: Number of failed operations
+            duration: Operation duration in seconds
+        """
+        if HAS_CLICK:
+            if failed_operations == 0:
+                click.secho(f"✅ {operation} completed: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='green')
+            else:
+                click.secho(f"⚠️  {operation} completed with warnings: {files_copied} files copied, {files_deleted} files removed, {failed_operations} files skipped ({duration:.1f}s)", fg='yellow')
+                click.echo()
+                click.secho("💡 Files were skipped due to permission issues:", fg='blue', bold=True)
+                click.echo("   • Excel files (.xlsx, .xls) are likely open in Excel")
+                click.echo("   • Close Excel files and run sync again if needed")
+                click.echo("   • The workflow will continue with available files")
+                click.echo()
+
     def initial_sync(self) -> bool:
         """
         Perform initial full sync from network to local staging.
@@ -386,8 +432,8 @@ class SmartSyncManager:
                                  files_copied=files_copied, files_deleted=files_deleted,
                                  failed_operations=failed_operations)
                 
-                if HAS_CLICK:
-                    click.secho(f"✅ Initial sync completed: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='green')
+                # Display comprehensive summary
+                self._display_sync_summary("Initial sync", files_copied, files_deleted, failed_operations, duration)
                 
                 return True
                 
@@ -492,8 +538,8 @@ class SmartSyncManager:
                                  files_copied=files_copied, files_deleted=files_deleted,
                                  failed_operations=failed_operations)
                 
-                if HAS_CLICK:
-                    click.secho(f"✅ Incremental sync completed: {files_copied} files updated, {files_deleted} files removed ({duration:.1f}s)", fg='green')
+                # Display comprehensive summary
+                self._display_sync_summary("Incremental sync down", files_copied, files_deleted, failed_operations, duration)
                 
                 return True
                 
@@ -594,8 +640,8 @@ class SmartSyncManager:
                                  files_copied=files_copied, files_deleted=files_deleted,
                                  failed_operations=failed_operations)
                 
-                if HAS_CLICK:
-                    click.secho(f"✅ Changes synced to network: {files_copied} files updated, {files_deleted} files removed ({duration:.1f}s)", fg='green')
+                # Display comprehensive summary
+                self._display_sync_summary("Incremental sync up", files_copied, files_deleted, failed_operations, duration)
                 
                 return True
                 
