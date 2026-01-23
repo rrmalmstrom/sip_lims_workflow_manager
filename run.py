@@ -349,6 +349,37 @@ class PlatformAdapter:
             return False
     
     @staticmethod
+    def cleanup_orphaned_staging_directories(project_path: Path):
+        """Clean up any orphaned staging directories for this project."""
+        try:
+            staging_base = Path("C:/temp/sip_workflow")
+            if not staging_base.exists():
+                return
+            
+            project_name = project_path.name
+            project_staging = staging_base / project_name
+            
+            if project_staging.exists():
+                click.echo(f"🧹 Cleaning up orphaned staging directory: {project_staging}")
+                log_info("Cleaning up orphaned staging directory",
+                        staging_path=str(project_staging),
+                        project_name=project_name)
+                
+                import shutil
+                shutil.rmtree(project_staging, ignore_errors=True)
+                
+                if not project_staging.exists():
+                    click.secho("✅ Orphaned staging directory cleaned up", fg='green')
+                    log_info("Orphaned staging directory cleanup completed")
+                else:
+                    click.secho("⚠️ Could not fully clean staging directory", fg='yellow')
+                    log_warning("Orphaned staging directory cleanup incomplete")
+                    
+        except Exception as e:
+            log_warning("Error during orphaned staging cleanup",
+                       error=str(e), project_path=str(project_path))
+    
+    @staticmethod
     def setup_smart_sync_environment(network_path: Path) -> Dict[str, str]:
         """Set up Smart Sync environment and perform initial sync."""
         with debug_context("run_py_setup_smart_sync_environment",
@@ -572,6 +603,9 @@ class ContainerManager:
                     if debug_logger:
                         debug_logger.info("Setting up Smart Sync environment")
                     
+                    # Cleanup any orphaned staging directories before setup
+                    PlatformAdapter.cleanup_orphaned_staging_directories(project_path)
+                    
                     sync_env = PlatformAdapter.setup_smart_sync_environment(project_path)
                     docker_project_path = Path(sync_env["PROJECT_PATH"])
                     click.secho("✅ Smart Sync enabled for Windows network drive", fg='green')
@@ -583,11 +617,17 @@ class ContainerManager:
                     
                 except Exception as e:
                     click.secho(f"❌ Smart Sync setup failed: {e}", fg='red')
-                    click.echo("Falling back to direct network drive access (may fail on Windows)")
-                    sync_env = {"SMART_SYNC_ENABLED": "false"}
+                    click.echo()
+                    click.secho("CRITICAL ERROR: Smart Sync is required for Windows network drives", fg='red', bold=True)
+                    click.echo("Docker Desktop cannot access network drives directly on Windows.")
+                    click.echo("Please resolve the Smart Sync setup issue and try again.")
+                    click.echo()
                     
-                    log_error("Container launch: Smart Sync setup failed",
+                    log_error("Container launch: Smart Sync setup failed - terminating",
                              error=str(e), project_path=str(project_path))
+                    
+                    # FAIL-FAST: No fallback behavior, terminate completely
+                    raise RuntimeError(f"Smart Sync setup failed: {e}")
             else:
                 sync_env = {"SMART_SYNC_ENABLED": "false"}
                 
@@ -632,12 +672,12 @@ class ContainerManager:
                 
                 log_info("Container stopped by user interrupt")
                 
-                # Perform final sync if Smart Sync was enabled
+                # Immediate cleanup of local staging directory
                 if sync_env.get("SMART_SYNC_ENABLED") == "true":
-                    click.echo("🔄 Performing final sync to network drive...")
+                    click.echo("🧹 Cleaning up local staging directory...")
                     
                     if debug_logger:
-                        debug_logger.info("Performing final Smart Sync on container shutdown")
+                        debug_logger.info("Performing Smart Sync cleanup on container shutdown")
                     
                     try:
                         from src.smart_sync import SmartSyncManager
@@ -645,15 +685,15 @@ class ContainerManager:
                             Path(sync_env["NETWORK_PROJECT_PATH"]),
                             Path(sync_env["LOCAL_PROJECT_PATH"])
                         )
-                        sync_manager.final_sync()
-                        click.secho("✅ Final sync completed", fg='green')
+                        sync_manager.cleanup()
+                        click.secho("✅ Local staging cleanup completed", fg='green')
                         
-                        log_info("Final sync completed on container shutdown")
+                        log_info("Smart Sync cleanup completed on container shutdown")
                         
                     except Exception as e:
-                        click.secho(f"⚠️ Final sync failed: {e}", fg='yellow')
+                        click.secho(f"⚠️ Cleanup failed: {e}", fg='yellow')
                         
-                        log_error("Final sync failed on container shutdown",
+                        log_error("Smart Sync cleanup failed on container shutdown",
                                  error=str(e))
             finally:
                 click.echo("Application has been shut down.")

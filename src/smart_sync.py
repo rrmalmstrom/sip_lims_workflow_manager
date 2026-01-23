@@ -48,6 +48,16 @@ from .debug_logger import (
 )
 
 
+class SmartSyncError(Exception):
+    """
+    Exception raised when Smart Sync operations fail critically.
+    
+    This exception indicates that the sync operation cannot continue
+    and the entire workflow manager launch should fail gracefully.
+    """
+    pass
+
+
 class SmartSyncManager:
     """
     Manages transparent sync between network drives and local staging for Docker compatibility.
@@ -251,7 +261,7 @@ class SmartSyncManager:
         
         return changes
     
-    def _copy_file_with_metadata(self, source: Path, dest: Path) -> bool:
+    def _copy_file_with_metadata(self, source: Path, dest: Path):
         """
         Copy file preserving metadata (timestamps, permissions).
         
@@ -259,8 +269,8 @@ class SmartSyncManager:
             source: Source file path
             dest: Destination file path
             
-        Returns:
-            True if copy successful, False otherwise
+        Raises:
+            SmartSyncError: If file cannot be copied (critical failure)
         """
         try:
             # Ensure destination directory exists
@@ -268,85 +278,53 @@ class SmartSyncManager:
             
             # Copy file with metadata preservation
             shutil.copy2(source, dest)
-            return True
             
         except PermissionError as e:
-            # Handle file permission errors (e.g., locked Excel files)
+            # Handle file permission errors - these are CRITICAL failures
             if source.suffix.lower() in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
-                if HAS_CLICK:
-                    click.secho(f"📊 Excel file locked (likely open in Excel): {source.name}", fg='yellow')
-                    click.echo(f"   Please close {source.name} in Excel and try again")
-                    click.echo(f"   Skipping this file for now - workflow will continue")
-                
-                log_file_operation("copy_skipped_locked", source, dest, False,
+                error_msg = f"Excel file locked (likely open in Excel): {source.name}. Please close {source.name} in Excel and try again."
+                log_file_operation("copy_failed_locked", source, dest, False,
                                  error=f"Excel file locked: {str(e)}")
             else:
-                if HAS_CLICK:
-                    click.secho(f"🔒 File permission denied: {source.name}", fg='yellow')
-                    click.echo(f"   Error: {e}")
-                    click.echo(f"   Skipping this file - workflow will continue")
-                
-                log_file_operation("copy_skipped_permission", source, dest, False,
+                error_msg = f"File permission denied: {source.name}. Error: {e}"
+                log_file_operation("copy_failed_permission", source, dest, False,
                                  error=f"Permission denied: {str(e)}")
             
-            return False
+            raise SmartSyncError(error_msg)
             
         except (OSError, shutil.Error) as e:
-            if HAS_CLICK:
-                click.secho(f"⚠️  Warning: Could not copy {source} to {dest}: {e}", fg='yellow')
-            
+            error_msg = f"Could not copy {source} to {dest}: {e}"
             log_file_operation("copy_failed", source, dest, False, error=str(e))
-            return False
+            raise SmartSyncError(error_msg)
     
-    def _delete_file_safe(self, file_path: Path) -> bool:
+    def _delete_file_safe(self, file_path: Path):
         """
         Safely delete a file.
         
         Args:
             file_path: File to delete
             
-        Returns:
-            True if deletion successful, False otherwise
+        Raises:
+            SmartSyncError: If file cannot be deleted (critical failure)
         """
         try:
             if file_path.exists():
                 file_path.unlink()
-            return True
             
         except (OSError, PermissionError) as e:
-            if HAS_CLICK:
-                click.secho(f"⚠️  Warning: Could not delete {file_path}: {e}", fg='yellow')
-            return False
+            error_msg = f"Could not delete {file_path}: {e}"
+            log_file_operation("delete_failed", file_path, file_path, False, error=str(e))
+            raise SmartSyncError(error_msg)
     
-    def _display_sync_summary(self, operation: str, files_copied: int, files_deleted: int, failed_operations: int, duration: float):
-        """
-        Display a comprehensive sync summary with user guidance for failed operations.
-        
-        Args:
-            operation: Type of sync operation
-            files_copied: Number of files successfully copied
-            files_deleted: Number of files successfully deleted
-            failed_operations: Number of failed operations
-            duration: Operation duration in seconds
-        """
-        if HAS_CLICK:
-            if failed_operations == 0:
-                click.secho(f"✅ {operation} completed: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='green')
-            else:
-                click.secho(f"⚠️  {operation} completed with warnings: {files_copied} files copied, {files_deleted} files removed, {failed_operations} files skipped ({duration:.1f}s)", fg='yellow')
-                click.echo()
-                click.secho("💡 Files were skipped due to permission issues:", fg='blue', bold=True)
-                click.echo("   • Excel files (.xlsx, .xls) are likely open in Excel")
-                click.echo("   • Close Excel files and run sync again if needed")
-                click.echo("   • The workflow will continue with available files")
-                click.echo()
-
     def initial_sync(self) -> bool:
         """
         Perform initial full sync from network to local staging.
         
         Returns:
-            True if sync successful, False otherwise
+            True if sync successful
+            
+        Raises:
+            SmartSyncError: If sync fails due to file permission or other critical errors
         """
         with debug_context("initial_sync",
                           network_path=str(self.network_path),
@@ -381,31 +359,24 @@ class SmartSyncManager:
                                      time.time() - start_time, True)
                     return True
                 
-                # Perform sync operations
+                # Perform sync operations - any failure will raise SmartSyncError
                 files_copied = 0
                 files_deleted = 0
-                failed_operations = 0
                 
                 for source, dest, action in changes:
                     if action == 'copy':
-                        success = self._copy_file_with_metadata(source, dest)
-                        if success:
-                            files_copied += 1
-                        else:
-                            failed_operations += 1
+                        self._copy_file_with_metadata(source, dest)  # Raises on failure
+                        files_copied += 1
                         
                         if debug_logger:
-                            log_file_operation("copy", source, dest, success)
+                            log_file_operation("copy", source, dest, True)
                             
                     elif action == 'delete':
-                        success = self._delete_file_safe(dest)
-                        if success:
-                            files_deleted += 1
-                        else:
-                            failed_operations += 1
+                        self._delete_file_safe(dest)  # Raises on failure
+                        files_deleted += 1
                         
                         if debug_logger:
-                            log_file_operation("delete", dest, dest, success)
+                            log_file_operation("delete", dest, dest, True)
                 
                 # Update stats
                 duration = time.time() - start_time
@@ -420,7 +391,7 @@ class SmartSyncManager:
                 self._log_sync_operation("initial_sync", {
                     "files_copied": files_copied,
                     "files_deleted": files_deleted,
-                    "failed_operations": failed_operations,
+                    "failed_operations": 0,
                     "duration_seconds": duration,
                     "network_path": str(self.network_path),
                     "local_path": str(self.local_path)
@@ -430,25 +401,19 @@ class SmartSyncManager:
                 log_sync_operation("initial_sync", "network_to_local",
                                  files_copied + files_deleted, duration, True,
                                  files_copied=files_copied, files_deleted=files_deleted,
-                                 failed_operations=failed_operations)
+                                 failed_operations=0)
                 
-                # Display comprehensive summary
-                self._display_sync_summary("Initial sync", files_copied, files_deleted, failed_operations, duration)
+                if HAS_CLICK:
+                    click.secho(f"✅ Initial sync completed: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='green')
                 
                 return True
                 
+            except SmartSyncError:
+                # Re-raise SmartSyncError to propagate to caller
+                raise
+                
             except Exception as e:
                 duration = time.time() - start_time
-                
-                if HAS_CLICK:
-                    click.secho(f"❌ Initial sync failed: {e}", fg='red')
-                
-                self._log_sync_operation("initial_sync_error", {
-                    "error": str(e),
-                    "duration_seconds": duration,
-                    "network_path": str(self.network_path),
-                    "local_path": str(self.local_path)
-                })
                 
                 # Debug logging
                 log_error("Initial sync failed", error=str(e), duration=duration,
@@ -457,7 +422,8 @@ class SmartSyncManager:
                 log_sync_operation("initial_sync", "network_to_local", 0, duration, False,
                                  error=str(e))
                 
-                return False
+                # Convert unexpected errors to SmartSyncError
+                raise SmartSyncError(f"Initial sync failed: {e}")
     
     def incremental_sync_down(self) -> bool:
         """
@@ -493,27 +459,20 @@ class SmartSyncManager:
                                      time.time() - start_time, True)
                     return True
                 
-                # Perform sync operations
+                # Perform sync operations - any failure will raise SmartSyncError
                 files_copied = 0
                 files_deleted = 0
-                failed_operations = 0
                 
                 for source, dest, action in changes:
                     if action == 'copy':
-                        success = self._copy_file_with_metadata(source, dest)
-                        if success:
-                            files_copied += 1
-                        else:
-                            failed_operations += 1
-                        log_file_operation("copy", source, dest, success)
+                        self._copy_file_with_metadata(source, dest)  # Raises on failure
+                        files_copied += 1
+                        log_file_operation("copy", source, dest, True)
                         
                     elif action == 'delete':
-                        success = self._delete_file_safe(dest)
-                        if success:
-                            files_deleted += 1
-                        else:
-                            failed_operations += 1
-                        log_file_operation("delete", dest, dest, success)
+                        self._delete_file_safe(dest)  # Raises on failure
+                        files_deleted += 1
+                        log_file_operation("delete", dest, dest, True)
                 
                 # Update stats
                 duration = time.time() - start_time
@@ -528,7 +487,7 @@ class SmartSyncManager:
                 self._log_sync_operation("incremental_sync_down", {
                     "files_copied": files_copied,
                     "files_deleted": files_deleted,
-                    "failed_operations": failed_operations,
+                    "failed_operations": 0,
                     "duration_seconds": duration
                 })
                 
@@ -536,12 +495,16 @@ class SmartSyncManager:
                 log_sync_operation("incremental_sync_down", "network_to_local",
                                  files_copied + files_deleted, duration, True,
                                  files_copied=files_copied, files_deleted=files_deleted,
-                                 failed_operations=failed_operations)
+                                 failed_operations=0)
                 
                 # Display comprehensive summary
-                self._display_sync_summary("Incremental sync down", files_copied, files_deleted, failed_operations, duration)
+                self._display_sync_summary("Incremental sync down", files_copied, files_deleted, 0, duration)
                 
                 return True
+                
+            except SmartSyncError:
+                # Re-raise SmartSyncError to propagate to caller
+                raise
                 
             except Exception as e:
                 duration = time.time() - start_time
@@ -595,27 +558,20 @@ class SmartSyncManager:
                                      time.time() - start_time, True)
                     return True
                 
-                # Perform sync operations
+                # Perform sync operations - any failure will raise SmartSyncError
                 files_copied = 0
                 files_deleted = 0
-                failed_operations = 0
                 
                 for source, dest, action in changes:
                     if action == 'copy':
-                        success = self._copy_file_with_metadata(source, dest)
-                        if success:
-                            files_copied += 1
-                        else:
-                            failed_operations += 1
-                        log_file_operation("copy", source, dest, success)
+                        self._copy_file_with_metadata(source, dest)  # Raises on failure
+                        files_copied += 1
+                        log_file_operation("copy", source, dest, True)
                         
                     elif action == 'delete':
-                        success = self._delete_file_safe(dest)
-                        if success:
-                            files_deleted += 1
-                        else:
-                            failed_operations += 1
-                        log_file_operation("delete", dest, dest, success)
+                        self._delete_file_safe(dest)  # Raises on failure
+                        files_deleted += 1
+                        log_file_operation("delete", dest, dest, True)
                 
                 # Update stats
                 duration = time.time() - start_time
@@ -630,7 +586,7 @@ class SmartSyncManager:
                 self._log_sync_operation("incremental_sync_up", {
                     "files_copied": files_copied,
                     "files_deleted": files_deleted,
-                    "failed_operations": failed_operations,
+                    "failed_operations": 0,
                     "duration_seconds": duration
                 })
                 
@@ -638,12 +594,16 @@ class SmartSyncManager:
                 log_sync_operation("incremental_sync_up", "local_to_network",
                                  files_copied + files_deleted, duration, True,
                                  files_copied=files_copied, files_deleted=files_deleted,
-                                 failed_operations=failed_operations)
+                                 failed_operations=0)
                 
                 # Display comprehensive summary
-                self._display_sync_summary("Incremental sync up", files_copied, files_deleted, failed_operations, duration)
+                self._display_sync_summary("Incremental sync up", files_copied, files_deleted, 0, duration)
                 
                 return True
+                
+            except SmartSyncError:
+                # Re-raise SmartSyncError to propagate to caller
+                raise
                 
             except Exception as e:
                 duration = time.time() - start_time
@@ -713,6 +673,23 @@ class SmartSyncManager:
             "local_path": str(self.local_path),
             "last_sync_time": self.last_sync_time
         }
+    
+    def _display_sync_summary(self, operation: str, files_copied: int, files_deleted: int, failed_operations: int, duration: float):
+        """
+        Display a comprehensive summary of sync operations.
+        
+        Args:
+            operation: Name of the sync operation
+            files_copied: Number of files copied
+            files_deleted: Number of files deleted
+            failed_operations: Number of failed operations
+            duration: Duration in seconds
+        """
+        if HAS_CLICK:
+            if failed_operations == 0:
+                click.secho(f"✅ {operation} completed: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='green')
+            else:
+                click.secho(f"⚠️  {operation} completed with {failed_operations} failures: {files_copied} files copied, {files_deleted} files removed ({duration:.1f}s)", fg='yellow')
 
 
 def detect_smart_sync_scenario(project_path: Path) -> bool:

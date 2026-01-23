@@ -166,8 +166,8 @@ class TestSmartSyncWorkflowIntegration:
                 # Verify step was marked as completed
                 assert project.get_state("step1") == "completed"
     
-    def test_handle_step_result_failure_no_post_sync(self):
-        """Test that failed step completion doesn't trigger post-step sync."""
+    def test_handle_step_result_failure_with_three_factor_detection(self):
+        """Test that three-factor detection calls post-step sync even on script failure."""
         # Set up Smart Sync environment
         env_vars = {
             "SMART_SYNC_ENABLED": "true",
@@ -178,6 +178,7 @@ class TestSmartSyncWorkflowIntegration:
         with patch.dict(os.environ, env_vars):
             with patch('src.core.get_smart_sync_manager') as mock_get_manager:
                 mock_manager = MagicMock(spec=SmartSyncManager)
+                mock_manager.incremental_sync_up.return_value = True  # Sync succeeds
                 mock_get_manager.return_value = mock_manager
                 
                 project = Project(self.project_dir)
@@ -193,14 +194,14 @@ class TestSmartSyncWorkflowIntegration:
                                 
                                 project.handle_step_result("step1", result)
                                 
-                                # Verify post-step sync was NOT called
-                                mock_manager.incremental_sync_up.assert_not_called()
+                                # With three-factor detection, post-step sync IS called to check sync status
+                                mock_manager.incremental_sync_up.assert_called_once()
                                 
-                                # Verify step remains pending
+                                # Verify step remains pending (script failed)
                                 assert project.get_state("step1") == "pending"
     
-    def test_sync_error_handling_pre_step(self):
-        """Test that sync errors during pre-step don't break workflow execution."""
+    def test_sync_error_handling_pre_step_fail_fast(self):
+        """Test that sync errors during pre-step prevent workflow execution (fail-fast)."""
         # Set up Smart Sync environment
         env_vars = {
             "SMART_SYNC_ENABLED": "true",
@@ -218,14 +219,91 @@ class TestSmartSyncWorkflowIntegration:
                 
                 # Mock the script runner to avoid actual execution
                 with patch.object(project.script_runner, 'run') as mock_run:
-                    # Should not raise exception despite sync error
-                    project.run_step("step1")
+                    # Should raise RuntimeError due to pre-step sync failure (fail-fast)
+                    with pytest.raises(RuntimeError, match="Smart Sync: Pre-step sync error"):
+                        project.run_step("step1")
                     
-                    # Script should still be executed
-                    mock_run.assert_called_once()
+                    # Script should NOT be executed due to pre-step sync failure
+                    mock_run.assert_not_called()
     
-    def test_sync_error_handling_post_step(self):
-        """Test that sync errors during post-step don't affect step completion status."""
+    def test_sync_error_handling_post_step_triggers_rollback(self):
+        """Test that sync errors during post-step trigger rollback (fail-fast)."""
+        # Set up Smart Sync environment
+        env_vars = {
+            "SMART_SYNC_ENABLED": "true",
+            "NETWORK_PROJECT_PATH": str(self.network_dir),
+            "LOCAL_PROJECT_PATH": str(self.local_dir)
+        }
+        
+        with patch.dict(os.environ, env_vars):
+            with patch('src.core.get_smart_sync_manager') as mock_get_manager:
+                mock_manager = MagicMock(spec=SmartSyncManager)
+                mock_manager.incremental_sync_up.return_value = False  # Sync fails
+                mock_get_manager.return_value = mock_manager
+                
+                project = Project(self.project_dir)
+                
+                # Create success marker for the script
+                status_dir = self.project_dir / ".workflow_status"
+                status_dir.mkdir(exist_ok=True)
+                success_file = status_dir / "test_script.success"
+                success_file.write_text("success")
+                
+                # Mock the snapshot manager to handle rollback
+                with patch.object(project.snapshot_manager, 'restore') as mock_restore:
+                    with patch.object(project.snapshot_manager, 'restore_complete_snapshot') as mock_restore_complete:
+                        with patch.object(project.snapshot_manager, 'snapshot_exists', return_value=False):
+                            with patch.object(project.snapshot_manager, 'get_current_run_number', return_value=0):
+                                # Mock successful script result
+                                from src.logic import RunResult
+                                result = RunResult(success=True, stdout="Test output", stderr="", return_code=0)
+                                
+                                # Handle step result - should trigger rollback due to sync failure
+                                project.handle_step_result("step1", result)
+                                
+                                # Step should remain pending due to sync failure (three-factor detection)
+                                assert project.get_state("step1") == "pending"
+                                
+                                # Verify rollback was attempted
+                                mock_restore.assert_called_once()
+    
+    def test_smart_sync_cleanup_behavior(self):
+        """Test that Smart Sync cleanup is handled properly through post-step sync."""
+        # Set up Smart Sync environment
+        env_vars = {
+            "SMART_SYNC_ENABLED": "true",
+            "NETWORK_PROJECT_PATH": str(self.network_dir),
+            "LOCAL_PROJECT_PATH": str(self.local_dir)
+        }
+        
+        with patch.dict(os.environ, env_vars):
+            with patch('src.core.get_smart_sync_manager') as mock_get_manager:
+                mock_manager = MagicMock(spec=SmartSyncManager)
+                mock_manager.incremental_sync_up.return_value = True
+                mock_get_manager.return_value = mock_manager
+                
+                project = Project(self.project_dir)
+                
+                # Verify Smart Sync manager was created
+                assert project.smart_sync_manager is not None
+                
+                # Test that post-step sync works (this replaces finalize_smart_sync)
+                result = project._perform_post_step_sync("test_step")
+                assert result is True
+                
+                # Verify sync was called
+                mock_manager.incremental_sync_up.assert_called_once()
+    
+    def test_smart_sync_without_manager(self):
+        """Test that operations work correctly when no Smart Sync manager exists."""
+        project = Project(self.project_dir)
+        
+        # Should not raise exception and should return True (sync not needed)
+        result = project._perform_post_step_sync("test_step")
+        assert result is True
+    
+    def test_smart_sync_error_handling_in_post_step(self):
+        """Test that post-step sync handles errors gracefully."""
         # Set up Smart Sync environment
         env_vars = {
             "SMART_SYNC_ENABLED": "true",
@@ -241,77 +319,12 @@ class TestSmartSyncWorkflowIntegration:
                 
                 project = Project(self.project_dir)
                 
-                # Create success marker for the script
-                status_dir = self.project_dir / ".workflow_status"
-                status_dir.mkdir(exist_ok=True)
-                success_file = status_dir / "test_script.success"
-                success_file.write_text("success")
+                # Should not raise exception but should return False
+                result = project._perform_post_step_sync("test_step")
+                assert result is False
                 
-                # Mock successful script result
-                from src.logic import RunResult
-                result = RunResult(success=True, stdout="Test output", stderr="", return_code=0)
-                
-                # Should not raise exception despite sync error
-                project.handle_step_result("step1", result)
-                
-                # Step should still be marked as completed
-                assert project.get_state("step1") == "completed"
-    
-    def test_finalize_smart_sync(self):
-        """Test the finalize_smart_sync method."""
-        # Set up Smart Sync environment
-        env_vars = {
-            "SMART_SYNC_ENABLED": "true",
-            "NETWORK_PROJECT_PATH": str(self.network_dir),
-            "LOCAL_PROJECT_PATH": str(self.local_dir)
-        }
-        
-        with patch.dict(os.environ, env_vars):
-            with patch('src.core.get_smart_sync_manager') as mock_get_manager:
-                mock_manager = MagicMock(spec=SmartSyncManager)
-                mock_manager.final_sync.return_value = True
-                mock_get_manager.return_value = mock_manager
-                
-                project = Project(self.project_dir)
-                
-                # Call finalize
-                project.finalize_smart_sync()
-                
-                # Verify final sync and cleanup were called
-                mock_manager.final_sync.assert_called_once()
-                mock_manager.cleanup.assert_called_once()
-    
-    def test_finalize_smart_sync_without_manager(self):
-        """Test that finalize_smart_sync handles case where no Smart Sync manager exists."""
-        project = Project(self.project_dir)
-        
-        # Should not raise exception
-        project.finalize_smart_sync()
-        
-        assert project.smart_sync_manager is None
-    
-    def test_finalize_smart_sync_error_handling(self):
-        """Test that finalize_smart_sync handles errors gracefully."""
-        # Set up Smart Sync environment
-        env_vars = {
-            "SMART_SYNC_ENABLED": "true",
-            "NETWORK_PROJECT_PATH": str(self.network_dir),
-            "LOCAL_PROJECT_PATH": str(self.local_dir)
-        }
-        
-        with patch.dict(os.environ, env_vars):
-            with patch('src.core.get_smart_sync_manager') as mock_get_manager:
-                mock_manager = MagicMock(spec=SmartSyncManager)
-                mock_manager.final_sync.side_effect = Exception("Final sync error")
-                mock_get_manager.return_value = mock_manager
-                
-                project = Project(self.project_dir)
-                
-                # Should not raise exception despite error
-                project.finalize_smart_sync()
-                
-                # Verify final sync was attempted
-                mock_manager.final_sync.assert_called_once()
+                # Verify sync was attempted
+                mock_manager.incremental_sync_up.assert_called_once()
 
 
 class TestSmartSyncEnvironmentVariables:

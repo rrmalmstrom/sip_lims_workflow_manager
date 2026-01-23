@@ -7,9 +7,12 @@
 **Key Features**:
 - ✅ Transparent to users (zero configuration)
 - ✅ Fast incremental sync (5-10 seconds between steps)
-- ✅ Automatic conflict resolution
+- ✅ **Fail-fast behavior** for critical errors (Excel files locked, permission denied)
+- ✅ **Comprehensive cleanup logic** for local staging directories
+- ✅ **Enhanced debug logging** and performance monitoring
 - ✅ Complete hidden file support
 - ✅ Preserves snapshot system integrity
+- ✅ **Robust error handling** with graceful degradation
 
 ---
 
@@ -409,6 +412,116 @@ fi
 
 ## 🛡️ Error Handling & Recovery
 
+### **Fail-Fast Behavior for Critical Errors**
+
+Smart Sync implements fail-fast behavior for critical errors that would prevent successful workflow execution:
+
+```python
+class SmartSyncError(Exception):
+    """Exception raised when Smart Sync operations fail critically."""
+    pass
+
+def _copy_file_with_metadata(self, source: Path, dest: Path):
+    """Copy file preserving metadata with fail-fast error handling."""
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, dest)
+    except PermissionError as e:
+        # CRITICAL: Excel files locked - fail immediately
+        if source.suffix.lower() in ['.xlsx', '.xls', '.xlsm', '.xlsb']:
+            error_msg = f"Excel file locked (likely open in Excel): {source.name}. Please close {source.name} in Excel and try again."
+            log_file_operation("copy_failed_locked", source, dest, False, error=str(e))
+        else:
+            error_msg = f"File permission denied: {source.name}. Error: {e}"
+            log_file_operation("copy_failed_permission", source, dest, False, error=str(e))
+        
+        raise SmartSyncError(error_msg)  # FAIL FAST
+    except (OSError, shutil.Error) as e:
+        error_msg = f"Could not copy {source} to {dest}: {e}"
+        log_file_operation("copy_failed", source, dest, False, error=str(e))
+        raise SmartSyncError(error_msg)  # FAIL FAST
+```
+
+**Critical Error Scenarios (Fail-Fast)**:
+- 🚫 **Excel files locked**: User has Excel file open during sync
+- 🚫 **Permission denied**: File system permission errors
+- 🚫 **Disk full**: Insufficient space for sync operations
+- 🚫 **Network path invalid**: Network drive path becomes invalid
+
+### **Comprehensive Cleanup Logic**
+
+Smart Sync includes multiple cleanup mechanisms to ensure no orphaned staging directories remain:
+
+#### **1. Orphaned Staging Directory Cleanup**
+```python
+# Location: run.py lines 352-380, run_debug.py (synchronized)
+class PlatformAdapter:
+    @staticmethod
+    def cleanup_orphaned_staging_directories(project_path: Path):
+        """Clean up orphaned staging directories from previous runs."""
+        staging_base = Path(tempfile.gettempdir()) / "sip_workflow"
+        
+        if not staging_base.exists():
+            return
+        
+        project_name = project_path.name
+        project_staging = staging_base / project_name
+        
+        if project_staging.exists():
+            try:
+                shutil.rmtree(project_staging, ignore_errors=True)
+                if HAS_CLICK:
+                    click.secho(f"🧹 Cleaned up orphaned staging: {project_staging}", fg='green')
+            except Exception as e:
+                if HAS_CLICK:
+                    click.secho(f"⚠️ Could not clean orphaned staging: {e}", fg='yellow')
+```
+
+#### **2. Container Shutdown Cleanup**
+```python
+# Location: run.py lines 675-697
+def cleanup_smart_sync_on_shutdown():
+    """Clean up Smart Sync environment during container shutdown."""
+    sync_env = {
+        "SMART_SYNC_ENABLED": os.environ.get('SMART_SYNC_ENABLED', 'false'),
+        "NETWORK_PROJECT_PATH": os.environ.get('NETWORK_PROJECT_PATH', ''),
+        "LOCAL_PROJECT_PATH": os.environ.get('LOCAL_PROJECT_PATH', '')
+    }
+    
+    if sync_env["SMART_SYNC_ENABLED"] == "true" and sync_env["LOCAL_PROJECT_PATH"]:
+        try:
+            from src.smart_sync import SmartSyncManager
+            sync_manager = SmartSyncManager(
+                Path(sync_env["NETWORK_PROJECT_PATH"]),
+                Path(sync_env["LOCAL_PROJECT_PATH"])
+            )
+            
+            # Perform final sync and cleanup
+            sync_manager.final_sync()
+            sync_manager.cleanup()
+            
+        except Exception as e:
+            if HAS_CLICK:
+                click.secho(f"⚠️ Smart Sync cleanup failed: {e}", fg='yellow')
+```
+
+#### **3. SmartSyncManager Cleanup**
+```python
+# Location: src/smart_sync.py lines 648-661
+def cleanup(self):
+    """Clean up local staging directory and sync logs."""
+    try:
+        if self.local_path.exists():
+            if HAS_CLICK:
+                click.echo("🧹 Cleaning up local staging directory...")
+            shutil.rmtree(self.local_path)
+            if HAS_CLICK:
+                click.secho("✅ Local staging cleaned up", fg='green')
+    except Exception as e:
+        if HAS_CLICK:
+            click.secho(f"⚠️ Warning: Could not clean up staging directory: {e}", fg='yellow')
+```
+
 ### **Network Drive Disconnection**
 ```python
 def handle_network_error(self):
@@ -421,20 +534,56 @@ def handle_network_error(self):
     os.environ['SMART_SYNC_ENABLED'] = 'false'
 ```
 
-### **Sync Conflicts**
+### **Enhanced Debug Logging**
+
+Smart Sync includes comprehensive debug logging for troubleshooting:
+
 ```python
-def handle_sync_conflict(self, conflicted_files: List[Path]):
-    """Handle files that have conflicting changes."""
-    click.secho("⚠️ Sync conflict detected", fg='yellow')
-    click.echo("Network drive has newer changes than local copy.")
-    
-    if click.confirm("Download latest changes from network? (Local changes will be lost)"):
-        # Force sync down from network
-        self.force_sync_down()
-        return True
-    else:
-        click.echo("Continuing with local data. Manual sync required later.")
-        return False
+# Debug logging integration
+from .debug_logger import (
+    debug_context, log_smart_sync_detection, log_sync_operation,
+    log_file_operation, log_error, log_info, log_warning
+)
+
+def initial_sync(self) -> bool:
+    """Perform initial sync with comprehensive debug logging."""
+    with debug_context("initial_sync",
+                      network_path=str(self.network_path),
+                      local_path=str(self.local_path)) as debug_logger:
+        
+        start_time = time.time()
+        
+        try:
+            changes = self._detect_changes(self.network_path, self.local_path)
+            
+            if debug_logger:
+                debug_logger.info(f"Detected {len(changes)} changes for initial sync",
+                                total_changes=len(changes))
+            
+            # Perform sync operations - any failure will raise SmartSyncError
+            for source, dest, action in changes:
+                if action == 'copy':
+                    self._copy_file_with_metadata(source, dest)  # Raises on failure
+                    log_file_operation("copy", source, dest, True)
+                elif action == 'delete':
+                    self._delete_file_safe(dest)  # Raises on failure
+                    log_file_operation("delete", dest, dest, True)
+            
+            # Log successful completion
+            duration = time.time() - start_time
+            log_sync_operation("initial_sync", "network_to_local",
+                             len(changes), duration, True)
+            
+            return True
+            
+        except SmartSyncError:
+            # Re-raise SmartSyncError to propagate to caller (FAIL FAST)
+            raise
+        except Exception as e:
+            # Convert unexpected errors to SmartSyncError (FAIL FAST)
+            duration = time.time() - start_time
+            log_error("Initial sync failed", error=str(e), duration=duration)
+            raise SmartSyncError(f"Initial sync failed: {e}")
 ```
 
 ---
@@ -460,31 +609,45 @@ def handle_sync_conflict(self, conflicted_files: List[Path]):
 
 ---
 
-## 🎯 Implementation Phases
+## 🎯 Implementation Status
 
-### **Phase 1: Core Smart Sync (MVP)**
-- [ ] Implement `SmartSyncManager` class
-- [ ] Modify [`run.py`](run.py:176) for Windows network drive detection
-- [ ] Add initial full sync capability
-- [ ] Create basic sync scripts for container
+### **Phase 1: Core Smart Sync (MVP)** ✅ **COMPLETED**
+- [x] Implement `SmartSyncManager` class with fail-fast behavior
+- [x] Modify [`run.py`](run.py) for Windows network drive detection
+- [x] Add initial full sync capability with comprehensive error handling
+- [x] Create sync scripts for container integration
+- [x] Implement comprehensive debug logging and performance monitoring
 
-### **Phase 2: Container Integration**
-- [ ] Modify [`core.py`](core.py:112) for pre-step sync triggers
-- [ ] Modify [`core.py`](core.py:192) for post-step sync triggers
-- [ ] Update [`docker-compose.yml`](docker-compose.yml:16) for sync script mounting
-- [ ] Implement incremental sync logic
+### **Phase 2: Container Integration** ✅ **COMPLETED**
+- [x] Modify [`core.py`](core.py) for pre-step sync triggers
+- [x] Modify [`core.py`](core.py) for post-step sync triggers
+- [x] Update [`docker-compose.yml`](docker-compose.yml) for sync script mounting
+- [x] Implement incremental sync logic with change detection
+- [x] Add Smart Sync environment variable support
 
-### **Phase 3: Polish & Optimization**
-- [ ] Add sync progress indicators in UI
-- [ ] Implement conflict detection and resolution
-- [ ] Add performance optimizations (parallel sync, compression)
-- [ ] Comprehensive error handling and recovery
+### **Phase 3: Error Handling & Cleanup** ✅ **COMPLETED**
+- [x] Implement fail-fast behavior for critical errors (Excel locks, permissions)
+- [x] Add comprehensive cleanup logic (orphaned directories, container shutdown)
+- [x] Implement robust error handling with graceful degradation
+- [x] Add enhanced debug logging and performance monitoring
+- [x] Create comprehensive test suite (100+ tests covering all scenarios)
 
-### **Phase 4: Testing & Validation**
-- [ ] Windows testing with various network drive configurations
-- [ ] Performance testing with large projects
-- [ ] Network interruption testing
-- [ ] Multi-user workflow validation
+### **Phase 4: Testing & Validation** 🔄 **IN PROGRESS**
+- [x] Create comprehensive test suite with 100+ tests
+- [x] Implement Windows simulation testing on macOS
+- [x] Add performance benchmarking and monitoring
+- [x] Test fail-fast behavior and cleanup logic
+- [ ] **Real Windows testing** with various network drive configurations
+- [ ] **Performance validation** with large projects on actual Windows systems
+- [ ] **Network interruption testing** on real Windows environments
+- [ ] **Multi-user workflow validation** in production scenarios
+
+### **Phase 5: Documentation & Deployment** 🔄 **IN PROGRESS**
+- [x] Update Smart Sync architecture documentation
+- [ ] Update user guide documentation with Smart Sync troubleshooting
+- [ ] Update troubleshooting documentation with Smart Sync error scenarios
+- [ ] Create comprehensive Smart Sync workflow summary
+- [ ] Build and deploy updated Docker image with Smart Sync improvements
 
 ---
 

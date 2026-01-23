@@ -409,15 +409,17 @@ class TestSmartSyncErrorHandling:
     
     def test_sync_with_permission_errors(self):
         """Test sync behavior with permission errors."""
+        from src.smart_sync import SmartSyncError
+        
         # Create a file and make it read-only to simulate permission error
         test_file = self.network_dir / "readonly.txt"
         test_file.write_text("readonly content")
         
         # Mock permission error during copy
         with patch('shutil.copy2', side_effect=PermissionError("Permission denied")):
-            result = self.sync_manager.initial_sync()
-            # Should return True but log the error
-            assert result is True
+            # Should now raise SmartSyncError with fail-fast approach
+            with pytest.raises(SmartSyncError, match="File permission denied"):
+                self.sync_manager.initial_sync()
     
     def test_logging_with_json_error(self):
         """Test that JSON logging errors don't break sync operations."""

@@ -148,13 +148,12 @@ class TestSmartSyncEndToEndWorkflow:
                         assert project.get_state("data_preparation") == "completed"
                     
                     # Step 7: Test final cleanup
-                    with patch.object(project.smart_sync_manager, 'final_sync', return_value=True) as mock_final_sync:
-                        with patch.object(project.smart_sync_manager, 'cleanup') as mock_cleanup:
-                            project.finalize_smart_sync()
-                            
-                            # Verify final sync and cleanup were called
-                            mock_final_sync.assert_called_once()
-                            mock_cleanup.assert_called_once()
+                    # Final sync and cleanup are now handled automatically by post-step sync
+                    # No explicit finalize_smart_sync method needed - post-step sync handles everything
+                    
+                    # Verify that the post-step sync already handled the final synchronization
+                    # (This was already verified in Step 6 above)
+                    assert project.get_state("data_preparation") == "completed"
     
     def test_smart_sync_file_preservation(self):
         """Test that Smart Sync preserves all important files including hidden ones."""
@@ -183,15 +182,16 @@ class TestSmartSyncEndToEndWorkflow:
             assert local_file.exists(), f"Hidden file {item} should be synced"
             assert local_file.read_text() == f"content of {item}"
     
-    def test_smart_sync_error_resilience(self):
-        """Test Smart Sync error handling and resilience."""
+    def test_smart_sync_error_resilience_fail_fast(self):
+        """Test Smart Sync fail-fast error handling."""
+        from src.smart_sync import SmartSyncError
+        
         sync_manager = SmartSyncManager(self.network_project, self.local_staging)
         
-        # Test sync with permission errors - should handle gracefully
+        # Test sync with permission errors - should raise SmartSyncError (fail-fast)
         with patch('shutil.copy2', side_effect=PermissionError("Permission denied")):
-            result = sync_manager.initial_sync()
-            # Should handle gracefully and return True (no files copied but no crash)
-            assert result is True
+            with pytest.raises(SmartSyncError, match="File permission denied"):
+                sync_manager.initial_sync()
         
         # Test sync with network disconnection simulation - should return False but not crash
         with patch('pathlib.Path.exists', side_effect=OSError("Network error")):

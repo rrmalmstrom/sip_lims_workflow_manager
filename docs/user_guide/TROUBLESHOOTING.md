@@ -141,17 +141,82 @@ This guide provides solutions to common issues you may encounter while using the
 -   **Cause**: Commands aren't found after installation.
 -   **Solution**: Restart your terminal after installing prerequisites to refresh the PATH environment variable.
 
-#### Windows Network Drive Issues
+#### Windows Network Drive Issues (Smart Sync)
+
+**Smart Sync** automatically solves Windows Docker network drive permission issues by creating a local staging environment and synchronizing files bidirectionally.
+
+##### Smart Sync Activation
+-   **When it activates**: Automatically when running on Windows with network drives (D: through Z:)
+-   **What it does**: Creates local staging in `C:\temp\sip_workflow\project_name` and syncs with network drive
+-   **User experience**: Transparent - no configuration required
+
+##### Smart Sync Error Scenarios
+
+###### Excel File Locked Error (Fail-Fast)
+-   **Error Message**:
+    ```
+    ❌ Smart Sync Error: Excel file locked (likely open in Excel): data.xlsx.
+    Please close data.xlsx in Excel and try again.
+    ```
+-   **Cause**: User has Excel file open during sync operation
+-   **Solution**:
+    1. Close the Excel file in Excel application
+    2. Restart the workflow manager
+    3. Smart Sync will retry the operation
+
+###### Permission Denied Error (Fail-Fast)
+-   **Error Message**:
+    ```
+    ❌ Smart Sync Error: File permission denied: filename.txt. Error: [Errno 13] Permission denied
+    ```
+-   **Cause**: File system permission issues or file in use by another application
+-   **Solution**:
+    1. Check if file is open in another application and close it
+    2. Verify you have write permissions to both network drive and `C:\temp\`
+    3. Run as administrator if necessary
+    4. Restart the workflow manager
+
+###### Network Drive Disconnection
+-   **Error Message**:
+    ```
+    ⚠️ Network drive disconnected
+    Workflow will continue with local data.
+    Reconnect network drive and restart to sync changes.
+    ```
+-   **Cause**: Network drive becomes unavailable during workflow execution
+-   **Solution**:
+    1. Reconnect to the network drive
+    2. Restart the workflow manager to resume sync operations
+    3. Local data is preserved in `C:\temp\sip_workflow\project_name`
+
+###### Cleanup Issues
+-   **Error Message**:
+    ```
+    ⚠️ Warning: Could not clean up staging directory: [error details]
+    ```
+-   **Cause**: Cleanup of local staging directory failed (usually due to locked files)
+-   **Solution**:
+    1. Close any applications that might have files open from the project
+    2. Manually delete `C:\temp\sip_workflow\project_name` if needed
+    3. Restart the workflow manager
+
+##### Smart Sync Debug Information
+
+To enable detailed Smart Sync logging:
+1. Set environment variable: `SMART_SYNC_DEBUG=true`
+2. Run the workflow manager
+3. Check debug logs for detailed sync operation information
+
+##### Legacy Network Drive Issues (Pre-Smart Sync)
 -   **Cause**: Docker fails to mount UNC network paths (e.g., `\\server\share\folder`) with error "is not a valid Windows path".
 -   **Error Message**:
     ```
     Error response from daemon: \\server\share\folder is not a valid Windows path
     ```
--   **Solution**: This issue has been fixed in the unified Python launcher (`run.py`). The launcher now automatically handles Windows UNC paths correctly for Docker compatibility. If you encounter this error:
-    1.  **Use the unified launcher**: Run `python run.py` instead of the old batch files
-    2.  **Verify path format**: Ensure your network path uses backslashes (`\\server\share`) not forward slashes
-    3.  **Check network access**: Verify you can access the network drive in Windows Explorer
-    4.  **Try mapped drives**: If UNC paths still fail, consider mapping the network drive to a letter (e.g., Z:) and using that instead
+-   **Solution**: This issue is automatically resolved by Smart Sync. If you encounter this error:
+    1.  **Update to latest version**: Ensure you're using the latest version with Smart Sync
+    2.  **Use the unified launcher**: Run `python run.py` instead of old batch files
+    3.  **Verify Smart Sync activation**: Check for Smart Sync messages during startup
 
 ### Linux Issues
 

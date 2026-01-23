@@ -42,7 +42,7 @@ This application uses **Docker** with deterministic builds to ensure a consisten
 **Prerequisites for Windows:**
 - Windows 10 version 2004 and higher (Build 19041 and higher) or Windows 11
 - WSL 2 feature enabled (required for Docker Desktop)
-- Network drive mapping (if using external network drives)
+- **Smart Sync** automatically handles network drive compatibility (no manual setup required)
 
 1.  **Enable WSL 2 (if not already enabled):**
     - Open PowerShell as Administrator
@@ -51,38 +51,32 @@ This application uses **Docker** with deterministic builds to ensure a consisten
     - After restart, check WSL version: `wsl --version`
     - Update WSL if needed: `wsl --update`
 
-2.  **Set up Network Drive Mapping (if using external network drives):**
+2.  **Smart Sync for Network Drives (Automatic):**
     
-    If your project data is stored on an external network drive (like `\\server\share\folder`), you must map it to a drive letter for Docker Desktop compatibility.
+    **Smart Sync** automatically handles Windows network drive compatibility issues:
     
-    **To create a persistent network drive mapping:**
-    - Open Command Prompt as Administrator
-    - Run the mapping command:
-      ```cmd
-      net use Z: \\your-server\your-share /persistent:yes
-      ```
-      Replace `Z:` with any available drive letter and `\\your-server\your-share` with your actual network path.
+    **What Smart Sync Does:**
+    - ✅ **Automatic Detection**: Detects Windows + network drive scenarios (D: through Z:)
+    - ✅ **Local Staging**: Creates temporary staging in `C:\temp\sip_workflow\project_name`
+    - ✅ **Bidirectional Sync**: Syncs data between network drive and local staging
+    - ✅ **Docker Compatibility**: Runs Docker with local staging (no permission issues)
+    - ✅ **Transparent Operation**: No user configuration required
     
-    **Example:**
-    ```cmd
-    net use Z: \\storage.jgi.lbl.gov\gentech\Microscale_Application_STORAGE /persistent:yes
+    **User Experience:**
+    - Use your network drive path directly (e.g., `Z:\your_project` or `\\server\share\project`)
+    - Smart Sync activates automatically when needed
+    - You'll see sync progress messages during workflow execution
+    - All data is preserved on your network drive
+    
+    **Smart Sync Messages You'll See:**
+    ```
+    🔄 Smart Sync detected: Windows + Network Drive
+    📥 Setting up local staging: C:\temp\sip_workflow\project_name
+    📥 Initial sync: Network → Local (30.2s)
+    🐳 Docker launching with local staging...
     ```
     
-    **To view current mappings:**
-    ```cmd
-    net use
-    ```
-    
-    **To remove a mapping (if needed):**
-    ```cmd
-    net use Z: /delete
-    ```
-    
-    **Important Notes:**
-    - The `/persistent:yes` flag ensures the mapping survives computer restarts
-    - Choose any available drive letter (Z:, Y:, X:, etc.)
-    - After mapping, use the drive letter path (e.g., `Z:\folder`) instead of the UNC path
-    - This is a one-time setup per network location
+    **No Manual Setup Required** - Smart Sync handles everything automatically!
 
 3.  **Download Docker Desktop:**
     - Go to [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
