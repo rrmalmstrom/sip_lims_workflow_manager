@@ -337,6 +337,86 @@ class SmartSyncDebugLogger:
         else:
             self.warning(f"Workflow sync failed: {step_id} ({sync_type})", **integration_data)
     
+    def log_fail_fast_trigger(self, trigger_type: str, details: Dict[str, Any],
+                             recovery_attempted: bool = False):
+        """Log fail-fast behavior trigger and recovery attempts."""
+        fail_fast_data = {
+            "trigger_type": trigger_type,
+            "recovery_attempted": recovery_attempted,
+            "timestamp": time.time(),
+            **details
+        }
+        
+        self.performance_stats.setdefault("fail_fast_events", []).append(fail_fast_data)
+        
+        if recovery_attempted:
+            self.warning(f"Fail-fast triggered with recovery: {trigger_type}", **fail_fast_data)
+        else:
+            self.error(f"Fail-fast triggered: {trigger_type}", **fail_fast_data)
+    
+    def log_three_factor_validation(self, step_id: str, exit_code: int,
+                                   marker_file_exists: bool, sync_success: bool,
+                                   overall_success: bool, **details):
+        """Log three-factor success validation for workflow steps."""
+        validation_data = {
+            "step_id": step_id,
+            "exit_code": exit_code,
+            "marker_file_exists": marker_file_exists,
+            "sync_success": sync_success,
+            "overall_success": overall_success,
+            "factors_passed": sum([exit_code == 0, marker_file_exists, sync_success]),
+            "timestamp": time.time(),
+            **details
+        }
+        
+        self.performance_stats.setdefault("three_factor_validations", []).append(validation_data)
+        
+        if overall_success:
+            self.info(f"Three-factor validation passed: {step_id}", **validation_data)
+        else:
+            self.warning(f"Three-factor validation failed: {step_id}", **validation_data)
+    
+    def log_cleanup_operation(self, operation_type: str, target_path: str,
+                             success: bool, files_removed: int = 0,
+                             errors_encountered: List[str] = None, **details):
+        """Log cleanup operations for temporary directories and files."""
+        cleanup_data = {
+            "operation_type": operation_type,
+            "target_path": target_path,
+            "success": success,
+            "files_removed": files_removed,
+            "errors_encountered": errors_encountered or [],
+            "timestamp": time.time(),
+            **details
+        }
+        
+        self.performance_stats.setdefault("cleanup_operations", []).append(cleanup_data)
+        
+        if success:
+            self.info(f"Cleanup successful: {operation_type}", **cleanup_data)
+        else:
+            self.error(f"Cleanup failed: {operation_type}", **cleanup_data)
+    
+    def log_sync_pattern(self, pattern_type: str, step_id: str, direction: str,
+                        success: bool, duration: float, **details):
+        """Log specific sync patterns (pre-step, post-step, recovery)."""
+        pattern_data = {
+            "pattern_type": pattern_type,
+            "step_id": step_id,
+            "direction": direction,
+            "success": success,
+            "duration": duration,
+            "timestamp": time.time(),
+            **details
+        }
+        
+        self.performance_stats.setdefault("sync_patterns", []).append(pattern_data)
+        
+        if success:
+            self.debug(f"Sync pattern completed: {pattern_type} ({direction})", **pattern_data)
+        else:
+            self.warning(f"Sync pattern failed: {pattern_type} ({direction})", **pattern_data)
+    
     def get_performance_summary(self) -> Dict[str, Any]:
         """Get performance summary for analysis."""
         current_time = time.time()
@@ -349,9 +429,16 @@ class SmartSyncDebugLogger:
             "total_file_operations": len(self.performance_stats["file_operations"]),
             "total_detection_calls": len(self.performance_stats["detection_calls"]),
             "total_errors": len(self.performance_stats["errors"]),
+            "total_fail_fast_events": len(self.performance_stats.get("fail_fast_events", [])),
+            "total_three_factor_validations": len(self.performance_stats.get("three_factor_validations", [])),
+            "total_cleanup_operations": len(self.performance_stats.get("cleanup_operations", [])),
+            "total_sync_patterns": len(self.performance_stats.get("sync_patterns", [])),
             "average_sync_duration": 0,
             "sync_success_rate": 0,
-            "file_operation_success_rate": 0
+            "file_operation_success_rate": 0,
+            "three_factor_success_rate": 0,
+            "cleanup_success_rate": 0,
+            "fail_fast_recovery_rate": 0
         }
         
         # Calculate averages
@@ -363,6 +450,24 @@ class SmartSyncDebugLogger:
         if self.performance_stats["file_operations"]:
             successful_files = sum(1 for op in self.performance_stats["file_operations"] if op.get("success", False))
             summary["file_operation_success_rate"] = successful_files / len(self.performance_stats["file_operations"])
+        
+        # Calculate three-factor success rate
+        three_factor_validations = self.performance_stats.get("three_factor_validations", [])
+        if three_factor_validations:
+            successful_validations = sum(1 for v in three_factor_validations if v.get("overall_success", False))
+            summary["three_factor_success_rate"] = successful_validations / len(three_factor_validations)
+        
+        # Calculate cleanup success rate
+        cleanup_operations = self.performance_stats.get("cleanup_operations", [])
+        if cleanup_operations:
+            successful_cleanups = sum(1 for c in cleanup_operations if c.get("success", False))
+            summary["cleanup_success_rate"] = successful_cleanups / len(cleanup_operations)
+        
+        # Calculate fail-fast recovery rate
+        fail_fast_events = self.performance_stats.get("fail_fast_events", [])
+        if fail_fast_events:
+            recovery_attempts = sum(1 for f in fail_fast_events if f.get("recovery_attempted", False))
+            summary["fail_fast_recovery_rate"] = recovery_attempts / len(fail_fast_events)
         
         return summary
     
@@ -523,6 +628,39 @@ def log_warning(message: str, **details):
         logger.warning(message, **details)
 
 
+def log_fail_fast_trigger(trigger_type: str, details: Dict[str, Any], recovery_attempted: bool = False):
+    """Log fail-fast trigger (convenience function)."""
+    if debug_enabled():
+        logger = get_debug_logger()
+        logger.log_fail_fast_trigger(trigger_type, details, recovery_attempted)
+
+
+def log_three_factor_validation(step_id: str, exit_code: int, marker_file_exists: bool,
+                               sync_success: bool, overall_success: bool, **details):
+    """Log three-factor validation (convenience function)."""
+    if debug_enabled():
+        logger = get_debug_logger()
+        logger.log_three_factor_validation(step_id, exit_code, marker_file_exists,
+                                          sync_success, overall_success, **details)
+
+
+def log_cleanup_operation(operation_type: str, target_path: str, success: bool,
+                         files_removed: int = 0, errors_encountered: List[str] = None, **details):
+    """Log cleanup operation (convenience function)."""
+    if debug_enabled():
+        logger = get_debug_logger()
+        logger.log_cleanup_operation(operation_type, target_path, success,
+                                    files_removed, errors_encountered, **details)
+
+
+def log_sync_pattern(pattern_type: str, step_id: str, direction: str,
+                    success: bool, duration: float, **details):
+    """Log sync pattern (convenience function)."""
+    if debug_enabled():
+        logger = get_debug_logger()
+        logger.log_sync_pattern(pattern_type, step_id, direction, success, duration, **details)
+
+
 # Test validation helpers
 class DebugTestValidator:
     """Helper class for validating debug output in tests."""
@@ -576,17 +714,89 @@ class DebugTestValidator:
         perf_data = {
             "sync_operations": [],
             "file_operations": [],
-            "detection_calls": []
+            "detection_calls": [],
+            "fail_fast_events": [],
+            "three_factor_validations": [],
+            "cleanup_operations": [],
+            "sync_patterns": []
         }
         
         for entry in self.entries:
             details = entry.get("details", {})
+            message = entry.get("message", "").lower()
+            
             if "duration" in details:
-                if "sync" in entry.get("message", "").lower():
+                if "sync" in message:
                     perf_data["sync_operations"].append(details)
-                elif "file" in entry.get("message", "").lower():
+                elif "file" in message:
                     perf_data["file_operations"].append(details)
-                elif "detection" in entry.get("message", "").lower():
+                elif "detection" in message:
                     perf_data["detection_calls"].append(details)
+            
+            # Track new Smart Sync features
+            if "fail-fast" in message:
+                perf_data["fail_fast_events"].append(details)
+            elif "three-factor" in message:
+                perf_data["three_factor_validations"].append(details)
+            elif "cleanup" in message:
+                perf_data["cleanup_operations"].append(details)
+            elif "sync pattern" in message:
+                perf_data["sync_patterns"].append(details)
         
         return perf_data
+    
+    def get_fail_fast_events(self) -> List[Dict]:
+        """Get all fail-fast event entries."""
+        return [entry for entry in self.entries
+                if "fail-fast" in entry.get("message", "").lower()]
+    
+    def get_three_factor_validations(self) -> List[Dict]:
+        """Get all three-factor validation entries."""
+        return [entry for entry in self.entries
+                if "three-factor" in entry.get("message", "").lower()]
+    
+    def get_cleanup_operations(self) -> List[Dict]:
+        """Get all cleanup operation entries."""
+        return [entry for entry in self.entries
+                if "cleanup" in entry.get("message", "").lower()]
+    
+    def get_sync_patterns(self) -> List[Dict]:
+        """Get all sync pattern entries."""
+        return [entry for entry in self.entries
+                if "sync pattern" in entry.get("message", "").lower()]
+    
+    def assert_three_factor_success(self, step_id: str):
+        """Assert that three-factor validation passed for a step."""
+        validations = self.get_three_factor_validations()
+        step_validations = [v for v in validations
+                           if v.get("details", {}).get("step_id") == step_id]
+        
+        if not step_validations:
+            raise AssertionError(f"No three-factor validation found for step: {step_id}")
+        
+        successful = [v for v in step_validations
+                     if v.get("details", {}).get("overall_success", False)]
+        
+        if not successful:
+            raise AssertionError(f"Three-factor validation failed for step: {step_id}")
+    
+    def assert_cleanup_successful(self, operation_type: str):
+        """Assert that cleanup operation was successful."""
+        cleanups = self.get_cleanup_operations()
+        type_cleanups = [c for c in cleanups
+                        if c.get("details", {}).get("operation_type") == operation_type]
+        
+        if not type_cleanups:
+            raise AssertionError(f"No cleanup operation found for type: {operation_type}")
+        
+        successful = [c for c in type_cleanups
+                     if c.get("details", {}).get("success", False)]
+        
+        if not successful:
+            raise AssertionError(f"Cleanup operation failed for type: {operation_type}")
+    
+    def assert_no_fail_fast_events(self):
+        """Assert that no fail-fast events occurred."""
+        fail_fast_events = self.get_fail_fast_events()
+        if fail_fast_events:
+            raise AssertionError(f"Found {len(fail_fast_events)} fail-fast events: {fail_fast_events}")

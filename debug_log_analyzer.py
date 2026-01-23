@@ -243,14 +243,29 @@ class SmartSyncLogAnalyzer:
             'environment_setups': [],
             'workflow_integrations': [],
             'container_launches': [],
+            'fail_fast_events': [],
+            'three_factor_validations': [],
+            'cleanup_operations': [],
+            'sync_patterns': [],
             'sync_success_rate': 0,
             'average_sync_duration': 0,
-            'sync_patterns': defaultdict(int)
+            'three_factor_success_rate': 0,
+            'cleanup_success_rate': 0,
+            'fail_fast_recovery_rate': 0,
+            'sync_pattern_analysis': defaultdict(int)
         }
         
         successful_syncs = 0
         total_syncs = 0
         sync_durations = []
+        
+        # Counters for new features
+        successful_three_factor = 0
+        total_three_factor = 0
+        successful_cleanups = 0
+        total_cleanups = 0
+        fail_fast_with_recovery = 0
+        total_fail_fast = 0
         
         for session_id, session in self.sessions.items():
             for entry in session['entries']:
@@ -267,7 +282,7 @@ class SmartSyncLogAnalyzer:
                         'project_path': details.get('project_path', 'unknown')
                     })
                 
-                elif 'sync' in message:
+                elif 'sync' in message and 'pattern' not in message:
                     sync_analysis['sync_operations'].append({
                         'session': session_id,
                         'timestamp': entry.get('timestamp'),
@@ -285,6 +300,64 @@ class SmartSyncLogAnalyzer:
                     duration = details.get('duration', 0)
                     if duration > 0:
                         sync_durations.append(duration)
+                
+                elif 'sync pattern' in message:
+                    sync_analysis['sync_patterns'].append({
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'pattern_type': details.get('pattern_type', 'unknown'),
+                        'step_id': details.get('step_id', 'unknown'),
+                        'direction': details.get('direction', 'unknown'),
+                        'success': details.get('success', False),
+                        'duration': details.get('duration', 0)
+                    })
+                    
+                    pattern_type = details.get('pattern_type', 'unknown')
+                    sync_analysis['sync_pattern_analysis'][pattern_type] += 1
+                
+                elif 'fail-fast' in message:
+                    sync_analysis['fail_fast_events'].append({
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'trigger_type': details.get('trigger_type', 'unknown'),
+                        'recovery_attempted': details.get('recovery_attempted', False),
+                        'details': details
+                    })
+                    
+                    total_fail_fast += 1
+                    if details.get('recovery_attempted', False):
+                        fail_fast_with_recovery += 1
+                
+                elif 'three-factor' in message:
+                    sync_analysis['three_factor_validations'].append({
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'step_id': details.get('step_id', 'unknown'),
+                        'exit_code': details.get('exit_code', -1),
+                        'marker_file_exists': details.get('marker_file_exists', False),
+                        'sync_success': details.get('sync_success', False),
+                        'overall_success': details.get('overall_success', False),
+                        'factors_passed': details.get('factors_passed', 0)
+                    })
+                    
+                    total_three_factor += 1
+                    if details.get('overall_success', False):
+                        successful_three_factor += 1
+                
+                elif 'cleanup' in message:
+                    sync_analysis['cleanup_operations'].append({
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'operation_type': details.get('operation_type', 'unknown'),
+                        'target_path': details.get('target_path', 'unknown'),
+                        'success': details.get('success', False),
+                        'files_removed': details.get('files_removed', 0),
+                        'errors_encountered': details.get('errors_encountered', [])
+                    })
+                    
+                    total_cleanups += 1
+                    if details.get('success', False):
+                        successful_cleanups += 1
                 
                 elif 'environment setup' in message:
                     sync_analysis['environment_setups'].append({
@@ -311,11 +384,6 @@ class SmartSyncLogAnalyzer:
                         'smart_sync_enabled': details.get('smart_sync_enabled', False),
                         'project_path': details.get('project_path', 'unknown')
                     })
-                
-                # Track sync patterns
-                sync_type = details.get('sync_type', '')
-                if sync_type:
-                    sync_analysis['sync_patterns'][sync_type] += 1
         
         # Calculate success rate and average duration
         if total_syncs > 0:
@@ -324,8 +392,247 @@ class SmartSyncLogAnalyzer:
         if sync_durations:
             sync_analysis['average_sync_duration'] = statistics.mean(sync_durations)
         
+        # Calculate new feature success rates
+        if total_three_factor > 0:
+            sync_analysis['three_factor_success_rate'] = successful_three_factor / total_three_factor * 100
+        
+        if total_cleanups > 0:
+            sync_analysis['cleanup_success_rate'] = successful_cleanups / total_cleanups * 100
+        
+        if total_fail_fast > 0:
+            sync_analysis['fail_fast_recovery_rate'] = fail_fast_with_recovery / total_fail_fast * 100
+        
         self.analysis_results['smart_sync'] = sync_analysis
         return sync_analysis
+    
+    def analyze_fail_fast_patterns(self) -> Dict[str, Any]:
+        """Analyze fail-fast behavior patterns and recovery attempts."""
+        print("⚡ Analyzing fail-fast patterns...")
+        
+        fail_fast_analysis = {
+            'total_events': 0,
+            'trigger_types': Counter(),
+            'recovery_attempts': 0,
+            'recovery_success_rate': 0,
+            'common_triggers': [],
+            'timeline': [],
+            'sessions_with_fail_fast': []
+        }
+        
+        for session_id, session in self.sessions.items():
+            session_fail_fast = []
+            
+            for entry in session['entries']:
+                message = entry.get('message', '').lower()
+                if 'fail-fast' in message:
+                    details = entry.get('details', {})
+                    trigger_type = details.get('trigger_type', 'unknown')
+                    recovery_attempted = details.get('recovery_attempted', False)
+                    
+                    fail_fast_event = {
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'trigger_type': trigger_type,
+                        'recovery_attempted': recovery_attempted,
+                        'message': entry.get('message'),
+                        'details': details
+                    }
+                    
+                    fail_fast_analysis['total_events'] += 1
+                    fail_fast_analysis['trigger_types'][trigger_type] += 1
+                    fail_fast_analysis['timeline'].append(fail_fast_event)
+                    session_fail_fast.append(fail_fast_event)
+                    
+                    if recovery_attempted:
+                        fail_fast_analysis['recovery_attempts'] += 1
+            
+            if session_fail_fast:
+                fail_fast_analysis['sessions_with_fail_fast'].append({
+                    'session_id': session_id,
+                    'events': session_fail_fast,
+                    'event_count': len(session_fail_fast)
+                })
+        
+        # Calculate recovery success rate
+        if fail_fast_analysis['total_events'] > 0:
+            fail_fast_analysis['recovery_success_rate'] = (
+                fail_fast_analysis['recovery_attempts'] / fail_fast_analysis['total_events'] * 100
+            )
+        
+        # Identify most common triggers
+        fail_fast_analysis['common_triggers'] = fail_fast_analysis['trigger_types'].most_common(5)
+        
+        # Sort timeline by timestamp
+        fail_fast_analysis['timeline'].sort(key=lambda x: x['timestamp'] or '')
+        
+        self.analysis_results['fail_fast'] = fail_fast_analysis
+        return fail_fast_analysis
+    
+    def analyze_three_factor_validations(self) -> Dict[str, Any]:
+        """Analyze three-factor success validation patterns."""
+        print("🔍 Analyzing three-factor validations...")
+        
+        three_factor_analysis = {
+            'total_validations': 0,
+            'successful_validations': 0,
+            'success_rate': 0,
+            'factor_breakdown': {
+                'exit_code_success': 0,
+                'marker_file_success': 0,
+                'sync_success': 0
+            },
+            'partial_failures': [],
+            'complete_failures': [],
+            'step_analysis': defaultdict(lambda: {
+                'attempts': 0,
+                'successes': 0,
+                'success_rate': 0
+            }),
+            'timeline': []
+        }
+        
+        for session_id, session in self.sessions.items():
+            for entry in session['entries']:
+                message = entry.get('message', '').lower()
+                if 'three-factor' in message:
+                    details = entry.get('details', {})
+                    step_id = details.get('step_id', 'unknown')
+                    exit_code = details.get('exit_code', -1)
+                    marker_file_exists = details.get('marker_file_exists', False)
+                    sync_success = details.get('sync_success', False)
+                    overall_success = details.get('overall_success', False)
+                    factors_passed = details.get('factors_passed', 0)
+                    
+                    validation_event = {
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'step_id': step_id,
+                        'exit_code': exit_code,
+                        'marker_file_exists': marker_file_exists,
+                        'sync_success': sync_success,
+                        'overall_success': overall_success,
+                        'factors_passed': factors_passed,
+                        'message': entry.get('message')
+                    }
+                    
+                    three_factor_analysis['total_validations'] += 1
+                    three_factor_analysis['timeline'].append(validation_event)
+                    
+                    # Track individual factor success
+                    if exit_code == 0:
+                        three_factor_analysis['factor_breakdown']['exit_code_success'] += 1
+                    if marker_file_exists:
+                        three_factor_analysis['factor_breakdown']['marker_file_success'] += 1
+                    if sync_success:
+                        three_factor_analysis['factor_breakdown']['sync_success'] += 1
+                    
+                    # Track step-specific analysis
+                    three_factor_analysis['step_analysis'][step_id]['attempts'] += 1
+                    
+                    if overall_success:
+                        three_factor_analysis['successful_validations'] += 1
+                        three_factor_analysis['step_analysis'][step_id]['successes'] += 1
+                    elif factors_passed > 0:
+                        # Partial failure - some factors passed
+                        three_factor_analysis['partial_failures'].append(validation_event)
+                    else:
+                        # Complete failure - no factors passed
+                        three_factor_analysis['complete_failures'].append(validation_event)
+        
+        # Calculate success rates
+        if three_factor_analysis['total_validations'] > 0:
+            three_factor_analysis['success_rate'] = (
+                three_factor_analysis['successful_validations'] /
+                three_factor_analysis['total_validations'] * 100
+            )
+        
+        # Calculate step-specific success rates
+        for step_id, step_data in three_factor_analysis['step_analysis'].items():
+            if step_data['attempts'] > 0:
+                step_data['success_rate'] = step_data['successes'] / step_data['attempts'] * 100
+        
+        # Sort timeline by timestamp
+        three_factor_analysis['timeline'].sort(key=lambda x: x['timestamp'] or '')
+        
+        self.analysis_results['three_factor'] = three_factor_analysis
+        return three_factor_analysis
+    
+    def analyze_cleanup_operations(self) -> Dict[str, Any]:
+        """Analyze cleanup operation patterns and success rates."""
+        print("🧹 Analyzing cleanup operations...")
+        
+        cleanup_analysis = {
+            'total_operations': 0,
+            'successful_operations': 0,
+            'success_rate': 0,
+            'operation_types': Counter(),
+            'files_removed_total': 0,
+            'errors_encountered': [],
+            'cleanup_timeline': [],
+            'operation_type_analysis': defaultdict(lambda: {
+                'attempts': 0,
+                'successes': 0,
+                'success_rate': 0,
+                'total_files_removed': 0
+            })
+        }
+        
+        for session_id, session in self.sessions.items():
+            for entry in session['entries']:
+                message = entry.get('message', '').lower()
+                if 'cleanup' in message:
+                    details = entry.get('details', {})
+                    operation_type = details.get('operation_type', 'unknown')
+                    target_path = details.get('target_path', 'unknown')
+                    success = details.get('success', False)
+                    files_removed = details.get('files_removed', 0)
+                    errors_encountered = details.get('errors_encountered', [])
+                    
+                    cleanup_event = {
+                        'session': session_id,
+                        'timestamp': entry.get('timestamp'),
+                        'operation_type': operation_type,
+                        'target_path': target_path,
+                        'success': success,
+                        'files_removed': files_removed,
+                        'errors_encountered': errors_encountered,
+                        'message': entry.get('message')
+                    }
+                    
+                    cleanup_analysis['total_operations'] += 1
+                    cleanup_analysis['operation_types'][operation_type] += 1
+                    cleanup_analysis['cleanup_timeline'].append(cleanup_event)
+                    cleanup_analysis['files_removed_total'] += files_removed
+                    
+                    # Track operation type specific analysis
+                    cleanup_analysis['operation_type_analysis'][operation_type]['attempts'] += 1
+                    cleanup_analysis['operation_type_analysis'][operation_type]['total_files_removed'] += files_removed
+                    
+                    if success:
+                        cleanup_analysis['successful_operations'] += 1
+                        cleanup_analysis['operation_type_analysis'][operation_type]['successes'] += 1
+                    
+                    # Collect errors
+                    if errors_encountered:
+                        cleanup_analysis['errors_encountered'].extend(errors_encountered)
+        
+        # Calculate success rates
+        if cleanup_analysis['total_operations'] > 0:
+            cleanup_analysis['success_rate'] = (
+                cleanup_analysis['successful_operations'] /
+                cleanup_analysis['total_operations'] * 100
+            )
+        
+        # Calculate operation type specific success rates
+        for op_type, op_data in cleanup_analysis['operation_type_analysis'].items():
+            if op_data['attempts'] > 0:
+                op_data['success_rate'] = op_data['successes'] / op_data['attempts'] * 100
+        
+        # Sort timeline by timestamp
+        cleanup_analysis['cleanup_timeline'].sort(key=lambda x: x['timestamp'] or '')
+        
+        self.analysis_results['cleanup'] = cleanup_analysis
+        return cleanup_analysis
     
     def generate_timeline_analysis(self) -> Dict[str, Any]:
         """Generate a timeline analysis of all operations."""
@@ -580,6 +887,9 @@ Examples:
             analyzer.analyze_performance()
             analyzer.analyze_errors()
             analyzer.analyze_smart_sync_operations()
+            analyzer.analyze_fail_fast_patterns()
+            analyzer.analyze_three_factor_validations()
+            analyzer.analyze_cleanup_operations()
             analyzer.generate_timeline_analysis()
             analyzer.generate_summary_report()
             
