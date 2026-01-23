@@ -18,8 +18,10 @@ import argparse
 import datetime
 import traceback
 
-# Set up debug logging
-DEBUG_LOG_FILE = "debug_log.txt"
+# Set up debug logging in centralized debug directory
+DEBUG_DIR = Path("debug_output")
+DEBUG_DIR.mkdir(exist_ok=True)
+DEBUG_LOG_FILE = DEBUG_DIR / "run_debug.log"
 
 def debug_log(message: str):
     """Write debug message to log file with timestamp."""

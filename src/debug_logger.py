@@ -66,10 +66,10 @@ class SmartSyncDebugLogger:
         self.session_id = self._generate_session_id()
         self.start_time = time.time()
         
-        # Set up log file
+        # Set up log file in centralized debug directory
         if log_file is None:
-            # Default to debug output directory
-            debug_dir = Path.cwd() / ".debug_output"
+            # Create centralized debug directory in workflow manager root
+            debug_dir = Path.cwd() / "debug_output"
             debug_dir.mkdir(exist_ok=True)
             self.log_file = debug_dir / "smart_sync_debug.log"
         else:
@@ -475,7 +475,7 @@ class SmartSyncDebugLogger:
         """Export all debug data for analysis."""
         if output_file is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            debug_dir = Path.cwd() / ".debug_output"
+            debug_dir = Path.cwd() / "debug_output"
             debug_dir.mkdir(exist_ok=True)
             output_file = debug_dir / f"smart_sync_debug_export_{timestamp}.json"
         

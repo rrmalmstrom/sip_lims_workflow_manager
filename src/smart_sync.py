@@ -198,6 +198,9 @@ class SmartSyncManager:
         changes = []
         
         if not source_path.exists():
+            if debug_enabled():
+                log_warning("Change detection: source path does not exist",
+                          source_path=str(source_path))
             return changes
         
         # Build file maps for comparison
@@ -206,58 +209,117 @@ class SmartSyncManager:
         
         # Scan source directory
         try:
+            source_file_count = 0
             for item in source_path.rglob("*"):
                 if self._should_ignore(item):
                     continue
                 
                 if item.is_file():
+                    source_file_count += 1
                     rel_path = item.relative_to(source_path)
                     source_files[rel_path] = {
                         'path': item,
                         'mtime': item.stat().st_mtime,
                         'size': item.stat().st_size
                     }
+            
+            if debug_enabled():
+                log_info("Change detection: scanned source directory",
+                        source_path=str(source_path),
+                        total_files=source_file_count,
+                        tracked_files=len(source_files))
+                        
         except (OSError, PermissionError) as e:
             if HAS_CLICK:
                 click.secho(f"⚠️  Warning: Could not scan source directory: {e}", fg='yellow')
+            if debug_enabled():
+                log_error("Change detection: failed to scan source directory",
+                         source_path=str(source_path), error=str(e))
             return changes
         
         # Scan destination directory
         if dest_path.exists():
             try:
+                dest_file_count = 0
                 for item in dest_path.rglob("*"):
                     if self._should_ignore(item):
                         continue
                     
                     if item.is_file():
+                        dest_file_count += 1
                         rel_path = item.relative_to(dest_path)
                         dest_files[rel_path] = {
                             'path': item,
                             'mtime': item.stat().st_mtime,
                             'size': item.stat().st_size
                         }
+                
+                if debug_enabled():
+                    log_info("Change detection: scanned destination directory",
+                            dest_path=str(dest_path),
+                            total_files=dest_file_count,
+                            tracked_files=len(dest_files))
+                            
             except (OSError, PermissionError) as e:
                 if HAS_CLICK:
                     click.secho(f"⚠️  Warning: Could not scan destination directory: {e}", fg='yellow')
+                if debug_enabled():
+                    log_error("Change detection: failed to scan destination directory",
+                             dest_path=str(dest_path), error=str(e))
+        else:
+            if debug_enabled():
+                log_info("Change detection: destination path does not exist",
+                        dest_path=str(dest_path))
         
         # Find files to copy (new or modified)
+        files_to_copy = 0
         for rel_path, source_info in source_files.items():
             dest_file = dest_path / rel_path
             
             if rel_path not in dest_files:
                 # New file
                 changes.append((source_info['path'], dest_file, 'copy'))
+                files_to_copy += 1
+                if debug_enabled():
+                    log_info("Change detection: new file found",
+                            file=str(rel_path), action="copy")
             else:
                 # Check if modified
                 dest_info = dest_files[rel_path]
-                if (source_info['mtime'] > dest_info['mtime'] or 
-                    source_info['size'] != dest_info['size']):
+                time_diff = source_info['mtime'] - dest_info['mtime']
+                size_diff = source_info['size'] != dest_info['size']
+                
+                if (source_info['mtime'] > dest_info['mtime'] or size_diff):
                     changes.append((source_info['path'], dest_file, 'copy'))
+                    files_to_copy += 1
+                    if debug_enabled():
+                        log_info("Change detection: modified file found",
+                                file=str(rel_path), action="copy",
+                                time_diff=time_diff, size_diff=size_diff,
+                                source_mtime=source_info['mtime'],
+                                dest_mtime=dest_info['mtime'],
+                                source_size=source_info['size'],
+                                dest_size=dest_info['size'])
         
         # Find files to delete (removed from source)
+        files_to_delete = 0
         for rel_path, dest_info in dest_files.items():
             if rel_path not in source_files:
                 changes.append((None, dest_info['path'], 'delete'))
+                files_to_delete += 1
+                if debug_enabled():
+                    log_info("Change detection: file to delete found",
+                            file=str(rel_path), action="delete")
+        
+        if debug_enabled():
+            log_info("Change detection completed",
+                    source_path=str(source_path),
+                    dest_path=str(dest_path),
+                    total_changes=len(changes),
+                    files_to_copy=files_to_copy,
+                    files_to_delete=files_to_delete,
+                    source_files=len(source_files),
+                    dest_files=len(dest_files))
         
         return changes
     
@@ -544,18 +606,72 @@ class SmartSyncManager:
                 debug_logger.info("Starting incremental sync up (local -> network)")
             
             try:
+                # CRITICAL DEBUG: Add extensive logging before change detection
+                if debug_logger:
+                    debug_logger.info("BEFORE change detection - incremental sync up",
+                                    local_path=str(self.local_path),
+                                    network_path=str(self.network_path),
+                                    local_exists=self.local_path.exists(),
+                                    network_exists=self.network_path.exists())
+                    
+                    # Log some sample files in local staging
+                    if self.local_path.exists():
+                        sample_files = []
+                        for item in self.local_path.rglob("*"):
+                            if item.is_file() and not self._should_ignore(item):
+                                sample_files.append(str(item.relative_to(self.local_path)))
+                                if len(sample_files) >= 10:  # Limit to first 10 files
+                                    break
+                        debug_logger.info("Sample files in local staging", sample_files=sample_files)
+                
                 changes = self._detect_changes(self.local_path, self.network_path)
                 
                 if debug_logger:
                     debug_logger.debug(f"Detected {len(changes)} changes for incremental sync up",
                                      total_changes=len(changes))
                 
+                # ENHANCED DEBUG: Log detailed change detection results
+                if debug_logger:
+                    debug_logger.info("Change detection completed for sync up",
+                                    local_path=str(self.local_path),
+                                    network_path=str(self.network_path),
+                                    changes_detected=len(changes),
+                                    local_exists=self.local_path.exists(),
+                                    network_exists=self.network_path.exists())
+                    
+                    # CRITICAL: Log the actual changes found
+                    if changes:
+                        change_details = []
+                        for source, dest, action in changes[:5]:  # Log first 5 changes
+                            change_details.append({
+                                "source": str(source) if source else None,
+                                "dest": str(dest),
+                                "action": action
+                            })
+                        debug_logger.info("CHANGES DETECTED", changes=change_details)
+                    else:
+                        debug_logger.warning("NO CHANGES DETECTED - This may be the bug!")
+                
                 if not changes:
+                    # ENHANCED DEBUG: Verify this is actually correct
+                    local_file_count = len(list(self.local_path.rglob("*"))) if self.local_path.exists() else 0
+                    network_file_count = len(list(self.network_path.rglob("*"))) if self.network_path.exists() else 0
+                    
+                    if debug_logger:
+                        debug_logger.warning("No changes detected for sync up - verifying this is correct",
+                                           local_file_count=local_file_count,
+                                           network_file_count=network_file_count,
+                                           local_path=str(self.local_path),
+                                           network_path=str(self.network_path))
+                    
                     if HAS_CLICK:
                         click.secho("✅ Network drive is up to date", fg='green')
                     
                     log_sync_operation("incremental_sync_up", "local_to_network", 0,
-                                     time.time() - start_time, True)
+                                     time.time() - start_time, True,
+                                     local_files=local_file_count,
+                                     network_files=network_file_count,
+                                     warning="No changes detected - may indicate detection issue")
                     return True
                 
                 # Perform sync operations - any failure will raise SmartSyncError
