@@ -13,7 +13,7 @@ import os
 from src.core import Project
 from src.logic import RunResult
 from src.workflow_utils import get_workflow_template_path, get_workflow_type_display
-from utils.docker_validation import validate_docker_environment, display_environment_status
+# Docker validation imports removed - native execution only
 import argparse
 
 def get_dynamic_title() -> str:
@@ -39,33 +39,33 @@ def get_project_display_name(project_path: Path) -> str:
     Uses PROJECT_NAME environment variable if available, otherwise falls back to path name.
     
     Args:
-        project_path: The project path (typically /data in Docker)
+        project_path: The project path for native execution
         
     Returns:
         str: The project name to display in the UI
     """
     project_name = os.environ.get('PROJECT_NAME', '').strip()
     
-    if project_name and project_name != 'data':  # Don't use 'data' as it's the fallback
+    if project_name:
         return project_name
     return project_path.name
 
 def display_project_info_in_sidebar():
     """
     Display project information in the sidebar.
-    Shows the actual project folder name instead of the Docker mount point.
+    Shows the project folder name for native execution.
     """
     if st.session_state.project_path:
         project_display_name = get_project_display_name(st.session_state.project_path)
-        st.info(f"🐳 **Docker Project**: `{project_display_name}`")
+        st.info(f"📁 **Current Project**: `{project_display_name}`")
     else:
-        st.warning("🐳 **Docker Mode**: No project detected in mounted volume")
+        st.warning("📁 **No Project**: Please select a project directory")
 
 def parse_script_path_argument():
     """
     Parse command line arguments to get script path.
     Uses argparse to handle Streamlit's argument passing format.
-    Docker-aware: automatically uses /workflow-scripts in Docker environment.
+    Native execution: uses SCRIPTS_PATH environment variable or default.
     """
     parser = argparse.ArgumentParser(add_help=False)  # Disable help to avoid conflicts
     parser.add_argument('--script-path',
@@ -75,17 +75,14 @@ def parse_script_path_argument():
     # Parse only known args to avoid conflicts with Streamlit args
     try:
         args, unknown = parser.parse_known_args()
-        script_path = Path(args.script_path)
         
-        # Docker-aware script path detection
-        if os.path.exists("/.dockerenv"):  # Running in Docker
-            docker_script_path = Path("/workflow-scripts")
-            if docker_script_path.exists():
-                print(f"Docker mode: Using mounted scripts from {docker_script_path}")
-                return docker_script_path
-            else:
-                print(f"Warning: Docker detected but /workflow-scripts not mounted")
-                print("Falling back to default script path")
+        # Check for SCRIPTS_PATH environment variable (set by run.py)
+        env_script_path = os.environ.get('SCRIPTS_PATH', '').strip()
+        if env_script_path:
+            script_path = Path(env_script_path)
+            print(f"Native mode: Using scripts path from environment: {script_path}")
+        else:
+            script_path = Path(args.script_path)
         
         # Validate that script path exists
         if not script_path.exists():
@@ -237,18 +234,19 @@ def handle_terminal_input_change():
 
 def create_inline_file_browser(input_key: str, start_path: str = None):
     """
-    Create an inline file browser widget for Docker-compatible file selection.
-    Based on the legacy approach that worked in production.
+    Create an inline file browser widget for native file selection.
     
     Args:
         input_key: Unique key for this file browser instance
-        start_path: Starting directory path (defaults to /data in Docker, . otherwise)
+        start_path: Starting directory path (defaults to current project or home directory)
     
     Returns:
         str: Selected file path or None if no selection made
     """
     if start_path is None:
-        start_path = "/data" if os.path.exists("/data") else "."
+        # Use PROJECT_PATH environment variable if available, otherwise current directory
+        project_path = os.environ.get('PROJECT_PATH', '').strip()
+        start_path = project_path if project_path else "."
     
     # Initialize session state for this browser instance
     browser_key = f"browser_{input_key}"
@@ -281,7 +279,9 @@ def create_inline_file_browser(input_key: str, start_path: str = None):
         
         with col2:
             if st.button("🏠 Home", key=f"home_{input_key}"):
-                home_path = "/data" if os.path.exists("/data") else Path.home()
+                # Use PROJECT_PATH environment variable if available, otherwise user home
+                project_path = os.environ.get('PROJECT_PATH', '').strip()
+                home_path = project_path if project_path else str(Path.home())
                 st.session_state[current_path_key] = Path(home_path)
                 st.rerun()
         
@@ -440,30 +440,23 @@ def start_script_thread(project, step_id, user_inputs):
 def main():
     st.title(get_dynamic_title())
 
-    # --- Docker Environment Validation ---
-    # Validate Docker environment on startup if running in container
-    if not validate_docker_environment():
-        st.error("❌ **Docker Environment Validation Failed**")
-        st.info("Please check the error messages above and resolve the issues before proceeding.")
-        st.stop()
+    # --- Native Environment Validation ---
+    # Native execution only - no Docker validation needed
 
-    # --- Docker Auto-Detection and Project Loading ---
-    # In Docker mode, automatically load project from /data if available
-    def detect_and_load_docker_project():
-        """Auto-detect and load project in Docker environment."""
-        import os
-        from pathlib import Path
+    # --- Native Project Loading ---
+    # Load project from PROJECT_PATH environment variable if available
+    def detect_and_load_native_project():
+        """Auto-detect and load project from environment variables."""
+        project_path_env = os.environ.get('PROJECT_PATH', '').strip()
         
-        # Check if running in Docker with mounted /data volume
-        if os.path.exists("/data") and os.path.ismount("/data"):
-            data_path = Path("/data")
+        if project_path_env:
+            project_path = Path(project_path_env)
             
-            # Auto-load the project from /data regardless of contents
-            # Let the existing project loading logic handle all scenarios
-            if 'project_path' not in st.session_state or st.session_state.project_path != data_path:
-                st.session_state.project_path = data_path
+            # Auto-load the project from environment variable
+            if 'project_path' not in st.session_state or st.session_state.project_path != project_path:
+                st.session_state.project_path = project_path
                 st.session_state.project = None  # Force reload
-                st.info(f"🐳 **Docker Mode**: Auto-loaded project from mounted volume: `{data_path}`")
+                st.info(f"📁 **Native Mode**: Auto-loaded project from environment: `{project_path}`")
             return True
         return False
 
@@ -497,9 +490,9 @@ def main():
     if 'completed_script_success' not in st.session_state:
         st.session_state.completed_script_success = None
 
-    # --- Docker Auto-Detection ---
-    # Try to auto-detect and load Docker project
-    is_docker_mode = detect_and_load_docker_project()
+    # --- Native Auto-Detection ---
+    # Try to auto-detect and load native project
+    is_native_mode = detect_and_load_native_project()
 
     # --- Sidebar ---
     with st.sidebar:
@@ -507,7 +500,7 @@ def main():
         
         st.subheader("Project")
         
-        # Docker-only mode - project path set by run.command
+        # Native mode - project path set by run.py environment variables
         display_project_info_in_sidebar()
         
         # Quick Start functionality - only show for projects without workflow state
@@ -609,11 +602,11 @@ def main():
         
         # Shutdown functionality
         st.subheader("Application")
-        if st.button("Shut Down Workflow Manager", key="shutdown_app", type="primary", help="Stop the Docker container and exit the application"):
+        if st.button("Shut Down Workflow Manager", key="shutdown_app", type="primary", help="Stop the native application"):
             st.warning("⚠️ Shutting down the application...")
-            st.info("💡 Terminating container...")
+            st.info("💡 Terminating Streamlit...")
             
-            # Check if running in Docker environment
+            # Native shutdown logic
             try:
                 import os
                 import signal
@@ -624,66 +617,49 @@ def main():
                     """Shutdown the application after a short delay to allow the response to be sent."""
                     time.sleep(1)  # Give time for the response to be sent to browser
                     
-                    # Check if we're running in Docker
-                    if os.path.exists("/.dockerenv"):
-                        # Running in Docker - send SIGTERM to PID 1 (the container's main process)
-                        # This will cause the container to shut down gracefully
-                        try:
-                            # Send SIGTERM to the container's main process (PID 1)
-                            # This is the proper way to shut down a Docker container from inside
-                            os.kill(1, signal.SIGTERM)
-                            print("Sent SIGTERM to container main process (PID 1)")
-                        except Exception as e:
-                            print(f"Error sending SIGTERM to PID 1: {e}")
-                            # Fallback: exit the current process
-                            os._exit(0)
-                    else:
-                        # Not running in Docker - use original shutdown logic
-                        try:
-                            import psutil
-                            current_process = psutil.Process(os.getpid())
-                            
-                            # Find all streamlit processes
-                            streamlit_processes = []
-                            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                                try:
-                                    if proc.info['cmdline'] and any('streamlit' in str(arg).lower() for arg in proc.info['cmdline']):
-                                        streamlit_processes.append(proc)
-                                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    continue
-                            
-                            # Terminate all streamlit processes gracefully
-                            for proc in streamlit_processes:
-                                try:
-                                    proc.terminate()
-                                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    continue
-                            
-                            # Wait for processes to terminate
-                            gone, alive = psutil.wait_procs(streamlit_processes, timeout=3)
-                            
-                            # Force kill any remaining processes
-                            for proc in alive:
-                                try:
-                                    proc.kill()
-                                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                                    continue
-                            
-                        except ImportError:
-                            # psutil not available, fall back to platform-specific methods
-                            system = platform.system().lower()
-                            
-                            if system in ['linux', 'darwin']:  # macOS/Linux
-                                subprocess.run(["pkill", "-f", "streamlit"], check=False)
-                                time.sleep(0.5)
-                                os.kill(os.getpid(), signal.SIGTERM)
-                            elif system == 'windows':  # Windows
-                                subprocess.run(["taskkill", "/f", "/im", "python.exe", "/fi", "COMMANDLINE eq *streamlit*"], check=False)
-                                time.sleep(0.5)
-                                os.kill(os.getpid(), signal.SIGTERM)
-                        except Exception:
-                            # Last resort: force exit
-                            os._exit(0)
+                    try:
+                        import psutil
+                        # Find all streamlit processes
+                        streamlit_processes = []
+                        for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                            try:
+                                if proc.info['cmdline'] and any('streamlit' in str(arg).lower() for arg in proc.info['cmdline']):
+                                    streamlit_processes.append(proc)
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                        # Terminate all streamlit processes gracefully
+                        for proc in streamlit_processes:
+                            try:
+                                proc.terminate()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                        # Wait for processes to terminate
+                        gone, alive = psutil.wait_procs(streamlit_processes, timeout=3)
+                        
+                        # Force kill any remaining processes
+                        for proc in alive:
+                            try:
+                                proc.kill()
+                            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                continue
+                        
+                    except ImportError:
+                        # psutil not available, fall back to platform-specific methods
+                        system = platform.system().lower()
+                        
+                        if system in ['linux', 'darwin']:  # macOS/Linux
+                            subprocess.run(["pkill", "-f", "streamlit"], check=False)
+                            time.sleep(0.5)
+                            os.kill(os.getpid(), signal.SIGTERM)
+                        elif system == 'windows':  # Windows
+                            subprocess.run(["taskkill", "/f", "/im", "python.exe", "/fi", "COMMANDLINE eq *streamlit*"], check=False)
+                            time.sleep(0.5)
+                            os.kill(os.getpid(), signal.SIGTERM)
+                    except Exception:
+                        # Last resort: force exit
+                        os._exit(0)
                 
                 # Start shutdown in background thread
                 shutdown_thread = threading.Thread(target=delayed_shutdown, daemon=True)
@@ -695,7 +671,7 @@ def main():
             except Exception as e:
                 st.error(f"❌ Could not shutdown application automatically: {e}")
                 st.info("💡 **Manual shutdown required:**")
-                st.info("Run `docker-compose down` in the terminal where you started the container")
+                st.info("Use Ctrl+C in the terminal where you started the application")
             
             # Stop the Streamlit script execution
             st.stop()
@@ -991,7 +967,7 @@ def main():
                     st.session_state.project = None
 
     # --- Main Content Area ---
-    # Update functionality removed - all updates handled by run scripts before container creation
+    # Update functionality removed - all updates handled by run.py before application launch
     
     if not st.session_state.project:
         st.info("Select a project folder using the 'Browse' button in the sidebar.")

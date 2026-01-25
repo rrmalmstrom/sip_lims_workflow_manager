@@ -3,10 +3,10 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any
 from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult
-from src.smart_sync import get_smart_sync_manager
+# Native execution only - Smart Sync removed
 from src.debug_logger import (
     debug_context, log_info, log_error, log_warning,
-    log_smart_sync_detection, debug_enabled
+    debug_enabled
 )
 
 class Workflow:
@@ -49,47 +49,14 @@ class Project:
         
         self.state_manager = StateManager(self.path / "workflow_state.json")
         self.snapshot_manager = SnapshotManager(self.path, self.path / ".snapshots")
-        # Roo-Fix: Pass the script_path to the ScriptRunner.
+        # Pass the script_path to the ScriptRunner for native execution
         self.script_runner = ScriptRunner(self.path, script_path=self.script_path)
         
-        # Initialize Smart Sync if enabled
-        self.smart_sync_manager = None
-        smart_sync_enabled = os.getenv("SMART_SYNC_ENABLED") == "true"
-        
+        # Native execution only - Smart Sync removed
         if debug_enabled():
-            log_info("Project initialization: Smart Sync check",
-                    smart_sync_enabled=smart_sync_enabled,
-                    project_path=str(project_path))
-        
-        if smart_sync_enabled:
-            network_path = os.getenv("NETWORK_PROJECT_PATH")
-            local_path = os.getenv("LOCAL_PROJECT_PATH")
-            
-            if debug_enabled():
-                log_info("Project initialization: Smart Sync environment variables",
-                        network_path=network_path,
-                        local_path=local_path)
-            
-            if network_path and local_path:
-                try:
-                    self.smart_sync_manager = get_smart_sync_manager(network_path, local_path)
-                    print(f"Smart Sync enabled: {network_path} <-> {local_path}")
-                    
-                    log_info("Project initialization: Smart Sync manager created successfully",
-                            network_path=network_path,
-                            local_path=local_path,
-                            manager_type=type(self.smart_sync_manager).__name__)
-                    
-                except Exception as e:
-                    log_error("Project initialization: Smart Sync manager creation failed",
-                             error=str(e),
-                             network_path=network_path,
-                             local_path=local_path)
-                    print(f"Smart Sync initialization failed: {e}")
-            else:
-                log_warning("Project initialization: Smart Sync enabled but missing environment variables",
-                           network_path=network_path,
-                           local_path=local_path)
+            log_info("Project initialization: Native execution mode",
+                    project_path=str(project_path),
+                    script_path=str(self.script_path))
         
         if load_workflow:
             if not self.workflow_file_path.is_file():
@@ -177,51 +144,12 @@ class Project:
                                 step_name=step.get('name', 'Unknown'),
                                 step_script=step.get('script', 'No script'),
                                 user_inputs=user_inputs,
-                                smart_sync_enabled=self.smart_sync_manager is not None)
+                                execution_mode="native")
 
-            # Smart Sync: Pre-step sync (network -> local) - CRITICAL for data consistency
-            if self.smart_sync_manager:
-                print(f"Smart Sync: Syncing latest changes before step '{step_id}'...")
-                
-                if debug_logger:
-                    debug_logger.info("Starting pre-step Smart Sync (network -> local)",
-                                    step_id=step_id)
-                
-                try:
-                    sync_success = self.smart_sync_manager.incremental_sync_down()
-                    if sync_success:
-                        print("Smart Sync: Pre-step sync completed successfully")
-                        
-                        log_info("Workflow pre-step sync completed successfully",
-                                step_id=step_id,
-                                sync_direction="network_to_local")
-                        
-                    else:
-                        # Pre-step sync failure prevents step execution
-                        error_msg = f"Smart Sync: Pre-step sync failed - cannot proceed with step '{step_id}'"
-                        print(error_msg)
-                        
-                        log_error("Workflow pre-step sync failed - aborting step execution",
-                                 step_id=step_id,
-                                 sync_direction="network_to_local")
-                        
-                        raise RuntimeError(error_msg)
-                        
-                except Exception as e:
-                    # Pre-step sync error prevents step execution
-                    error_msg = f"Smart Sync: Pre-step sync error: {e} - cannot proceed with step '{step_id}'"
-                    print(error_msg)
-                    
-                    log_error("Workflow pre-step sync error - aborting step execution",
-                             step_id=step_id,
-                             sync_direction="network_to_local",
-                             error=str(e))
-                    
-                    raise RuntimeError(error_msg)
-            else:
-                if debug_logger:
-                    debug_logger.info("No Smart Sync manager - skipping pre-step sync",
-                                    step_id=step_id)
+            # Native execution - proceeding directly to step
+            if debug_logger:
+                debug_logger.info("Native execution mode - proceeding directly to step",
+                                step_id=step_id)
 
         is_first_run = self.get_state(step_id) == "pending"
         snapshot_items = step.get("snapshot_items", [])
@@ -268,14 +196,13 @@ class Project:
             is_first_run = self.get_state(step_id) == "pending"
             snapshot_items = step.get("snapshot_items", [])
 
-            # Three-factor success detection: exit code, success marker, AND post-step sync
+            # Two-factor success detection: exit code and success marker (native execution)
             exit_code_success = result.success
             script_name = step.get("script", "")
             marker_file_success = self._check_success_marker(script_name)
-            sync_success = self._perform_post_step_sync(step_id, debug_logger)
             
-            # ALL THREE conditions must be true for actual success
-            actual_success = exit_code_success and marker_file_success and sync_success
+            # Both conditions must be true for actual success
+            actual_success = exit_code_success and marker_file_success
             
             if debug_logger:
                 debug_logger.info("Processing step result",
@@ -284,27 +211,12 @@ class Project:
                                 script_name=script_name,
                                 exit_code_success=exit_code_success,
                                 marker_file_success=marker_file_success,
-                                sync_success=sync_success,
                                 actual_success=actual_success,
-                                is_first_run=is_first_run)
+                                is_first_run=is_first_run,
+                                execution_mode="native")
             
             # Provide detailed user feedback about what failed
-            if exit_code_success and marker_file_success and not sync_success:
-                failure_msg = f"❌ STEP FAILED: '{step.get('name', step_id)}' - Smart Sync failed to save results to network drive"
-                print(failure_msg)
-                print("   The script completed successfully but results could not be synchronized.")
-                print("   This step will be automatically rolled back to prevent data corruption.")
-                print("   Please check for locked files (Excel, etc.) and try again.")
-                
-                log_error("Step failed due to Smart Sync failure",
-                         step_id=step_id,
-                         step_name=step.get('name', 'Unknown'),
-                         script_name=script_name,
-                         exit_code_success=exit_code_success,
-                         marker_file_success=marker_file_success,
-                         sync_success=sync_success)
-                
-            elif exit_code_success and not marker_file_success:
+            if exit_code_success and not marker_file_success:
                 failure_msg = f"❌ STEP FAILED: '{step.get('name', step_id)}' - Script did not complete successfully"
                 print(failure_msg)
                 print("   Script exited with code 0 but no success marker found.")
@@ -313,8 +225,7 @@ class Project:
                            step_id=step_id,
                            script_name=script_name,
                            exit_code_success=exit_code_success,
-                           marker_file_success=marker_file_success,
-                           sync_success=sync_success)
+                           marker_file_success=marker_file_success)
                 
             elif not exit_code_success:
                 failure_msg = f"❌ STEP FAILED: '{step.get('name', step_id)}' - Script execution failed"
@@ -325,8 +236,7 @@ class Project:
                          step_id=step_id,
                          script_name=script_name,
                          exit_code_success=exit_code_success,
-                         marker_file_success=marker_file_success,
-                         sync_success=sync_success)
+                         marker_file_success=marker_file_success)
                 
                 try:
                     # Create hidden log directory if it doesn't exist
@@ -340,7 +250,7 @@ class Project:
                 except:
                     pass
 
-            # Handle the result based on our three-factor success detection
+            # Handle the result based on our two-factor success detection
             if actual_success:
                 self.update_state(step_id, "completed")
                 
@@ -348,15 +258,13 @@ class Project:
                 print(success_msg)
                 print("   • Script executed successfully")
                 print("   • Success marker created")
-                if self.smart_sync_manager:
-                    print("   • Results synchronized to network drive")
                 
                 log_info("Workflow step completed successfully",
                         step_id=step_id,
                         step_name=step.get('name', 'Unknown'),
                         exit_code_success=exit_code_success,
                         marker_file_success=marker_file_success,
-                        sync_success=sync_success)
+                        execution_mode="native")
                 
                 # Note: "after" snapshots removed for simplified undo system
                 # Only "before" snapshots are now used for undo functionality
@@ -367,7 +275,8 @@ class Project:
                          step_name=step.get('name', 'Unknown'),
                          exit_code_success=exit_code_success,
                          marker_file_success=marker_file_success,
-                         is_first_run=is_first_run)
+                         is_first_run=is_first_run,
+                         execution_mode="native")
                 
                 # If this was the first run and it failed, restore the snapshot
                 if is_first_run:
@@ -505,58 +414,5 @@ class Project:
         success_file = status_dir / f"{script_filename}.success"
         return success_file.exists()
 
-    def _perform_post_step_sync(self, step_id: str, debug_logger=None) -> bool:
-        """
-        Perform post-step Smart Sync (local -> network) as part of three-factor success detection.
-        
-        Args:
-            step_id: The step ID for logging purposes
-            debug_logger: Optional debug logger
-            
-        Returns:
-            bool: True if sync successful or not needed, False if sync failed
-        """
-        if not self.smart_sync_manager:
-            # No Smart Sync manager - sync not needed, return True
-            if debug_logger:
-                debug_logger.info("No Smart Sync manager - post-step sync not needed",
-                                step_id=step_id)
-            return True
-        
-        print(f"Smart Sync: Saving results to network drive after step '{step_id}'...")
-        
-        if debug_logger:
-            debug_logger.info("Starting post-step Smart Sync (local -> network)",
-                            step_id=step_id)
-        
-        try:
-            sync_success = self.smart_sync_manager.incremental_sync_up()
-            if sync_success:
-                print("Smart Sync: Results successfully saved to network drive")
-                
-                log_info("Workflow post-step sync completed successfully",
-                        step_id=step_id,
-                        sync_direction="local_to_network")
-                
-                return True
-            else:
-                print("Smart Sync: Failed to save results to network drive")
-                
-                log_error("Workflow post-step sync failed",
-                         step_id=step_id,
-                         sync_direction="local_to_network")
-                
-                return False
-                
-        except Exception as e:
-            print(f"Smart Sync: Error saving results to network drive: {e}")
-            
-            log_error("Workflow post-step sync error",
-                     step_id=step_id,
-                     sync_direction="local_to_network",
-                     error=str(e))
-            
-            return False
-
-    # Final sync removed - post-step sync handles all synchronization
-    # Local staging cleanup will be handled by separate cleanup process
+    # Native execution only - Smart Sync methods removed
+    # All synchronization overhead eliminated for performance

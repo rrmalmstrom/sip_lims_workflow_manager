@@ -1,0 +1,31 @@
+{
+  "session_info": {
+    "session_id": "workflow_20260124_070244_84812",
+    "start_time": 1769266964.137253,
+    "export_time": 1769266964.137822,
+    "platform": "Darwin",
+    "log_file": "/var/folders/7l/1zqvzgk52_3627s539stc5g80000gp/T/tmpx6cizh2t/test_debug.log"
+  },
+  "performance_stats": {
+    "workflow_operations": [],
+    "script_executions": [],
+    "vnc_sessions": [
+      {
+        "vnc_session_id": "vnc_1",
+        "user": "user1",
+        "client_ip": null,
+        "timestamp": "2026-01-24T15:02:44.137665+00:00"
+      }
+    ],
+    "errors": []
+  },
+  "performance_summary": {
+    "session_id": "workflow_20260124_070244_84812",
+    "session_duration": 0.0005710124969482422,
+    "total_workflow_operations": 0,
+    "total_script_executions": 0,
+    "total_vnc_sessions": 1,
+    "total_errors": 0,
+    "average_operation_duration": 0
+  }
+}
