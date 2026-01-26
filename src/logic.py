@@ -15,6 +15,12 @@ from pathlib import Path
 from typing import Dict, Any, List
 from dataclasses import dataclass
 
+# Native execution debug logging
+from src.enhanced_debug_logger import (
+    debug_context, log_info, log_error, log_warning,
+    debug_enabled
+)
+
 @dataclass
 class RunResult:
     """Holds the results of a script execution."""
@@ -282,12 +288,8 @@ class SnapshotManager:
             '.DS_Store'
         }
         
-        # FA result archive directories to exclude (preserve during undo)
-        fa_archive_patterns = {
-            'first_lib_attempt_fa_results',
-            'second_lib_attempt_fa_results',
-            'third_lib_attempt_fa_results'
-        }
+        # No FA archive exclusions from snapshots - archived files should be included
+        # Archive preservation is handled in restore_complete_snapshot()
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
             # Collect all directories first to preserve their timestamps
@@ -303,9 +305,8 @@ class SnapshotManager:
                 if file_path.name in exclude_patterns:
                     continue
                 
-                # Skip FA result archive directories to preserve them during undo
-                if any(part in fa_archive_patterns for part in file_path.parts):
-                    continue
+                # Archive files are now included in snapshots
+                # (preservation during restore is handled separately)
                 
                 if file_path.is_file():
                     relative_path = file_path.relative_to(self.project_path)
@@ -363,10 +364,11 @@ class SnapshotManager:
         }
         
         # FA result archive directories to preserve (never delete during restore)
+        # These should only match files under archived_files/ directory
         fa_archive_patterns = {
-            'first_lib_attempt_fa_results',
-            'second_lib_attempt_fa_results',
-            'third_lib_attempt_fa_results'
+            'archived_files/first_lib_attempt_fa_results',
+            'archived_files/second_lib_attempt_fa_results',
+            'archived_files/third_lib_attempt_fa_results'
         }
         
         # Get list of files currently in project
@@ -379,7 +381,8 @@ class SnapshotManager:
                 if file_path.name in preserve_patterns:
                     continue
                 # Skip FA result archive files to preserve them during restore
-                if any(part in fa_archive_patterns for part in file_path.parts):
+                relative_path = file_path.relative_to(self.project_path)
+                if any(str(relative_path).startswith(pattern) for pattern in fa_archive_patterns):
                     continue
                 current_files.add(file_path.relative_to(self.project_path))
         
@@ -414,7 +417,8 @@ class SnapshotManager:
                     continue
                 
                 # Skip FA result archive directories to preserve them during restore
-                if any(part in fa_archive_patterns for part in dir_path.parts):
+                rel_dir = dir_path.relative_to(self.project_path)
+                if any(str(rel_dir).startswith(pattern) for pattern in fa_archive_patterns):
                     continue
                 
                 # Skip directories that should be preserved from snapshot
@@ -510,9 +514,16 @@ class SnapshotManager:
 
 class ScriptRunner:
     """Executes workflow scripts using pseudo-terminal for interactive execution."""
-    def __init__(self, project_path: Path, script_path: Path = None):
+    def __init__(self, project_path: Path, script_path: Path):
         self.project_path = project_path
-        self.script_path = script_path or (project_path / "scripts")
+        # NO FALLBACKS! script_path is REQUIRED for native execution
+        if script_path is None:
+            raise ValueError(
+                "script_path is required for ScriptRunner. "
+                "The system must know exactly where workflow scripts are located. "
+                "This should be passed from Project which gets it from environment variables."
+            )
+        self.script_path = script_path
         self.master_fd = None
         self.slave_fd = None
         self.process = None
@@ -682,7 +693,24 @@ Return Code Type: {type(return_code)}
         script_filename = Path(script_path_str).name
         script_path = self.script_path / script_filename
         
+        # CRITICAL DEBUG: Log script path resolution
+        if debug_enabled():
+            log_info("Script execution attempt",
+                    script_filename=script_filename,
+                    script_path_str=script_path_str,
+                    resolved_script_path=str(script_path),
+                    script_path_directory=str(self.script_path),
+                    script_exists=script_path.exists())
+        
         if not script_path.exists():
+            # CRITICAL DEBUG: Log the failure details
+            if debug_enabled():
+                log_error("Script not found - CRITICAL PATH ISSUE",
+                         script_filename=script_filename,
+                         looking_in_directory=str(self.script_path),
+                         full_resolved_path=str(script_path),
+                         directory_exists=self.script_path.exists(),
+                         directory_contents=list(str(f) for f in self.script_path.iterdir()) if self.script_path.exists() else "DIRECTORY_DOES_NOT_EXIST")
             raise FileNotFoundError(f"Script '{script_filename}' not found in '{self.script_path}'")
 
         python_executable = sys.executable

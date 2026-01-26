@@ -16,6 +16,13 @@ from src.workflow_utils import get_workflow_template_path, get_workflow_type_dis
 # Docker validation imports removed - native execution only
 import argparse
 
+# CRITICAL: Enable debug logging for app.py and import debug functions
+os.environ['WORKFLOW_DEBUG'] = 'true'
+from src.enhanced_debug_logger import (
+    debug_context, log_info, log_error, log_warning,
+    debug_enabled
+)
+
 def get_dynamic_title() -> str:
     """
     Generate dynamic title based on WORKFLOW_TYPE environment variable.
@@ -80,15 +87,18 @@ def parse_script_path_argument():
         env_script_path = os.environ.get('SCRIPTS_PATH', '').strip()
         if env_script_path:
             script_path = Path(env_script_path)
-            print(f"Native mode: Using scripts path from environment: {script_path}")
+            # REMOVED: print statement was causing infinite Streamlit refresh loops
         else:
             script_path = Path(args.script_path)
         
-        # Validate that script path exists
+        # Validate that script path exists - FAIL FAST instead of fallback
         if not script_path.exists():
-            print(f"Warning: Script path does not exist: {script_path}")
-            print("Falling back to default 'scripts' directory")
-            script_path = Path("scripts")
+            print(f"CRITICAL ERROR: Script path does not exist: {script_path}")
+            print(f"Environment SCRIPTS_PATH: {os.environ.get('SCRIPTS_PATH', 'NOT SET')}")
+            print("This indicates a configuration or setup issue.")
+            print("Please check your workflow setup and script path configuration.")
+            # DO NOT fallback to local scripts - this causes wrong script path issues
+            raise FileNotFoundError(f"Script path does not exist: {script_path}")
             
         return script_path
     except Exception as e:
@@ -96,8 +106,45 @@ def parse_script_path_argument():
         print("Using default 'scripts' directory")
         return Path("scripts")
 
-# Initialize script path globally and resolve to an absolute path
-SCRIPT_PATH = parse_script_path_argument().resolve()
+# Script path will be determined dynamically when needed
+def get_script_path():
+    """Get the current script path, checking environment variables each time."""
+    script_path = parse_script_path_argument().resolve()
+    
+    # REMOVED DEBUG LOGGING HERE - it was causing infinite loop
+    # Debug logging will be done in Project initialization instead
+    
+    return script_path
+
+def clear_cached_project_if_script_path_changed():
+    """Clear cached project if the script path has changed to force recreation with correct path."""
+    if 'project' in st.session_state:
+        current_script_path = get_script_path()
+        cached_script_path = st.session_state.project.script_path
+        
+        # Debug information
+        st.info(f"🔍 **Debug**: Current script path: `{current_script_path}`")
+        st.info(f"🔍 **Debug**: Cached script path: `{cached_script_path}`")
+        
+        if current_script_path != cached_script_path:
+            st.error(f"🚨 **SCRIPT PATH MISMATCH DETECTED!**")
+            st.error(f"   Cached: `{cached_script_path}`")
+            st.error(f"   Current: `{current_script_path}`")
+            st.warning("🗑️ **Clearing cached project to use correct script path...**")
+            
+            # Clear the cached project using Streamlit's recommended method
+            del st.session_state.project
+            
+            # Also clear any other related cached state
+            keys_to_clear = [key for key in st.session_state.keys() if 'project' in key.lower()]
+            for key in keys_to_clear:
+                del st.session_state[key]
+                st.info(f"🗑️ Cleared cached state: `{key}`")
+            
+            st.success("✅ **Session state cleared! Reloading with correct script path...**")
+            st.rerun()
+        else:
+            st.success(f"✅ **Script paths match**: `{current_script_path}`")
 
 # --- Page Configuration ---
 st.set_page_config(page_title="SIP LIMS Workflow Manager", page_icon="🧪", layout="wide")
@@ -436,8 +483,26 @@ def start_script_thread(project, step_id, user_inputs):
     thread.start()
 
 
+def detect_and_load_native_project():
+    """Auto-detect and load project from environment variables."""
+    project_path_env = os.environ.get('PROJECT_PATH', '').strip()
+    
+    if project_path_env:
+        project_path = Path(project_path_env)
+        
+        # Auto-load the project from environment variable
+        if 'project_path' not in st.session_state or st.session_state.project_path != project_path:
+            st.session_state.project_path = project_path
+            st.session_state.project = None  # Force reload
+            st.info(f"📁 **Native Mode**: Auto-loaded project from environment: `{project_path}`")
+        return True
+    return False
+
 # --- Main Application ---
 def main():
+    # REMOVED: clear_cached_project_if_script_path_changed() was causing infinite refresh loops
+    # Script path validation is now handled during project creation
+    
     st.title(get_dynamic_title())
 
     # --- Native Environment Validation ---
@@ -445,20 +510,6 @@ def main():
 
     # --- Native Project Loading ---
     # Load project from PROJECT_PATH environment variable if available
-    def detect_and_load_native_project():
-        """Auto-detect and load project from environment variables."""
-        project_path_env = os.environ.get('PROJECT_PATH', '').strip()
-        
-        if project_path_env:
-            project_path = Path(project_path_env)
-            
-            # Auto-load the project from environment variable
-            if 'project_path' not in st.session_state or st.session_state.project_path != project_path:
-                st.session_state.project_path = project_path
-                st.session_state.project = None  # Force reload
-                st.info(f"📁 **Native Mode**: Auto-loaded project from environment: `{project_path}`")
-            return True
-        return False
 
     # --- State Initialization ---
     if 'project' not in st.session_state:
@@ -706,7 +757,7 @@ def main():
                     
                     # Load the project immediately
                     try:
-                        st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                        st.session_state.project = Project(project_path, script_path=get_script_path())
                         st.success("🎉 New project loaded! Ready to start from Step 1.")
                         st.rerun()
                     except Exception as e:
@@ -725,7 +776,7 @@ def main():
                     return
                 
                 # Load the project directly
-                st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                st.session_state.project = Project(project_path, script_path=get_script_path())
                 st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                 st.rerun()
             except Exception as e:
@@ -769,7 +820,7 @@ def main():
                             return
                         
                         # Load the project directly
-                        st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                        st.session_state.project = Project(project_path, script_path=get_script_path())
                         st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                         st.rerun()
                     except Exception as e:
@@ -805,7 +856,7 @@ def main():
             with col1:
                 if st.button("🔧 Try Restore from Snapshots", key="try_restore"):
                     try:
-                        project_for_restore = Project(project_path, script_path=SCRIPT_PATH, load_workflow=False)
+                        project_for_restore = Project(project_path, script_path=get_script_path(), load_workflow=False)
                         restored_any = False
                         
                         if missing_workflow_yml:
@@ -871,7 +922,7 @@ def main():
                                 return
                             
                             # Load the project and set flag for existing work pre-selection
-                            st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                            st.session_state.project = Project(project_path, script_path=get_script_path())
                             st.session_state.setup_with_existing_preselected = True
                             st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
                             st.rerun()
@@ -911,7 +962,7 @@ def main():
                                         return
                                     
                                     # Load the project and set flag for existing work pre-selection
-                                    st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                                    st.session_state.project = Project(project_path, script_path=get_script_path())
                                     st.session_state.setup_with_existing_preselected = True
                                     st.success("🎉 Project loaded! Please choose your setup option in the sidebar.")
                                     st.rerun()
@@ -934,7 +985,7 @@ def main():
                 with col1:
                     if st.button("🔧 Try to Restore from Snapshot"):
                         try:
-                            project_for_restore = Project(project_path, script_path=SCRIPT_PATH, load_workflow=False)
+                            project_for_restore = Project(project_path, script_path=get_script_path(), load_workflow=False)
                             restored = project_for_restore.snapshot_manager.restore_file_from_latest_snapshot("workflow.yml")
                             if restored:
                                 st.success("✅ Restored workflow.yml from snapshot!")
@@ -958,7 +1009,7 @@ def main():
                             st.error(f"Template replacement failed: {e}")
             else:
                 try:
-                    st.session_state.project = Project(project_path, script_path=SCRIPT_PATH)
+                    st.session_state.project = Project(project_path, script_path=get_script_path())
                     st.success(f"✅ Loaded: {st.session_state.project.path.name}")
                     # Trigger rerun so sidebar re-renders with undo button if there are completed steps
                     st.rerun()
@@ -1226,34 +1277,24 @@ def main():
 
     # --- Background Loop for UI Updates & Final Result Processing ---
     if st.session_state.project:
-        # This block handles both polling for terminal output and the final result
+        # Simple polling for both output and completion
         if st.session_state.running_step_id:
             runner = st.session_state.project.script_runner
             
-            # Enhanced polling logic to retrieve all available output
-            # This fixes the pseudo-terminal buffering issue where prompts
-            # would remain invisible until user interaction
+            # Simple output polling without excessive reruns
             output_received = False
-            items_retrieved = 0
-            queue_size_before = runner.output_queue.qsize()
-            
-            for attempt in range(10):  # Increased from single attempt to 10
+            while True:
                 try:
                     output = runner.output_queue.get_nowait()
                     if output is not None:
                         st.session_state.terminal_output += output
                         output_received = True
-                        items_retrieved += 1
-                except queue.Empty:
-                    if output_received:
-                        # If we got some output, wait briefly and try again
-                        # This handles cases where output arrives in quick succession
-                        time.sleep(0.01)
-                        continue
                     else:
-                        break  # No output available, stop polling
+                        break  # Sentinel value received
+                except queue.Empty:
+                    break  # No more output available
             
-            # Only trigger rerun if we actually received output
+            # Only rerun if we received output (minimal reruns)
             if output_received:
                 st.rerun()
 
@@ -1261,13 +1302,11 @@ def main():
             try:
                 result = runner.result_queue.get_nowait()
                 
-                # We got the result, the script is done.
-                # Now we can update the state and UI using the new handle_step_result method.
+                # Script is done - handle the result
                 step_id = st.session_state.running_step_id
                 
-                # Use the new handle_step_result method which includes rollback logic
+                # Use the handle_step_result method which includes rollback logic
                 st.session_state.project.handle_step_result(step_id, result)
-
 
                 # Preserve the terminal output for completed script display
                 st.session_state.completed_script_output = st.session_state.terminal_output
@@ -1280,14 +1319,8 @@ def main():
                 st.rerun()
 
             except queue.Empty:
-                pass # Not finished yet
-
-            # If still running, schedule another rerun with shorter delay
-            # This ensures prompts appear immediately without waiting for user interaction
-            if st.session_state.running_step_id:
-                # Reduced delay to make polling more responsive
-                # This fixes the issue where users need to click "Send Input" twice
-                time.sleep(0.05)  # Reduced from 0.1s to 0.05s
+                # Script still running - schedule a simple rerun to continue polling
+                time.sleep(0.1)  # Small delay to prevent excessive CPU usage
                 st.rerun()
         
 

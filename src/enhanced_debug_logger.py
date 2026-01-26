@@ -60,7 +60,10 @@ class EnhancedDebugLogger:
             # Create centralized debug directory in workflow manager root
             debug_dir = Path.cwd() / "debug_output"
             debug_dir.mkdir(exist_ok=True)
-            self.log_file = debug_dir / "workflow_debug.log"
+            
+            # Use timestamped log files to prevent overwriting
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            self.log_file = debug_dir / f"workflow_debug_{timestamp}.log"
         else:
             self.log_file = Path(log_file)
         

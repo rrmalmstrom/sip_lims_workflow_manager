@@ -1,0 +1,5 @@
+# Debug output directory for workflow manager
+*.log
+*.json
+workflow_debug_export_*
+!.gitignore

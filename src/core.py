@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult
 # Native execution only - Smart Sync removed
-from src.debug_logger import (
+from src.enhanced_debug_logger import (
     debug_context, log_info, log_error, log_warning,
     debug_enabled
 )
@@ -38,25 +38,37 @@ class Project:
     and all associated data. It coordinates the StateManager, SnapshotManager,
     and ScriptRunner.
     """
-    def __init__(self, project_path: Path, script_path: Path = None, load_workflow: bool = True):
+    def __init__(self, project_path: Path, script_path: Path, load_workflow: bool = True):
         self.path = project_path
-        # If no script_path provided, default to project_path/scripts
+        # NO FALLBACKS! script_path is REQUIRED for native execution
         if script_path is None:
-            self.script_path = self.path / "scripts"
-        else:
-            self.script_path = script_path
+            raise ValueError(
+                "script_path is required for native execution. "
+                "The system must know exactly where workflow scripts are located. "
+                "Check that SCRIPTS_PATH environment variable is properly set by run.py"
+            )
+        self.script_path = script_path
         self.workflow_file_path = self.path / "workflow.yml"
+        
+        # CRITICAL DEBUG: Log Project initialization details
+        if debug_enabled():
+            log_info("Project initialization: Native execution mode",
+                    project_path=str(project_path),
+                    script_path=str(self.script_path),
+                    script_path_exists=self.script_path.exists(),
+                    script_path_type=type(self.script_path).__name__)
         
         self.state_manager = StateManager(self.path / "workflow_state.json")
         self.snapshot_manager = SnapshotManager(self.path, self.path / ".snapshots")
         # Pass the script_path to the ScriptRunner for native execution
         self.script_runner = ScriptRunner(self.path, script_path=self.script_path)
         
-        # Native execution only - Smart Sync removed
+        # CRITICAL DEBUG: Log ScriptRunner initialization
         if debug_enabled():
-            log_info("Project initialization: Native execution mode",
+            log_info("ScriptRunner initialized",
                     project_path=str(project_path),
-                    script_path=str(self.script_path))
+                    script_runner_script_path=str(self.script_runner.script_path),
+                    script_runner_path_exists=self.script_runner.script_path.exists())
         
         if load_workflow:
             if not self.workflow_file_path.is_file():
