@@ -91,16 +91,16 @@ class GitUpdateManager:
         self._cache = {}
         self._last_check_time = None
         
-        # Repository configuration - both use Git tags for unified approach
+        # Repository configuration - scripts use tags, application uses commits for active development
         if repo_type == "scripts":
             self.config = detect_script_repository_config(self.repo_path)
         else:
             self.config = {
                 "repo_url": "https://github.com/rrmalmstrom/sip_lims_workflow_manager.git",
                 "api_url": "https://api.github.com/repos/rrmalmstrom/sip_lims_workflow_manager",
-                "update_method": "releases",  # Use GitHub releases
-                "current_version_source": "git_tags",  # Get current version from Git tags
-                "fallback_version_source": "version_file"  # Fallback to config/version.json if needed
+                "update_method": "commits",  # Use commit-based updates for active development
+                "current_version_source": "commit_hash",  # Get current version from commit hash
+                "fallback_version_source": "git_tags"  # Fallback to tags if needed
             }
     
     def _is_cache_valid(self, cache_key: str) -> bool:
@@ -128,10 +128,24 @@ class GitUpdateManager:
         return None
     
     def get_current_version(self) -> Optional[str]:
-        """Get the current version using unified Git-tag approach with fallbacks."""
+        """Get the current version using configured approach with fallbacks."""
         try:
-            # Primary method: Get current version from Git tags
-            if self.config["current_version_source"] == "git_tags":
+            # Primary method: Get current version based on configuration
+            if self.config["current_version_source"] == "commit_hash":
+                # Use commit hash for application repository (active development)
+                result = subprocess.run(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    commit_hash = result.stdout.strip()
+                    return commit_hash  # Return just the hash, not prefixed
+                
+            elif self.config["current_version_source"] == "git_tags":
+                # Use Git tags for scripts repository (release-based)
                 result = subprocess.run(
                     ['git', 'describe', '--tags', '--abbrev=0'],
                     cwd=self.repo_path,
@@ -144,29 +158,42 @@ class GitUpdateManager:
                     tag = result.stdout.strip()
                     # Remove 'v' prefix if present
                     return tag.lstrip('v')
-                
-                # If no tags found, try fallback method
-                fallback_source = self.config.get("fallback_version_source")
-                if fallback_source == "version_file":
-                    # Fallback to config/version.json for app repository
-                    version_file = self.repo_path.parent / "config" / "version.json"
-                    if version_file.exists():
-                        with open(version_file, 'r') as f:
-                            config = json.load(f)
-                            return config.get('version')
-                
-                elif fallback_source == "commit_hash":
-                    # Fallback to commit hash for scripts repository (if no tags)
-                    result = subprocess.run(
-                        ['git', 'rev-parse', '--short', 'HEAD'],
-                        cwd=self.repo_path,
-                        capture_output=True,
-                        text=True,
-                        timeout=10
-                    )
-                    if result.returncode == 0:
-                        commit_hash = result.stdout.strip()
-                        return f"commit-{commit_hash}"
+            
+            # Try fallback method if primary failed
+            fallback_source = self.config.get("fallback_version_source")
+            if fallback_source == "git_tags":
+                # Fallback to tags for app repository
+                result = subprocess.run(
+                    ['git', 'describe', '--tags', '--abbrev=0'],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    tag = result.stdout.strip()
+                    return tag.lstrip('v')
+                    
+            elif fallback_source == "commit_hash":
+                # Fallback to commit hash for scripts repository
+                result = subprocess.run(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    commit_hash = result.stdout.strip()
+                    return commit_hash
+                    
+            elif fallback_source == "version_file":
+                # Fallback to config/version.json
+                version_file = self.repo_path.parent / "config" / "version.json"
+                if version_file.exists():
+                    with open(version_file, 'r') as f:
+                        config = json.load(f)
+                        return config.get('version')
             
             return None
         except Exception as e:
@@ -204,11 +231,11 @@ class GitUpdateManager:
             print(f"Error fetching latest release: {e}")
             return None
     
-    def get_latest_tag_via_git(self, timeout: int = 10) -> Optional[str]:
+    def get_latest_version_via_git(self, timeout: int = 10) -> Optional[str]:
         """
-        Get the latest tag from the current branch's remote tracking branch.
-        This is branch-aware to prevent feature branches from detecting newer
-        tags from the main branch.
+        Get the latest version from the remote tracking branch.
+        For commit-based repos: returns latest commit hash
+        For tag-based repos: returns latest tag
         """
         try:
             # 1. Get the remote tracking branch for the current branch
@@ -221,54 +248,66 @@ class GitUpdateManager:
             )
 
             if get_remote_branch_result.returncode != 0:
-                print("Could not determine remote tracking branch. Falling back to fetching all tags.")
-                remote_branch = None
-            else:
-                remote_branch = get_remote_branch_result.stdout.strip()
+                print("Could not determine remote tracking branch.")
+                return None
+            
+            remote_branch = get_remote_branch_result.stdout.strip()
+            remote_name, branch_name = remote_branch.split('/', 1)
 
-            # 2. Fetch tags from the specific remote branch if possible, otherwise all tags
-            if remote_branch:
-                # e.g., 'origin/sip_mac_solution_no_docker'
-                remote_name, branch_name = remote_branch.split('/', 1)
+            # 2. Fetch latest changes from remote
+            subprocess.run(
+                ['git', 'fetch', remote_name, branch_name],
+                cwd=self.repo_path,
+                capture_output=True,
+                timeout=timeout
+            )
+
+            # 3. Get version based on repository type
+            if self.config["current_version_source"] == "commit_hash":
+                # For application repository: get latest commit hash from remote branch
+                result = subprocess.run(
+                    ['git', 'rev-parse', '--short', remote_branch],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip()
+            else:
+                # For scripts repository: get latest tag from remote branch
                 subprocess.run(
                     ['git', 'fetch', remote_name, f'refs/tags/*:refs/tags/*'],
                     cwd=self.repo_path,
                     capture_output=True,
                     timeout=timeout
                 )
-            else:
-                subprocess.run(
-                    ['git', 'fetch', '--tags'],
+                
+                result = subprocess.run(
+                    ['git', 'describe', '--tags', '--abbrev=0', remote_branch],
                     cwd=self.repo_path,
                     capture_output=True,
+                    text=True,
                     timeout=timeout
                 )
-
-            # 3. Get the latest tag associated with the remote tracking branch
-            # This lists all tags reachable from the tip of the remote branch
-            cmd = ['git', 'describe', '--tags', '--abbrev=0']
-            if remote_branch:
-                cmd.append(remote_branch)
-
-            result = subprocess.run(
-                cmd,
-                cwd=self.repo_path,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
-
-            if result.returncode == 0:
-                return result.stdout.strip()
+                if result.returncode == 0:
+                    return result.stdout.strip()
 
             return None
         except Exception as e:
-            print(f"Error getting latest tag via Git: {e}")
+            print(f"Error getting latest version via Git: {e}")
             return None
     
     def compare_versions(self, current: str, latest: str) -> bool:
-        """Compare version strings (semantic versioning)."""
+        """Compare version strings (semantic versioning or commit hashes)."""
         try:
+            # For commit-based comparison (application repository)
+            if self.config["current_version_source"] == "commit_hash":
+                # If both are commit hashes, they're different if not equal
+                # This means any difference indicates an update is available
+                return current != latest
+            
+            # For tag-based comparison (scripts repository)
             # Remove 'v' prefix if present
             current = current.lstrip('v')
             latest = latest.lstrip('v')
@@ -332,10 +371,14 @@ class GitUpdateManager:
                 result['latest_version'] = latest_version
                 result['release_info'] = latest_release
             else:
-                # Fallback to Git tags for private repos
-                latest_tag = self.get_latest_tag_via_git(timeout)
-                if latest_tag:
-                    latest_version = latest_tag.lstrip('v')
+                # Fallback to Git-based version detection
+                latest_version_raw = self.get_latest_version_via_git(timeout)
+                if latest_version_raw:
+                    # For commit hashes, use as-is; for tags, strip 'v' prefix
+                    if self.config["current_version_source"] == "commit_hash":
+                        latest_version = latest_version_raw
+                    else:
+                        latest_version = latest_version_raw.lstrip('v')
                     result['latest_version'] = latest_version
                 else:
                     result['error'] = "Could not determine latest version"
@@ -396,15 +439,15 @@ class GitUpdateManager:
                     result['error'] = f"Git fetch failed: {fetch_result.stderr}"
                     return result
                 
-                # Get latest tag
-                latest_tag = self.get_latest_tag_via_git()
-                if not latest_tag:
-                    result['error'] = "No tags found in repository"
+                # Get latest version (tag for scripts)
+                latest_version = self.get_latest_version_via_git()
+                if not latest_version:
+                    result['error'] = "No version found in repository"
                     return result
                 
                 # Checkout latest tag
                 checkout_result = subprocess.run(
-                    ['git', 'checkout', latest_tag],
+                    ['git', 'checkout', latest_version],
                     cwd=self.repo_path,
                     capture_output=True,
                     text=True,
@@ -413,7 +456,7 @@ class GitUpdateManager:
                 
                 if checkout_result.returncode == 0:
                     result['success'] = True
-                    result['new_version'] = latest_tag.lstrip('v')
+                    result['new_version'] = latest_version.lstrip('v')
                     result['message'] = f"Updated scripts to version {result['new_version']}"
                 else:
                     result['error'] = f"Git checkout failed: {checkout_result.stderr}"
