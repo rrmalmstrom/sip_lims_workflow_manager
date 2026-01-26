@@ -12,6 +12,7 @@ import os
 import sys
 import subprocess
 import argparse
+import signal
 from pathlib import Path
 from typing import Optional
 
@@ -362,12 +363,37 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
                         mode: Optional[str] = None,
                         perform_core_updates: bool = False):
     """Launch the Streamlit workflow manager."""
+    streamlit_process = None
+    
+    def signal_handler(signum, frame):
+        """Handle Ctrl+C and other signals by terminating Streamlit gracefully."""
+        click.echo()
+        click.secho("🛑 Received interrupt signal - shutting down gracefully...", fg='yellow')
+        if streamlit_process:
+            try:
+                streamlit_process.terminate()
+                streamlit_process.wait(timeout=5)
+                click.secho("✅ Streamlit process terminated successfully", fg='green')
+            except subprocess.TimeoutExpired:
+                click.secho("⚠️  Force killing Streamlit process...", fg='yellow')
+                streamlit_process.kill()
+                streamlit_process.wait()
+            except Exception as e:
+                click.secho(f"⚠️  Error during shutdown: {e}", fg='yellow')
+        sys.exit(0)
+    
+    # Set up signal handlers
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination signal
+    
     try:
         click.echo()
         click.secho("--- Starting SIP LIMS Workflow Manager (Native) ---", fg='blue', bold=True)
         click.echo(f"   Workflow Type: {workflow_type.upper()}")
         click.echo(f"   Project Path: {project_path}")
         click.echo(f"   Execution Mode: Native Python")
+        click.echo()
+        click.secho("💡 Press Ctrl+C to stop the workflow manager", fg='cyan')
         click.echo()
         
         # Set up environment variables (preserves workflow type propagation)
@@ -393,7 +419,7 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
         
         # Check if streamlit is available
         try:
-            subprocess.run([sys.executable, "-m", "streamlit", "--version"], 
+            subprocess.run([sys.executable, "-m", "streamlit", "--version"],
                          capture_output=True, check=True)
         except (subprocess.CalledProcessError, FileNotFoundError):
             click.secho("❌ ERROR: Streamlit is not installed", fg='red', bold=True)
@@ -408,11 +434,14 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
             "--browser.gatherUsageStats", "false"
         ]
         
-        # Execute app.py with Streamlit
-        result = subprocess.run(app_args, env=os.environ.copy())
+        # Execute app.py with Streamlit using Popen for better signal handling
+        streamlit_process = subprocess.Popen(app_args, env=os.environ.copy())
+        
+        # Wait for the process to complete
+        result = streamlit_process.wait()
         
         # Exit with the same code as the Streamlit app
-        sys.exit(result.returncode)
+        sys.exit(result)
         
     except KeyboardInterrupt:
         click.echo()

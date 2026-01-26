@@ -835,20 +835,71 @@ Return Code Type: {type(return_code)}
         
         if self.process:
             try:
+                process_pid = self.process.pid
+                pgid = os.getpgid(process_pid)
+                log_info("Process termination starting", process_pid=process_pid, process_group_id=pgid)
+                
                 # Kill the process group to ensure all child processes are terminated
-                os.killpg(os.getpgid(self.process.pid), 9)
-            except Exception:
+                log_info("Executing process group kill", pgid=pgid, signal=9)
+                os.killpg(pgid, 9)
+                log_info("Process group kill completed successfully", pgid=pgid)
+                
+            except ProcessLookupError as e:
+                log_info("Process already terminated", error=str(e), error_type="ProcessLookupError")
+                # Process already terminated - this is actually success
+            except PermissionError as e:
+                log_error("Permission denied for process group kill", error=str(e), process_pid=self.process.pid)
                 try:
+                    log_info("Attempting direct process terminate as fallback")
                     self.process.terminate()
                     # Give it a moment to terminate gracefully
                     try:
                         self.process.wait(timeout=2)
+                        log_info("Direct process terminate succeeded")
                     except subprocess.TimeoutExpired:
+                        log_warning("Process terminate timeout, attempting kill")
                         # Force kill if it doesn't terminate
                         self.process.kill()
                         self.process.wait()
-                except Exception:
-                    pass  # Process may already be dead
+                        log_info("Direct process kill succeeded")
+                except Exception as fallback_e:
+                    log_error("Fallback termination methods failed", error=str(fallback_e), error_type=type(fallback_e).__name__)
+            except OSError as e:
+                log_error("OS error during process termination", error=str(e), errno=getattr(e, 'errno', None))
+                try:
+                    log_info("Attempting direct process terminate as OSError fallback")
+                    self.process.terminate()
+                    # Give it a moment to terminate gracefully
+                    try:
+                        self.process.wait(timeout=2)
+                        log_info("Direct process terminate succeeded after OSError")
+                    except subprocess.TimeoutExpired:
+                        log_warning("Process terminate timeout after OSError, attempting kill")
+                        # Force kill if it doesn't terminate
+                        self.process.kill()
+                        self.process.wait()
+                        log_info("Direct process kill succeeded after OSError")
+                except Exception as fallback_e:
+                    log_error("OSError fallback termination failed", error=str(fallback_e), error_type=type(fallback_e).__name__)
+            except Exception as e:
+                log_error("Unexpected exception during process termination", error=str(e), error_type=type(e).__name__)
+                try:
+                    log_info("Attempting direct process terminate as unexpected exception fallback")
+                    self.process.terminate()
+                    # Give it a moment to terminate gracefully
+                    try:
+                        self.process.wait(timeout=2)
+                        log_info("Direct process terminate succeeded after unexpected exception")
+                    except subprocess.TimeoutExpired:
+                        log_warning("Process terminate timeout after unexpected exception, attempting kill")
+                        # Force kill if it doesn't terminate
+                        self.process.kill()
+                        self.process.wait()
+                        log_info("Direct process kill succeeded after unexpected exception")
+                except Exception as fallback_e:
+                    log_error("All termination methods failed", error=str(fallback_e), error_type=type(fallback_e).__name__)
+        else:
+            log_warning("No process to terminate", process_state="None")
         
         if self.reader_thread and self.reader_thread.is_alive():
             self.reader_thread.join(timeout=1)

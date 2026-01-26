@@ -454,15 +454,26 @@ class Project:
             bool: True if script was terminated and rollback successful, False if no script was running
         """
         # Check if script is actually running
-        if not self.script_runner.is_running():
+        log_info("Script termination requested", step_id=step_id)
+        
+        is_running = self.script_runner.is_running()
+        log_info("Script runner status check", is_running=is_running, step_id=step_id)
+        
+        if not is_running:
+            log_warning("Script termination failed - no running script", step_id=step_id)
             return False
         
         step = self.workflow.get_step_by_id(step_id)
         if not step:
+            log_error("Script termination failed - step not found", step_id=step_id)
             raise ValueError(f"Step '{step_id}' not found in workflow.")
         
+        log_info("Script termination proceeding", step_id=step_id, step_name=step.get('name', 'Unknown'))
+        
         # Terminate the running script
+        log_info("Calling script runner terminate method", step_id=step_id)
         self.script_runner.terminate()
+        log_info("Script runner terminate method completed", step_id=step_id)
         
         # Get the current run number to find the correct "before" snapshot
         run_number = self.snapshot_manager.get_current_run_number(step_id)
