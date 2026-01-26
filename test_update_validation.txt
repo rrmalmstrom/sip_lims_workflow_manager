@@ -1,0 +1,13 @@
+This is a dummy file created to test the Git-based update system validation.
+
+Created during Phase B2 testing to verify that:
+1. Local repository can detect remote changes
+2. Update system properly identifies new commits
+3. Git-based update functionality works correctly
+
+This file will be used to create a controlled test scenario where:
+- Remote has this file (after push)
+- Local will revert to before this file existed
+- Update system should detect and pull this change
+
+Test timestamp: 2026-01-26T18:31:27.652Z
