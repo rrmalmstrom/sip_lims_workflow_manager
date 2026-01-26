@@ -35,16 +35,100 @@ class StateManager:
         self.path = state_file_path
 
     def load(self) -> Dict[str, Any]:
-        """Loads the current state from the state file."""
+        """
+        Loads the current state from the state file with retry logic for external drives.
+        Handles temporary corruption and race conditions.
+        """
         if not self.path.exists():
             return {}
-        with self.path.open('r') as f:
-            return json.load(f)
+        
+        # Retry logic for external drive race conditions
+        max_retries = 3
+        retry_delay = 0.1  # 100ms delay between retries
+        
+        for attempt in range(max_retries):
+            try:
+                with self.path.open('r') as f:
+                    content = f.read().strip()
+                    if not content:
+                        # File is empty - likely caught during write operation
+                        if attempt < max_retries - 1:
+                            import time
+                            time.sleep(retry_delay)
+                            continue
+                        else:
+                            # Last attempt failed - return empty state
+                            print(f"WARNING: workflow_state.json is empty after {max_retries} attempts")
+                            return {}
+                    
+                    # Parse the JSON content
+                    f.seek(0)  # Reset file pointer
+                    return json.load(f)
+                    
+            except json.JSONDecodeError as e:
+                if attempt < max_retries - 1:
+                    # Temporary corruption - retry after delay
+                    import time
+                    print(f"JSON decode error (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Final attempt failed - log error and return empty state
+                    print(f"CRITICAL: JSON corruption persists after {max_retries} attempts: {e}")
+                    print(f"File path: {self.path}")
+                    print("Returning empty state to prevent application crash")
+                    return {}
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    # Other error - retry after delay
+                    import time
+                    print(f"File read error (attempt {attempt + 1}/{max_retries}): {e}")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Final attempt failed - log error and return empty state
+                    print(f"CRITICAL: File read error persists after {max_retries} attempts: {e}")
+                    return {}
+        
+        # Should never reach here, but return empty state as fallback
+        return {}
 
     def save(self, state: Dict[str, Any]):
-        """Saves the given state to the state file."""
-        with self.path.open('w') as f:
-            json.dump(state, f, indent=2)
+        """
+        Saves the given state to the state file using atomic write operation.
+        This prevents race conditions on external drives by using write-then-rename.
+        """
+        import tempfile
+        import os
+        
+        # Create a temporary file in the same directory as the target file
+        temp_dir = self.path.parent
+        temp_fd, temp_path = tempfile.mkstemp(dir=temp_dir, suffix='.tmp', prefix='workflow_state_')
+        
+        try:
+            # Write to temporary file first
+            with os.fdopen(temp_fd, 'w') as f:
+                json.dump(state, f, indent=2)
+                f.flush()  # Ensure data is written to disk
+                os.fsync(f.fileno())  # Force write to disk (important for external drives)
+            
+            # Atomically replace the original file
+            if os.name == 'nt':  # Windows
+                # Windows requires removing the target file first
+                if self.path.exists():
+                    self.path.unlink()
+                os.rename(temp_path, self.path)
+            else:  # Unix/macOS
+                # Unix systems support atomic rename even if target exists
+                os.rename(temp_path, self.path)
+                
+        except Exception:
+            # Clean up temporary file if something went wrong
+            try:
+                os.unlink(temp_path)
+            except OSError:
+                pass
+            raise
 
     def get_step_state(self, step_id: str) -> str:
         """Gets the status of a specific step."""

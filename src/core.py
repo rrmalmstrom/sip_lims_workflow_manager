@@ -197,24 +197,71 @@ class Project:
         Handles the result of an asynchronously executed step.
         This should be called by the UI when the script completes.
         """
+        # COMPREHENSIVE LOGGING: Create detailed log for race condition debugging
+        log_dir = self.path / ".workflow_logs"
+        log_dir.mkdir(exist_ok=True)
+        step_result_log = log_dir / "step_result_handling.log"
+        
+        def log_step_detail(message, **kwargs):
+            """Log detailed step processing information"""
+            try:
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+                with open(step_result_log, "a") as f:
+                    f.write(f"[{timestamp}] {message}\n")
+                    for key, value in kwargs.items():
+                        f.write(f"  {key}: {value}\n")
+                    f.flush()
+            except Exception:
+                pass  # Don't let logging errors break workflow
+        
+        log_step_detail("=== STEP RESULT HANDLING STARTED ===",
+                       step_id=step_id,
+                       result_success=result.success,
+                       result_return_code=result.return_code)
+        
         with debug_context("workflow_step_result_handling",
                           step_id=step_id,
                           result_success=result.success) as debug_logger:
             
             step = self.workflow.get_step_by_id(step_id)
             if not step:
+                log_step_detail("ERROR: Step not found in workflow", step_id=step_id)
                 raise ValueError(f"Step '{step_id}' not found in workflow.")
+
+            log_step_detail("Step found in workflow",
+                           step_name=step.get('name', 'Unknown'),
+                           step_script=step.get('script', 'No script'))
 
             is_first_run = self.get_state(step_id) == "pending"
             snapshot_items = step.get("snapshot_items", [])
 
+            log_step_detail("Current step state analysis",
+                           current_state=self.get_state(step_id),
+                           is_first_run=is_first_run,
+                           snapshot_items=snapshot_items)
+
             # Two-factor success detection: exit code and success marker (native execution)
             exit_code_success = result.success
             script_name = step.get("script", "")
+            
+            log_step_detail("Starting success marker check",
+                           script_name=script_name,
+                           exit_code_success=exit_code_success)
+            
             marker_file_success = self._check_success_marker(script_name)
+            
+            log_step_detail("Success marker check completed",
+                           marker_file_success=marker_file_success,
+                           marker_file_path=f".workflow_status/{Path(script_name).stem}.success" if script_name else "N/A")
             
             # Both conditions must be true for actual success
             actual_success = exit_code_success and marker_file_success
+            
+            log_step_detail("Final success determination",
+                           exit_code_success=exit_code_success,
+                           marker_file_success=marker_file_success,
+                           actual_success=actual_success)
             
             if debug_logger:
                 debug_logger.info("Processing step result",
@@ -264,19 +311,59 @@ class Project:
 
             # Handle the result based on our two-factor success detection
             if actual_success:
-                self.update_state(step_id, "completed")
+                log_step_detail("=== ATTEMPTING ATOMIC STATE UPDATE ===",
+                               target_state="completed",
+                               current_state=self.get_state(step_id))
                 
-                success_msg = f"✅ STEP COMPLETED: '{step.get('name', step_id)}' - All operations successful"
-                print(success_msg)
-                print("   • Script executed successfully")
-                print("   • Success marker created")
-                
-                log_info("Workflow step completed successfully",
-                        step_id=step_id,
-                        step_name=step.get('name', 'Unknown'),
-                        exit_code_success=exit_code_success,
-                        marker_file_success=marker_file_success,
-                        execution_mode="native")
+                # ATOMIC STATE UPDATE: Use try-catch to ensure state update completes
+                try:
+                    # Read current state before update
+                    pre_update_state = self.state_manager.load()
+                    log_step_detail("Pre-update state loaded",
+                                   pre_update_state=pre_update_state,
+                                   step_current_status=pre_update_state.get(step_id, "unknown"))
+                    
+                    # Perform the atomic state update
+                    self.update_state(step_id, "completed")
+                    
+                    # Verify the update succeeded
+                    post_update_state = self.state_manager.load()
+                    updated_status = post_update_state.get(step_id, "unknown")
+                    
+                    log_step_detail("Post-update state verification",
+                                   post_update_state=post_update_state,
+                                   step_updated_status=updated_status,
+                                   update_successful=(updated_status == "completed"))
+                    
+                    if updated_status == "completed":
+                        log_step_detail("✅ ATOMIC STATE UPDATE SUCCESSFUL")
+                        
+                        success_msg = f"✅ STEP COMPLETED: '{step.get('name', step_id)}' - All operations successful"
+                        print(success_msg)
+                        print("   • Script executed successfully")
+                        print("   • Success marker created")
+                        print("   • Workflow state updated atomically")
+                        
+                        log_info("Workflow step completed successfully",
+                                step_id=step_id,
+                                step_name=step.get('name', 'Unknown'),
+                                exit_code_success=exit_code_success,
+                                marker_file_success=marker_file_success,
+                                execution_mode="native")
+                    else:
+                        log_step_detail("❌ ATOMIC STATE UPDATE FAILED - State not updated",
+                                       expected_status="completed",
+                                       actual_status=updated_status)
+                        print(f"❌ WARNING: Step {step_id} completed successfully but state update failed!")
+                        print(f"   Expected: completed, Actual: {updated_status}")
+                        
+                except Exception as state_update_error:
+                    log_step_detail("❌ ATOMIC STATE UPDATE EXCEPTION",
+                                   error_type=type(state_update_error).__name__,
+                                   error_message=str(state_update_error))
+                    print(f"❌ CRITICAL: State update failed with exception: {state_update_error}")
+                    # Re-raise to ensure the error is visible
+                    raise
                 
                 # Note: "after" snapshots removed for simplified undo system
                 # Only "before" snapshots are now used for undo functionality
@@ -351,6 +438,10 @@ class Project:
                 except:
                     pass
             # Keep the state as "pending" for failed steps
+            
+            log_step_detail("=== STEP RESULT HANDLING COMPLETED ===",
+                           final_step_state=self.get_state(step_id),
+                           processing_successful=True)
 
     def terminate_script(self, step_id: str) -> bool:
         """

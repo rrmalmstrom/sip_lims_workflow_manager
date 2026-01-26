@@ -256,28 +256,8 @@ def send_and_clear_input(project, user_input):
             st.session_state.terminal_input_box = ""
             st.session_state.scroll_to_bottom = True
 
-def handle_terminal_input_change():
-    """Handle when terminal input changes - triggered by Enter key or other changes."""
-    if 'terminal_input_box' in st.session_state and 'project' in st.session_state:
-        user_input = st.session_state.terminal_input_box
-        # Strip whitespace and newlines to prevent PTY input buffer contamination
-        # This fixes the issue where pressing Enter leaves stray newlines that
-        # get consumed by subsequent input() calls in the same script
-        user_input = user_input.strip() if user_input else ""
-        
-        # Send input regardless of whether it's empty (for default answers)
-        project = st.session_state.project
-        if project and project.script_runner.is_running():
-            # Prevent double input by checking if we just sent input
-            current_time = time.time()
-            last_input_time = st.session_state.get('last_input_time', 0)
-            
-            # Only send if it's been more than 100ms since last input
-            if current_time - last_input_time > 0.1:
-                project.script_runner.send_input(user_input)
-                st.session_state.last_input_time = current_time
-                st.session_state.terminal_input_box = ""
-                st.session_state.scroll_to_bottom = True
+# handle_terminal_input_change() function removed - Enter key functionality disabled
+# to prevent race conditions with workflow_state.json file access on external drives
 
 def create_inline_file_browser(input_key: str, start_path: str = None):
     """
@@ -1054,9 +1034,8 @@ def main():
                 user_input = st.text_input(
                     "Input:",
                     key="terminal_input_box",
-                    help="Type your input and press Enter or click 'Send Input'",
-                    placeholder="Type your input here...",
-                    on_change=handle_terminal_input_change
+                    help="Type your input and click 'Send Input' button",
+                    placeholder="Type your input here..."
                 )
             with col2:
                 send_button = st.button(
