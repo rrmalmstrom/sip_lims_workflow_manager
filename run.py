@@ -128,23 +128,22 @@ def setup_environment_variables(workflow_type: str, project_path: Path, scripts_
     click.echo(f"   SCRIPTS_PATH = {os.environ.get('SCRIPTS_PATH', 'NOT SET')}")
 
 
-def perform_updates(workflow_type: str):
-    """Perform core updates (repository and scripts)."""
+def perform_updates():
+    """Perform core repository updates only (not workflow-specific scripts)."""
     try:
-        click.secho("🔄 Performing core updates...", fg='blue', bold=True)
-        click.echo("   • Repository updates")
-        click.echo("   • Scripts updates")
+        click.secho("🔄 Performing core repository updates...", fg='blue', bold=True)
+        click.echo("   • Repository updates only")
+        click.echo("   • Workflow-specific scripts are updated during normal execution")
         click.echo()
         
         # Import update components
         try:
             from src.git_update_manager import GitUpdateManager
-            from src.scripts_updater import ScriptsUpdater
         except ImportError as e:
             click.secho(f"❌ ERROR: Failed to import update modules: {e}", fg='red', bold=True)
             return False
         
-        # Repository updates
+        # Repository updates only
         click.echo("🔍 Checking for repository updates...")
         try:
             git_manager = GitUpdateManager("application", ".")
@@ -160,25 +159,7 @@ def perform_updates(workflow_type: str):
         except Exception as e:
             click.secho(f"⚠️  Warning: Repository update failed: {e}", fg='yellow')
         
-        # Scripts updates
-        click.echo("🔍 Checking for scripts updates...")
-        try:
-            scripts_updater = ScriptsUpdater(workflow_type=workflow_type)
-            # Create a default scripts directory path for checking
-            scripts_dir = Path.home() / ".sip_lims_workflow_manager" / f"{workflow_type}_scripts"
-            update_check = scripts_updater.check_scripts_update(str(scripts_dir))
-            if update_check.get('update_available', False):
-                update_result = scripts_updater.update_scripts(str(scripts_dir))
-                if update_result.get('success', False):
-                    click.secho("✅ Scripts updated", fg='green')
-                else:
-                    click.secho(f"⚠️  Scripts update failed: {update_result.get('error', 'Unknown error')}", fg='yellow')
-            else:
-                click.secho("✅ Scripts are up to date", fg='green')
-        except Exception as e:
-            click.secho(f"⚠️  Warning: Scripts update failed: {e}", fg='yellow')
-        
-        click.secho("✅ Updates completed", fg='green')
+        click.secho("✅ Core updates completed", fg='green')
         return True
         
     except Exception as e:
@@ -394,12 +375,12 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
         
         # Handle updates mode
         if perform_core_updates:
-            success = perform_updates(workflow_type)
+            success = perform_updates()
             click.echo()
             if success:
                 click.secho("🔄 RESTART REQUIRED", fg='yellow', bold=True)
                 click.echo("Please restart the script to launch with the latest version:")
-                click.echo(f"   python run.py {workflow_type} \"{project_path}\"")
+                click.echo("   python run.py")
             else:
                 click.secho("⚠️  Updates completed with warnings", fg='yellow')
             return
@@ -482,12 +463,8 @@ def main():
         
         # Handle updates flag
         if args.updates:
-            # Interactive workflow selection for updates
-            workflow_type = interactive_workflow_selection()
-            workflow_type = validate_workflow_type(workflow_type)
-            
-            # Perform updates and exit
-            success = perform_updates(workflow_type)
+            # Perform core repository updates only (no workflow selection needed)
+            success = perform_updates()
             if HAS_CLICK:
                 click.echo()
                 if success:
