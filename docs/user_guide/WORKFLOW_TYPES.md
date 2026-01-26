@@ -70,7 +70,8 @@ The SPS-CE workflow is a focused 6-step process for SPS library creation with Fr
 - Each workflow type maintains separate script repositories and configurations
 - No cross-contamination between workflow types
 
-### Development vs Production
+### Execution Modes
 Both workflow types support:
-- **Production Mode**: Automated script management and Docker deployment
+- **Production Mode**: Automated script management and native Python execution
 - **Development Mode**: Local script directory mounting for development and testing
+- **Native Performance**: Direct Python execution for optimal performance and debugging capabilities

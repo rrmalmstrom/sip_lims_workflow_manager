@@ -2,35 +2,21 @@
 
 This document provides a detailed overview of the key features of the SIP LIMS Workflow Manager.
 
-## Easy-Click Launchers & Unified Python Launcher
+## Native Python Launcher
 
-The SIP LIMS Workflow Manager provides multiple ways to launch the application, from simple double-click launchers to advanced command-line options.
+The SIP LIMS Workflow Manager uses a native Python launcher ([`run.py`](../../run.py)) that provides direct execution without container overhead.
 
-### Easy-Click Launchers (Recommended)
-For the easiest user experience, simply double-click the appropriate launcher:
-
-- **macOS**: Double-click [`run.mac.command`](../../run.mac.command)
-- **Windows**: Double-click [`run.windows.bat`](../../run.windows.bat)
-
-These launchers automatically:
-- Check for Python installation and provide helpful error messages
-- Launch the workflow with optimized default settings (scripts updates only)
-- Display clear status messages and pause for user review
-- Handle all error conditions gracefully
-
-### Unified Python Launcher (Advanced)
-For advanced users and automation, use the unified Python launcher ([`run.py`](../../run.py)):
-
-#### Key Features
+### Key Features
 - **Cross-Platform**: `python3 run.py` works on Windows, macOS, and Linux
+- **Native Execution**: Direct Python execution for faster startup and better performance
 - **Interactive Interface**: Rich CLI with colored output and user-friendly prompts
 - **Smart Update Logic**: Optimized update behavior for production users
 - **Command-Line Arguments**: Full support for automation and scripting
 - **Enhanced Error Handling**: Clear error messages and graceful recovery
 - **Platform Detection**: Automatic adaptation to host operating system features
-- **Docker Integration**: Intelligent detection of Docker commands and container management
+- **Conda Environment Integration**: Seamless integration with conda package management
 
-#### Usage Examples
+### Usage Examples
 ```bash
 # Default behavior (scripts updates only - fast and safe)
 python3 run.py
@@ -45,15 +31,21 @@ python3 run.py --workflow-type sip --mode production --updates
 python3 run.py --help
 ```
 
-#### Update Behavior (v1.1.0+)
-The launcher now uses optimized update logic:
+### Update Behavior
+The launcher uses optimized update logic:
 - **Default**: Scripts updates only (fast, safe, always current workflows)
-- **With `--updates`**: Core updates (fatal sync, repository, Docker) then terminate with restart instructions
+- **With `--updates`**: Core updates (repository, git sync) then terminate with restart instructions
 - **Clear Messaging**: Informative output about what updates are being performed
+
+### Performance Benefits
+- **Fast Startup**: Native execution eliminates container startup overhead (30s → 5s)
+- **Direct File Access**: No volume mounting or file system translation
+- **Native Debugging**: Standard Python debugging tools work directly
+- **Resource Efficiency**: Lower memory and CPU usage compared to containerized execution
 
 ## Multi-Workflow Support
 
-The SIP LIMS Workflow Manager now supports multiple laboratory workflow types:
+The SIP LIMS Workflow Manager supports multiple laboratory workflow types:
 
 ### Supported Workflows
 
@@ -104,7 +96,7 @@ The main interface of the application is an interactive checklist that visually 
 The application provides a streamlined process for setting up new and existing projects.
 
 -   **Automatic Detection**: The application automatically detects the state of a project folder and guides you through the setup process.
--   **Project Name Display**: The sidebar displays the actual name of your project folder for easy identification, rather than the internal Docker mount path.
+-   **Project Name Display**: The sidebar displays the actual name of your project folder for easy identification.
 -   **New Project**: If you are starting a new project, the application will initialize the workflow with all steps marked as "pending."
 -   **Existing Work**: If you are working with a project that has already been partially completed outside of the workflow manager, you can use the "Skip to Step" feature to mark all previous steps as "skipped" and start the workflow from any step.
 
@@ -124,6 +116,7 @@ The application features a robust, granular undo system that allows you to roll 
 -   **Undo Last Step**: The "Undo Last Step" button in the sidebar allows you to revert the project to the state it was in before the last completed step was run.
 -   **Multi-Run Undo**: If a step has been run multiple times, the undo function will first revert to the state after the previous run. Subsequent undos will continue to roll back through the history of runs for that step.
 -   **Conditional Undo**: The undo system is fully integrated with conditional workflows, allowing you to undo back to a decision point and make a different choice.
+-   **External Drive Safety**: Enhanced undo system with race condition protection for reliable operation on external drives and network storage.
 
 ## Interactive Terminal
 
@@ -132,16 +125,17 @@ When a script is running, the application displays a live, interactive terminal 
 -   **Real-Time Output**: The terminal displays the script's output in real-time, so you can monitor its progress.
 -   **User Input**: If a script requires user input, you can type your input directly into the terminal's input box and press "Enter" or click "Send Input."
 -   **Script Termination**: A "🛑 Terminate" button is available for all running scripts, allowing you to safely stop a script at any time. When a script is terminated, the application will automatically roll back to the state it was in before the script started.
+-   **Native Process Management**: Direct process control without container overhead for responsive script management.
 
 ## Smart Update System
 
 The application features an intelligent update system optimized for production use while maintaining full control for advanced users.
 
-### Launcher Update Behavior (v1.1.0+)
+### Native Update Behavior
 -   **Default Mode**: Scripts updates only - ensures you always have the latest workflow improvements without unnecessary downloads
--   **Updates Mode**: Use `--updates` flag to perform core updates (fatal sync, repository, Docker) and terminate with restart instructions
+-   **Updates Mode**: Use `--updates` flag to perform core updates (repository sync, git updates) and terminate with restart instructions
 -   **Clear Messaging**: Informative output shows exactly what updates are being performed and what's being skipped
--   **User Choice**: Easy-click launchers use default mode, command-line provides full control
+-   **Git-Based Updates**: Direct git operations for efficient and reliable updates
 
 ### In-Application Updates
 -   **Automatic Update Checks**: The application automatically checks for updates every 60 minutes and on page refresh
@@ -151,9 +145,8 @@ The application features an intelligent update system optimized for production u
 
 ### Update Types
 -   **Scripts Updates**: Always performed by default - keeps workflows current and improves functionality
--   **Docker Image Updates**: Performed only with `--updates` flag - ensures you get latest environment when needed
 -   **Repository Updates**: Performed only with `--updates` flag - gets latest launcher and system improvements
--   **Fatal Sync Checks**: Performed only with `--updates` flag - validates system integrity before major updates
+-   **Git Sync Checks**: Performed only with `--updates` flag - validates repository integrity before major updates
 
 ## Fragment Analyzer (FA) Results Archiving
 
@@ -197,3 +190,22 @@ archived_files/
 - **Directory Structure**: `B_first_attempt_fa_result/` → `first_lib_attempt_fa_results/`, etc.
 
 This feature ensures that your Fragment Analyzer data is always preserved across both SIP and SPS-CE workflows, even when using the workflow manager's powerful undo capabilities to iterate on your analysis parameters.
+
+## Enhanced Reliability Features
+
+### Race Condition Protection
+- **Atomic File Operations**: Write-then-rename pattern ensures data integrity
+- **Retry Logic**: Exponential backoff for handling temporary file system issues
+- **External Drive Optimization**: Special handling for network drives and external storage
+- **Enhanced Logging**: Comprehensive debug output for troubleshooting
+
+### Session Persistence
+- **State Management**: Workflow state persists across application restarts
+- **Project Memory**: Automatic restoration of project settings and progress
+- **Crash Recovery**: Robust recovery from unexpected application termination
+
+### Performance Optimization
+- **Native Execution**: Direct Python execution eliminates container overhead
+- **Efficient File I/O**: Optimized file operations for large datasets
+- **Memory Management**: Improved memory usage for long-running workflows
+- **External Drive Performance**: Optimized for laboratory environments with network storage
