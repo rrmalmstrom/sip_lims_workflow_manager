@@ -1016,8 +1016,12 @@ def main():
             
             # Large, prominent header
             st.markdown("# 🖥️ LIVE TERMINAL")
-            st.error(f"🚨 **SCRIPT RUNNING**: {running_step['name'] if running_step else 'Unknown Step'}")
-            st.warning("⚠️ **IMPORTANT**: Interactive input required below!")
+            st.warning(f"⏳ **SCRIPT RUNNING**: {running_step['name'] if running_step else 'Unknown Step'}")
+            st.markdown("""
+            <div style="background-color: #e6d7ff; padding: 10px; border-radius: 5px; border-left: 5px solid #9966cc; color: #4a4a4a;">
+                👇 <strong>INTERACTIVE INPUT</strong>: Please respond to prompts below
+            </div>
+            """, unsafe_allow_html=True)
             
             # Terminal with prominent styling - use st.code for better real-time updates
             st.subheader("Terminal Output")
