@@ -4,11 +4,11 @@ This document provides a detailed overview of the key features of the SIP LIMS W
 
 ## Native Python Launcher
 
-The SIP LIMS Workflow Manager uses a native Python launcher ([`run.py`](../../run.py)) that provides direct execution without container overhead.
+The SIP LIMS Workflow Manager uses a native Python launcher ([`launcher/run.py`](../../launcher/run.py)) that provides direct execution with optimal performance.
 
 ### Key Features
-- **Cross-Platform**: `python3 run.py` works on Windows, macOS, and Linux
-- **Native Execution**: Direct Python execution for faster startup and better performance
+- **Native Mac Execution**: Optimized for macOS with `./run.command` launcher
+- **Fast Startup**: Direct Python execution for optimal performance
 - **Interactive Interface**: Rich CLI with colored output and user-friendly prompts
 - **Smart Update Logic**: Optimized update behavior for production users
 - **Command-Line Arguments**: Full support for automation and scripting
@@ -19,16 +19,16 @@ The SIP LIMS Workflow Manager uses a native Python launcher ([`run.py`](../../ru
 ### Usage Examples
 ```bash
 # Default behavior (scripts updates only - fast and safe)
-python3 run.py
+./run.command
 
 # Perform core updates and terminate with restart instructions
-python3 run.py --updates
+./run.command --updates
 
 # Automated workflow launch with all updates
-python3 run.py --workflow-type sip --mode production --updates
+./run.command --workflow-type sip --mode production --updates
 
 # Show all available options
-python3 run.py --help
+./run.command --help
 ```
 
 ### Update Behavior
@@ -38,10 +38,10 @@ The launcher uses optimized update logic:
 - **Clear Messaging**: Informative output about what updates are being performed
 
 ### Performance Benefits
-- **Fast Startup**: Native execution eliminates container startup overhead (30s → 5s)
-- **Direct File Access**: No volume mounting or file system translation
+- **Fast Startup**: Native execution provides immediate application launch (5s)
+- **Direct File Access**: Seamless access to local and external drive files
 - **Native Debugging**: Standard Python debugging tools work directly
-- **Resource Efficiency**: Lower memory and CPU usage compared to containerized execution
+- **Resource Efficiency**: Optimal memory and CPU usage with native execution
 
 ## Multi-Workflow Support
 
@@ -125,7 +125,7 @@ When a script is running, the application displays a live, interactive terminal 
 -   **Real-Time Output**: The terminal displays the script's output in real-time, so you can monitor its progress.
 -   **User Input**: If a script requires user input, you can type your input directly into the terminal's input box and press "Enter" or click "Send Input."
 -   **Script Termination**: A "🛑 Terminate" button is available for all running scripts, allowing you to safely stop a script at any time. When a script is terminated, the application will automatically roll back to the state it was in before the script started.
--   **Native Process Management**: Direct process control without container overhead for responsive script management.
+-   **Native Process Management**: Direct process control for responsive script management.
 
 ## Smart Update System
 
@@ -205,7 +205,7 @@ This feature ensures that your Fragment Analyzer data is always preserved across
 - **Crash Recovery**: Robust recovery from unexpected application termination
 
 ### Performance Optimization
-- **Native Execution**: Direct Python execution eliminates container overhead
+- **Native Execution**: Direct Python execution for optimal performance
 - **Efficient File I/O**: Optimized file operations for large datasets
 - **Memory Management**: Improved memory usage for long-running workflows
 - **External Drive Performance**: Optimized for laboratory environments with network storage

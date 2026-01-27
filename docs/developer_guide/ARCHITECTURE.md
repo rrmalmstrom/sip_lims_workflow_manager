@@ -19,7 +19,7 @@ This document provides a high-level overview of the architecture, design princip
 -   **Configuration**: YAML (workflow templates: [`sip_workflow.yml`](../../templates/sip_workflow.yml), [`sps_workflow.yml`](../../templates/sps_workflow.yml))
 -   **State Management**: JSON (`workflow_state.json`)
 -   **Version Control**: Git-based repository and script management
--   **Native Launcher**: [`run.py`](../../run.py) - Cross-platform Python launcher
+-   **Native Launcher**: [`launcher/run.py`](../../launcher/run.py) - Native Mac Python launcher
 
 ## Native Execution Architecture
 
@@ -32,7 +32,7 @@ The application uses a **native Python execution model** to ensure optimal perfo
     -   `conda-lock.txt`: Exact conda package versions with build hashes
     -   `requirements-lock.txt`: Exact pip package versions
 -   **Git-Based Updates**: Repository and script updates via Git operations
--   **Cross-Platform Support**: Native execution on Windows, macOS, and Linux
+-   **Native Mac Support**: Optimized execution for macOS systems
 
 ### Benefits:
 -   **Performance**: 83% startup time reduction (30s → 5s)
@@ -85,7 +85,7 @@ The system uses a native Python execution model for optimal performance and simp
 -   **Production Scripts**: Automatically downloaded to `~/.sip_lims_workflow_manager/scripts`
 -   **Development Scripts**: Local scripts via direct file system access
 -   **Version Control**: Scripts are independently versioned and updated via Git
--   **Cross-Platform Paths**: Automatic path resolution for Windows, macOS, and Linux
+-   **Native Path Resolution**: Optimized path handling for macOS systems
 
 ## Execution Modes: Production vs. Developer
 
@@ -110,7 +110,7 @@ Activated by the presence of a `config/developer.marker` file:
 ### Environment Management:
 -   **Conda Integration**: Seamless integration with conda package management
 -   **Lock File Validation**: Ensures consistent package versions across deployments
--   **Cross-Platform Support**: Automatic adaptation to host operating system
+-   **Native Mac Support**: Optimized for macOS host operating system
 -   **Performance Optimization**: Native execution eliminates container startup overhead
 
 ## Development Workflow
@@ -121,7 +121,7 @@ The project includes tools for managing the deterministic conda environment:
 -   **Lock Files**: `conda-lock.txt` and `requirements-lock.txt` ensure reproducible environments
 -   **Environment Validation**: Automated checks for package consistency
 -   **Git Integration**: Version control for both code and environment specifications
--   **Cross-Platform Testing**: Validation across Windows, macOS, and Linux
+-   **Native Mac Testing**: Validation on macOS systems
 
 ### Development Workflow:
 1. **Development**: Modify dependencies in environment files
@@ -133,7 +133,7 @@ The project includes tools for managing the deterministic conda environment:
 ### Testing Infrastructure:
 -   **TDD Test Suite**: Comprehensive tests for all workflow components
 -   **Integration Tests**: End-to-end validation of native execution
--   **Cross-Platform Tests**: Validation across supported operating systems
+-   **Native Mac Tests**: Validation on macOS systems
 
 ## Workflow-Aware Architecture
 
@@ -152,8 +152,8 @@ User Selection → Native Python Launcher → Application Logic
 
 ### Native Python Launcher Features
 
-The [`run.py`](../../run.py) script provides:
-- **Cross-Platform Compatibility**: Single script works on Windows, macOS, and Linux
+The [`launcher/run.py`](../../launcher/run.py) script provides:
+- **Native Mac Compatibility**: Optimized script for macOS systems
 - **Interactive Workflow Selection**: Rich CLI interface with colored output
 - **Command-Line Arguments**: Support for automation and scripting
 - **Enhanced Error Handling**: Graceful error messages and recovery

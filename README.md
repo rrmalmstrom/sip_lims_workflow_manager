@@ -14,7 +14,7 @@ A comprehensive laboratory workflow management system for Stable Isotope Probing
 **Cross-platform setup using Docker containers**
 
 ```bash
-python run.py
+./run.command
 ```
 
 ## 📋 Prerequisites
@@ -43,9 +43,9 @@ python run.py
 ## 🔧 Advanced Usage
 
 ```bash
-python run.py --help          # Show all options
-python run.py --updates       # Perform system updates
-python run.py --version       # Check version
+./run.command --help          # Show all options
+./run.command --updates       # Perform system updates
+./run.command --version       # Check version
 ```
 
 ## 🆕 What's New

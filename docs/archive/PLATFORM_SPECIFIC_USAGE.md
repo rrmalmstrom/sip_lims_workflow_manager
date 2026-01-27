@@ -2,14 +2,14 @@
 
 ## Overview
 
-The SIP LIMS Workflow Manager now uses a single, unified Python launcher ([`run.py`](../run.py)) that works consistently across all operating systems, replacing the previous platform-specific scripts.
+The SIP LIMS Workflow Manager now uses a single, unified Python launcher ([`launcher/run.py`](../launcher/run.py)) that works consistently across all operating systems, replacing the previous platform-specific scripts.
 
 ## Unified Launcher
 
 ### All Platforms (macOS, Windows, Linux)
-- **File**: [`run.py`](../run.py)
-- **Usage**: `python3 run.py` (or `python run.py` on Windows)
-- **Features**: Full branch-aware Docker functionality with automatic updates and cross-platform compatibility
+- **File**: [`launcher/run.py`](../launcher/run.py)
+- **Usage**: `./run.command` (Native Mac launcher) or `python3 launcher/run.py` (Advanced usage)
+- **Features**: Native Mac execution with conda environment management and automatic updates
 
 ### Key Advantages
 - **Single Script**: One launcher for all platforms eliminates maintenance overhead

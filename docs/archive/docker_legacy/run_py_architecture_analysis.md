@@ -1,6 +1,6 @@
 # run.py Architecture Analysis
 
-**Document Purpose**: Comprehensive analysis of the [`run.py`](../../run.py) unified Docker launcher for future development agents.
+**Document Purpose**: Comprehensive analysis of the [`launcher/run.py`](../../launcher/run.py) unified Docker launcher for future development agents.
 
 **Analysis Date**: 2026-01-13  
 **Script Version**: 1.0.0  

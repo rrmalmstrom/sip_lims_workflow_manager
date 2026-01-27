@@ -31,4 +31,4 @@ echo "🚀 Launching workflow manager..."
 echo ""
 
 # Delegate to the sophisticated run.py with all its features
-python run.py "$@"
+python launcher/run.py "$@"
