@@ -1,6 +1,46 @@
 # SIP LIMS Workflow Manager - Quick Setup Guide
 
-## Prerequisites
+## 🍎 Native Mac Distribution (Recommended for Mac Users)
+
+**Simple, one-click setup for Mac users!** No Docker required.
+
+### Prerequisites
+- **macOS** (Intel or Apple Silicon)
+- **Miniconda** - For Python environment management
+
+### Setup Steps
+1. **Install Miniconda** (if not already installed):
+   - Download from: [https://docs.conda.io/en/latest/miniconda.html](https://docs.conda.io/en/latest/miniconda.html)
+   - Choose the installer for your Mac (Intel x86 or Apple Silicon M1/M2/M3/M4)
+   - Run the installer and follow the prompts
+   - Restart Terminal after installation
+
+2. **Download and Setup**:
+   - Download the `sip_lims_workflow_manager.zip` from GitHub releases
+   - Extract to a permanent location (Desktop or Documents)
+   - **Double-click `setup.command`** (one-time setup, 2-3 minutes)
+   - Wait for "Setup completed successfully!" message
+
+3. **Daily Usage**:
+   - **Double-click `run.command`** to launch the application
+   - Select your workflow type when prompted
+   - Start managing your laboratory workflow!
+
+### Advanced Usage
+For advanced users who want full control:
+```bash
+python run.py --help          # See all options
+python run.py --updates       # Perform updates
+python run.py --version       # Check version
+```
+
+---
+
+## 🐳 Docker Distribution (All Platforms)
+
+**Cross-platform setup using Docker containers.**
+
+### Prerequisites
 
 This application requires three components to be installed on your system:
 

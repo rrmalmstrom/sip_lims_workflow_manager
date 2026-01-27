@@ -11,6 +11,13 @@ Welcome to the central documentation for the SIP LIMS Workflow Manager. This gui
 
 ### Quick Start
 
+**🍎 Native Mac Distribution (New!):**
+1. Double-click `setup.command` (one-time setup)
+2. Double-click `run.command` (daily use)
+3. Select your workflow type when prompted
+4. Start managing your laboratory workflow!
+
+**🐳 Docker Distribution (All Platforms):**
 1. Run the application: `python3 run.py` or `python run.py`(all platforms)
 2. Select your workflow type when prompted
 3. Choose production or development mode
