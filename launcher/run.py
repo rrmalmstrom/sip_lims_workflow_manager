@@ -16,6 +16,9 @@ import signal
 from pathlib import Path
 from typing import Optional
 
+# Add parent directory to Python path to find src modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 # Try to import Click, fall back to standard library if not available
 try:
     import click
@@ -426,9 +429,10 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
             click.echo("Please install streamlit: pip install streamlit")
             sys.exit(1)
         
-        # Prepare arguments for app.py (Streamlit)
+        # Prepare arguments for app.py (Streamlit) - app.py is in parent directory
+        app_py_path = str(Path(__file__).parent.parent / "app.py")
         app_args = [
-            sys.executable, "-m", "streamlit", "run", "app.py",
+            sys.executable, "-m", "streamlit", "run", app_py_path,
             "--server.headless", "true",
             "--server.port", "8501",
             "--browser.gatherUsageStats", "false"
@@ -449,7 +453,7 @@ def launch_streamlit_app(workflow_type: str, project_path: Path,
         sys.exit(1)
     except FileNotFoundError:
         click.secho("❌ ERROR: app.py not found", fg='red', bold=True)
-        click.echo("Please ensure app.py is in the same directory as run.py")
+        click.echo("Please ensure app.py is in the parent directory of the launcher")
         sys.exit(1)
     except Exception as e:
         click.secho(f"❌ FATAL ERROR: {e}", fg='red', bold=True)
