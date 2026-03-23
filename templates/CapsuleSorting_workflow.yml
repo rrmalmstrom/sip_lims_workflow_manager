@@ -1,0 +1,33 @@
+workflow_name: "Capsule Sorting"
+steps:
+  - id: init_project
+    name: "1. Initiate Project / Make Sort Labels"
+    script: "initiate_project_folder_and_make_sort_plate_labels.py"
+    allow_rerun: true
+
+  - id: prep_library
+    name: "2. Generate Lib Creation Files"
+    script: "generate_lib_creation_files.py"
+    allow_rerun: true
+
+  - id: analyze_quality
+    name: "3. Analyze FA data"
+    script: "capsule_fa_analysis.py"
+    allow_rerun: true
+
+  - id: select_plates
+    name: "4. Create SPITS file"
+    script: "create_capsule_spits.py"
+    allow_rerun: false
+
+  - id: process_grid_barcodes
+    name: "5. Process Grid Tables & Generate Barcodes"
+    script: "process_grid_tables_and_generate_barcodes.py"
+    allow_rerun: false
+    notes: "Generates Excel template for barcode scanning. Manual scanning required before Step 6."
+
+  - id: verify_scanning_esp
+    name: "6. Verify Scanning & Generate ESP Files"
+    script: "verify_scanning_and_generate_ESP_files.py"
+    allow_rerun: false
+    notes: "Validates barcode scanning results. Will exit if any mismatches detected."
