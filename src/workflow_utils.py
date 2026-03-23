@@ -27,13 +27,14 @@ def get_workflow_template_path():
     workflow_type = workflow_type.lower()
     
     # Validate workflow type - fail fast if invalid
-    if workflow_type not in ['sip', 'sps-ce']:
-        raise ValueError(f"Invalid WORKFLOW_TYPE '{workflow_type}'. Must be 'sip' or 'sps-ce'.")
+    if workflow_type not in ['sip', 'sps-ce', 'capsule-sorting']:
+        raise ValueError(f"Invalid WORKFLOW_TYPE '{workflow_type}'. Must be 'sip', 'sps-ce', or 'capsule-sorting'.")
     
     # Map workflow type to template filename
     template_mapping = {
         'sip': 'sip_workflow.yml',
-        'sps-ce': 'sps_workflow.yml'
+        'sps-ce': 'sps_workflow.yml',
+        'capsule-sorting': 'CapsuleSorting_workflow.yml'
     }
     
     template_filename = template_mapping[workflow_type]
@@ -70,4 +71,4 @@ def validate_workflow_type(workflow_type: str) -> bool:
     """
     if not workflow_type:
         return False
-    return workflow_type.lower() in ['sip', 'sps-ce']
+    return workflow_type.lower() in ['sip', 'sps-ce', 'capsule-sorting']

@@ -59,7 +59,8 @@ except ImportError:
 def validate_workflow_type(workflow_type: str) -> str:
     """Validate and normalize workflow type."""
     if not workflow_type:
-        return "sip"  # Default to SIP
+        click.secho("❌ ERROR: No workflow type provided.", fg='red', bold=True)
+        sys.exit(1)
     
     workflow_type = workflow_type.lower().strip()
     
@@ -68,9 +69,12 @@ def validate_workflow_type(workflow_type: str) -> str:
         return "sip"
     elif workflow_type in ['sps', 'sps-ce', 'spsceq']:
         return "sps-ce"  # Always return sps-ce for consistency with ScriptsUpdater
+    elif workflow_type in ['capsule-sorting', 'capsule_sorting']:
+        return "capsule-sorting"  # Always return capsule-sorting for consistency with ScriptsUpdater
     else:
-        click.secho(f"⚠️  Warning: Unknown workflow type '{workflow_type}', defaulting to 'sip'", fg='yellow')
-        return "sip"
+        click.secho(f"❌ ERROR: Unknown workflow type '{workflow_type}'", fg='red', bold=True)
+        click.secho("Valid options: sip, sps-ce, capsule-sorting", fg='red')
+        sys.exit(1)
 
 
 def validate_project_path(project_path: Optional[str]) -> Path:
@@ -237,17 +241,20 @@ def interactive_workflow_selection():
     click.echo("Available workflow types:")
     click.echo("  1. SIP - Standard workflow")
     click.echo("  2. SPS-CE - SPS workflow")
+    click.echo("  3. Capsule Sorting - Capsule Sorting workflow")
     click.echo()
     
     while True:
-        choice = click.prompt("Select workflow type (1 or 2)", type=str).strip()
+        choice = click.prompt("Select workflow type (1, 2, or 3)", type=str).strip()
         
         if choice == '1':
             return 'sip'
         elif choice == '2':
             return 'sps-ce'
+        elif choice == '3':
+            return 'capsule-sorting'
         else:
-            click.secho(f"❌ Invalid choice '{choice}'. Please enter 1 or 2.", fg='red')
+            click.secho(f"❌ Invalid choice '{choice}'. Please enter 1, 2, or 3.", fg='red')
             click.secho("❌ Terminating - invalid workflow selection", fg='red', bold=True)
             sys.exit(1)
 

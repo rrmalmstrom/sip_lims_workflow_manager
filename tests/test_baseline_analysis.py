@@ -63,6 +63,7 @@ def test_workflow_utils_functionality():
         # Test workflow type validation
         assert validate_workflow_type('sip') == True
         assert validate_workflow_type('sps-ce') == True
+        assert validate_workflow_type('capsule-sorting') == True
         assert validate_workflow_type('invalid') == False
         
         # Test workflow display

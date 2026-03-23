@@ -36,6 +36,8 @@ def get_dynamic_title() -> str:
         return "🧪 SIP LIMS Workflow Manager"
     elif workflow_type == 'SPS-CE':
         return "🧪 SPS-CE LIMS Workflow Manager"
+    elif workflow_type == 'CAPSULE-SORTING':
+        return "🧪 Capsule Sorting LIMS Workflow Manager"
     else:
         # Fallback to generic title if workflow type is not set or unknown
         return "🧪 SIP LIMS Workflow Manager"

@@ -32,6 +32,10 @@ WORKFLOW_REPOSITORIES = {
     'sps-ce': {
         'repo_name': 'SPS_library_creation_scripts',
         'repo_owner': 'rrmalmstrom'
+    },
+    'capsule-sorting': {
+        'repo_name': 'capsule-single-cell-sort-scripts',
+        'repo_owner': 'rrmalmstrom'
     }
 }
 
@@ -44,7 +48,7 @@ class ScriptsUpdater:
         Initialize ScriptsUpdater with workflow-aware repository configuration.
         
         Args:
-            workflow_type: 'sip' or 'sps-ce' - determines which repository to use
+            workflow_type: 'sip', 'sps-ce', or 'capsule-sorting' - determines which repository to use
             repo_owner: Override default repository owner
             scripts_repo_name: Override default repository name
         """
@@ -215,7 +219,7 @@ def main():
     parser.add_argument("--summary", action="store_true", help="Show scripts update summary")
     parser.add_argument("--scripts-dir", required=True, help="Directory for scripts repository")
     parser.add_argument("--branch", default="main", help="Git branch to check/download from")
-    parser.add_argument("--workflow-type", help="Workflow type (sip or sps-ce) - defaults to WORKFLOW_TYPE env var")
+    parser.add_argument("--workflow-type", help="Workflow type (sip, sps-ce, or capsule-sorting) - defaults to WORKFLOW_TYPE env var")
     
     args = parser.parse_args()
     
