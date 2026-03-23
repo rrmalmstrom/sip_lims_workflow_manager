@@ -14,8 +14,8 @@ The "Capsule Sorting" workflow consists of the following six Python scripts:
 2.  `generate_lib_creation_files.py`: Creates library creation files, including index assignments and FA protocols.
 3.  `capsule_fa_analysis.py`: Analyzes the output from the Fragment Analyzer to assess the quality of the libraries.
 4.  `create_capsule_spits.py`: Generates SPITS files for submitting samples to JGI.
-5.  `make_ESP_smear_analysis_file.py`: Creates smear analysis files for the ESP system.
-6.  `relabel_lib_plates_for_pooling.py`: Generates labels for relabeling plates for pooling.
+5.  `process_grid_tables_and_generate_barcodes.py`: Processes grid tables, extracts container barcode mapping, and generates Excel barcode scanning template with BarTender files.
+6.  `verify_scanning_and_generate_ESP_files.py`: Validates barcode scanning verification and generates ESP smear analysis files (with mandatory safety gate - sys.exit() on any barcode mismatch).
 
 ### 1.4. Local Script Location
 
@@ -23,39 +23,15 @@ The "Capsule Sorting" scripts will be downloaded to and managed in the following
 
 `~/.sip_lims_workflow_manager/capsule-sorting_scripts`
 
-
-Each of the six "Capsule Sorting" Python scripts must be modified to create a success marker file upon successful completion. This is a critical integration point for the workflow manager.
-
-The marker file should be created at `.workflow_status/<script_name>.success`.
-
-#### Example Implementation:
-
-```python
-import sys
-from pathlib import Path
-from datetime import datetime
-
-def create_success_marker():
-    """Create success marker file for workflow manager integration."""
-    script_name = Path(__file__).stem
-    status_dir = Path(".workflow_status")
-    status_dir.mkdir(exist_ok=True)
-    success_file = status_dir / f"{script_name}.success"
-    
-    try:
-        with open(success_file, "w") as f:
-            f.write(f"SUCCESS: {script_name} completed at {datetime.now()}\n")
-        print(f"✅ Success marker created: {success_file}")
-    except Exception as e:
-        print(f"❌ ERROR: Could not create success marker: {e}")
-        print("Script failed - workflow manager integration requires success marker")
-        sys.exit()
 ```
 
 
 ### 1.2. Workflow Configuration File (`CapsuleSorting_workflow.yml`)
 
-A new workflow configuration file, `templates/CapsuleSorting_workflow.yml`, will be created. workflow_name: "Capsule Sorting"
+A new workflow configuration file, `templates/CapsuleSorting_workflow.yml`, will be created:
+
+```yaml
+workflow_name: "Capsule Sorting"
 steps:
   - id: init_project
     name: "1. Initiate Project / Make Sort Labels"
@@ -77,15 +53,19 @@ steps:
     script: "create_capsule_spits.py"
     allow_rerun: false
 
-  - id: integrate_esp
-    name: "5. Generate ESP File"
-    script: "make_ESP_smear_analysis_file.py"
+  - id: process_grid_barcodes
+    name: "5. Process Grid Tables & Generate Barcodes"
+    script: "process_grid_tables_and_generate_barcodes.py"
     allow_rerun: false
 
-  - id: relabel_plates
-    name: "6. Relabel Plates for Pooling"
-    script: "relabel_lib_plates_for_pooling.py"
+  - id: verify_scanning_esp
+    name: "6. Verify Scanning & Generate ESP Files"
+    script: "verify_scanning_and_generate_ESP_files.py"
     allow_rerun: false
+    
+```
+
+
 
 ## 2. Core Application Modifications
 
@@ -123,9 +103,11 @@ To integrate the "Capsule Sorting" workflow, the following modifications must be
               sys.exit(1)
   ```
 
-- **`validate_workflow_type()`**: Add `'capsule-sorting'` to the list of valid workflow types.
+- **`validate_workflow_type()`**: **CRITICAL FIX** - Replace dangerous fallback logic with strict validation.
 
-  **Modification:**
+  **Current Problem**: The function defaults to "sip" for invalid workflow types, which could cause users to accidentally run the wrong workflow.
+
+  **Required Fix:**
   ```python
   def validate_workflow_type(workflow_type: str) -> str:
       '''Validate and normalize workflow type.'''
@@ -143,34 +125,39 @@ To integrate the "Capsule Sorting" workflow, the following modifications must be
           return "capsule-sorting"
       else:
           click.secho(f"❌ ERROR: Unknown workflow type '{workflow_type}'", fg='red', bold=True)
+          click.secho("Valid options: sip, sps-ce, capsule-sorting", fg='red')
           sys.exit(1)
   ```
+
+  **Safety Improvement**: Eliminates dangerous fallback to "sip" that could cause laboratory safety issues.
 
 ### 2.2. `src/scripts_updater.py`
 
 - **`WORKFLOW_REPOSITORIES`**: Add a new entry for `'capsule-sorting'` that maps to the `capsule-single-cell-sort-scripts` GitHub repository.
 
-  **Modification:**
-  ```python
-  WORKFLOW_REPOSITORIES = {
-      'sip': {
-          'repo_name': 'sip_scripts_workflow_gui',
-          'repo_owner': 'rrmalmstrom'
-      },
-      'sps-ce': {
-          'repo_name': 'SPS_library_creation_scripts',
-          'repo_owner': 'rrmalmstrom'
-      },
-      'capsule-sorting': {
-          'repo_name': 'capsule-single-cell-sort-scripts',
-          'repo_owner': 'rrmalmstrom'
-      }
-  }
-  ```
+ **Modification:**
+ ```python
+ WORKFLOW_REPOSITORIES = {
+     'sip': {
+         'repo_name': 'sip_scripts_workflow_gui',
+         'repo_owner': 'rrmalmstrom'
+     },
+     'sps-ce': {
+         'repo_name': 'SPS_library_creation_scripts',
+         'repo_owner': 'rrmalmstrom'
+     },
+     'capsule-sorting': {
+         'repo_name': 'capsule-single-cell-sort-scripts',
+         'repo_owner': 'rrmalmstrom'
+     }
+ }
+ ```
 
 ### 2.3. `src/workflow_utils.py`
 
-- **`get_workflow_template_path()`**: Add `'capsule-sorting': 'CapsuleSorting_workflow.yml'` to the `template_mapping` dictionary.
+**CRITICAL**: This file has TWO functions that need updating for Capsule Sorting support.
+
+- **`get_workflow_template_path()`**: Add `'capsule-sorting': 'CapsuleSorting_workflow.yml'` to the `template_mapping` dictionary and update validation.
 
   **Modification:**
   ```python
@@ -205,7 +192,7 @@ To integrate the "Capsule Sorting" workflow, the following modifications must be
       return template_path
   ```
 
-- **`validate_workflow_type()`**: Add `'capsule-sorting'` to the list of valid workflow types.
+- **`validate_workflow_type()`** (line 73): Add `'capsule-sorting'` to the list of valid workflow types.
 
   **Modification:**
   ```python
@@ -222,49 +209,183 @@ To integrate the "Capsule Sorting" workflow, the following modifications must be
 
 - **`get_dynamic_title()`**: Add a condition to return "Capsule Sorting LIMS Workflow Manager" when `WORKFLOW_TYPE` is `'CAPSULE-SORTING'`.
 
-  **Modification:**
-  ```python
-  def get_dynamic_title() -> str:
-      '''
-      Generate dynamic title based on WORKFLOW_TYPE environment variable.
-      '''
-      workflow_type = os.environ.get('WORKFLOW_TYPE', '').strip().upper()
+ **Modification:**
+ ```python
+ def get_dynamic_title() -> str:
+     '''
+     Generate dynamic title based on WORKFLOW_TYPE environment variable.
+     '''
+     workflow_type = os.environ.get('WORKFLOW_TYPE', '').strip().upper()
 
-      if workflow_type == 'SIP':
-          return "🧪 SIP LIMS Workflow Manager"
-      elif workflow_type == 'SPS-CE':
-          return "🧪 SPS-CE LIMS Workflow Manager"
-      elif workflow_type == 'CAPSULE-SORTING':
-          return "🧪 Capsule Sorting LIMS Workflow Manager"
-      else:
-          return "🧪 SIP LIMS Workflow Manager"
-  ```
+     if workflow_type == 'SIP':
+         return "🧪 SIP LIMS Workflow Manager"
+     elif workflow_type == 'SPS-CE':
+         return "🧪 SPS-CE LIMS Workflow Manager"
+     elif workflow_type == 'CAPSULE-SORTING':
+         return "🧪 Capsule Sorting LIMS Workflow Manager"
+     else:
+         return "🧪 SIP LIMS Workflow Manager"
+ ```
+
+## 3. Missing Template File Creation
+
+### 3.1. `templates/CapsuleSorting_workflow.yml`
+
+A new workflow template file must be created at `templates/CapsuleSorting_workflow.yml`:
+
+```yaml
+workflow_name: "Capsule Sorting"
+steps:
+ - id: init_project
+   name: "1. Initiate Project / Make Sort Labels"
+   script: "initiate_project_folder_and_make_sort_plate_labels.py"
+   allow_rerun: true
+
+ - id: prep_library
+   name: "2. Generate Lib Creation Files"
+   script: "generate_lib_creation_files.py"
+   allow_rerun: true
+
+ - id: analyze_quality
+   name: "3. Analyze FA data"
+   script: "capsule_fa_analysis.py"
+   allow_rerun: true
+
+ - id: select_plates
+   name: "4. Create SPITS file"
+   script: "create_capsule_spits.py"
+   allow_rerun: false
+
+ - id: process_grid_barcodes
+   name: "5. Process Grid Tables & Generate Barcodes"
+   script: "process_grid_tables_and_generate_barcodes.py"
+   allow_rerun: false
+   notes: "Generates Excel barcode scanning template - manual scanning step required before next step"
+
+ - id: verify_scanning_esp
+   name: "6. Verify Scanning & Generate ESP Files"
+   script: "verify_scanning_and_generate_ESP_files.py"
+   allow_rerun: false
+   notes: "Mandatory barcode verification - sys.exit() on ANY mismatch detected"
+```
+
+## 4. Repository Verification Requirements
+
+### 4.1. Pre-Implementation Verification (CRITICAL)
+
+Before implementing Capsule Sorting support, the following must be verified:
+
+#### Repository Accessibility
+- **Repository URL**: Confirm `rrmalmstrom/capsule-single-cell-sort-scripts` exists and is accessible
+- **Branch Structure**: Verify proper Git branch organization and default branch
+- **Permissions**: Validate read access for script download operations
+- **Repository Status**: Confirm repository is active and maintained
+
+#### Script Availability Verification
+All six required scripts must exist in the repository:
+- `initiate_project_folder_and_make_sort_plate_labels.py`
+- `generate_lib_creation_files.py`
+- `capsule_fa_analysis.py`
+- `create_capsule_spits.py`
+- `process_grid_tables_and_generate_barcodes.py`
+- `verify_scanning_and_generate_ESP_files.py`
+
+#### Success Marker Integration
+All scripts must follow the workflow manager's success marker pattern:
+```python
+# Required at the end of each successful script
+success_dir = Path(".workflow_status")
+success_dir.mkdir(exist_ok=True)
+success_file = success_dir / f"{Path(__file__).stem}.success"
+success_file.touch()
+```
+
+### 4.2. Fallback Strategies
+If repository verification reveals issues:
+- **Repository Inaccessibility**: Implement local script management or alternative repository
+- **Missing Scripts**: Coordinate with repository maintainer for script availability
+- **Version Mismatches**: Update implementation plan to match available script versions
+- **Documentation Gaps**: Create supplementary documentation for workflow manager integration
 
 
-## 4. Testing and Validation
+## 5. Testing and Validation
 
-To ensure the new "Capsule Sorting" workflow is implemented correctly and does not introduce any regressions, the following testing and validation strategy must be followed.
+### 5.1. Required Test Updates
 
-### 4.1. Test-Driven Development (TDD)
+The following test files must be updated to include Capsule Sorting workflow support:
 
-The coding agent must adopt a TDD approach. For each modification made to the existing codebase, a corresponding test must be created or updated to validate the change. New tests must be created for any new functions or classes.
+#### 5.1.1. `tests/test_platform_launchers.py`
+- Add tests for 3rd workflow option in `interactive_workflow_selection()`
+- Validate `validate_workflow_type()` accepts `'capsule-sorting'`
+- Test workflow type normalization for various input formats
 
--   **`launcher/run.py`**: New tests must be added to `tests/test_platform_launchers.py` to validate the new workflow selection and validation logic.
--   **`src/scripts_updater.py`**: The tests in `tests/test_scripts_updater.py` must be updated to include the new "Capsule Sorting" workflow and its repository.
--   **`src/workflow_utils.py`**: The tests in `tests/test_workflow_type_propagation.py` must be updated to validate the new "Capsule Sorting" workflow type.
--   **`app.py`**: New tests must be added to `tests/test_app.py` to validate the new dynamic title for the "Capsule Sorting" workflow.
+#### 5.1.2. `tests/test_scripts_updater.py`
+- Add tests for `'capsule-sorting'` repository mapping in `WORKFLOW_REPOSITORIES`
+- Validate ScriptsUpdater initialization with `'capsule-sorting'` workflow type
+- Test script download and update functionality for Capsule Sorting repository
 
-### 4.2. Manual Validation
+#### 5.1.3. `tests/test_workflow_type_propagation.py`
+- Add tests for `'capsule-sorting'` workflow type in `get_workflow_template_path()`
+- Test `validate_workflow_type()` function with `'capsule-sorting'` input
+- Validate environment variable propagation for Capsule Sorting workflow
 
-Once the automated tests are passing, you will perform manual validation to ensure the new workflow is working as expected. The following steps should be performed:
+#### 5.1.4. `tests/test_app.py`
+- Add tests for Capsule Sorting dynamic title in `get_dynamic_title()`
+- Validate title generation when `WORKFLOW_TYPE='CAPSULE-SORTING'`
 
-1.  **Launch the application** and select the "Capsule Sorting" workflow.
-2.  **Verify the title** of the application is "Capsule Sorting LIMS Workflow Manager".
-3.  **Create a new project** and verify that the `CapsuleSorting_workflow.yml` file is created correctly.
-4.  **Run each step** of the "Capsule Sorting" workflow, verifying that each script completes successfully and that the UI updates accordingly.
-5.  **Verify the success markers** are created in the `.workflow_status` directory after each step.
-6.  **Test the `allow_rerun` functionality** for the steps where it is enabled.
-7.  **Test the undo functionality** to ensure it correctly rolls back the workflow state.
+### 5.2. Manual Validation Steps
+
+1. **Launch Application**: Select "Capsule Sorting" workflow from interactive menu
+2. **Verify Title**: Confirm application title shows "Capsule Sorting LIMS Workflow Manager"
+3. **Create New Project**: Verify `CapsuleSorting_workflow.yml` template is used
+4. **Test Script Download**: Confirm scripts download from `capsule-single-cell-sort-scripts` repository
+5. **Validate Workflow Steps**: Verify all 6 workflow steps display correctly
+6. **Test Success Markers**: Confirm `.workflow_status` directory integration works
+
+## 6. Implementation Priority
+
+### 6.1. Phase 1: Core Integration (Week 1)
+1. **Workflow Type Support** - Update all core files to recognize `'capsule-sorting'`
+2. **Template File Creation** - Create `templates/CapsuleSorting_workflow.yml`
+3. **Repository Verification** - Confirm script repository accessibility and script availability
+4. **Basic Testing** - Update test files for third workflow support
+
+### 6.2. Phase 2: Validation and Testing (Week 2)
+1. **Integration Testing** - End-to-end workflow validation
+2. **Repository Integration** - Test script downloading and execution
+3. **Manual Validation** - Complete workflow testing
+4. **Documentation Updates** - Update user guides and documentation
+
+## 7. Risk Assessment
+
+### 7.1. High Priority Risks
+
+#### Repository Accessibility Risk
+- **Risk**: `capsule-single-cell-sort-scripts` repository may not exist or be inaccessible
+- **Impact**: Complete implementation failure, script download failures
+- **Mitigation**: Verify repository accessibility before implementation begins
+
+#### Script Availability Risk
+- **Risk**: Required scripts may not exist in the repository
+- **Impact**: Workflow execution failures, missing functionality
+- **Mitigation**: Verify all 6 required scripts exist and follow success marker pattern
+
+#### Template File Risk
+- **Risk**: Missing `CapsuleSorting_workflow.yml` template file
+- **Impact**: New project creation failures, workflow loading errors
+- **Mitigation**: Create template file following existing patterns
+
+### 7.2. Medium Priority Risks
+
+#### Testing Coverage Risk
+- **Risk**: Incomplete test coverage for third workflow type
+- **Impact**: Undetected regressions, integration issues
+- **Mitigation**: Comprehensive test updates across all relevant test files
+
+#### Integration Complexity Risk
+- **Risk**: Workflow manager integration may reveal unexpected issues
+- **Impact**: Extended development time, potential system instability
+- **Mitigation**: Phased implementation approach with thorough testing
 
 ### 4.4. Documentation
 
