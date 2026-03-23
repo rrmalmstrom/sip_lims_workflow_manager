@@ -4,11 +4,14 @@ This directory contains the master workflow templates for the LIMS Workflow Mana
 
 ## Files
 
-- **`workflow.yml`** - Master workflow template used when creating new projects
-  - This is the authoritative template that gets copied to new project directories
-  - Protected by Git version control
-  - Changes here will affect all new projects created
-  - Includes conditional workflow configuration for steps 10-11 (emergency third attempt decision point)
+- **`sip_workflow.yml`** - SIP (Stable Isotope Probing) workflow template for 21-step comprehensive fractionation workflow
+- **`sps_workflow.yml`** - SPS-CE (Single Particle Sorts & Cell Enrichments) workflow template for 6-step focused library creation workflow
+- **`CapsuleSorting_workflow.yml`** - Capsule Sorting workflow template for 6-step capsule sorting and preparation workflow
+
+These are the authoritative templates that get copied to new project directories:
+- Protected by Git version control
+- Changes here will affect all new projects created
+- Each workflow type has its own specific template with appropriate step configurations
 
 ## Important Notes
 

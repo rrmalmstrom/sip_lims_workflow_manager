@@ -61,6 +61,12 @@ The SIP LIMS Workflow Manager supports multiple laboratory workflow types:
 - **Scripts Repository**: `SPS_library_creation_scripts`
 - **Template**: [`templates/sps_workflow.yml`](../../templates/sps_workflow.yml)
 
+#### Capsule Sorting - 6 Steps
+- **Purpose**: Capsule sorting and preparation for downstream analysis
+- **Steps**: 6 comprehensive steps from project initiation through ESP file generation
+- **Scripts Repository**: `capsule-single-cell-sort-scripts`
+- **Template**: [`templates/CapsuleSorting_workflow.yml`](../../templates/CapsuleSorting_workflow.yml)
+
 ### Workflow Selection
 
 When starting the application, you'll be prompted to select your workflow type:
@@ -69,7 +75,8 @@ When starting the application, you'll be prompted to select your workflow type:
 Select workflow type:
 1) SIP (Stable Isotope Probing)
 2) SPS-CE (SPS-Capillary Electrophoresis)
-Enter choice (1 or 2):
+3) Capsule Sorting
+Enter choice (1, 2, or 3):
 ```
 
 ### Backward Compatibility

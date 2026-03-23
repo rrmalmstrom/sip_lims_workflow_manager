@@ -47,7 +47,8 @@ When you run the application, you'll first be asked to select your workflow type
 🧪 Select workflow type:
 1) SIP (Stable Isotope Probing) - 21 step comprehensive workflow
 2) SPS-CE (SPS-Capillary Electrophoresis) - 6 step focused workflow
-Enter choice (1 or 2):
+3) Capsule Sorting - 6 step capsule sorting and preparation workflow
+Enter choice (1, 2, or 3):
 ```
 
 ### Project Folder Selection

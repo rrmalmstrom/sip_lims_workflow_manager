@@ -44,6 +44,29 @@ The SPS-CE workflow is a focused 6-step process for SPS library creation with Fr
 - **Scripts**: `SPS_library_creation_scripts`
 - **Location**: `~/.sip_lims_workflow_manager/sps-ce_scripts`
 
+## Capsule Sorting Workflow
+
+### Overview
+The Capsule Sorting workflow is a focused 6-step process for capsule sorting and preparation for downstream analysis.
+
+### Workflow Steps (6 Total)
+1. **Initiate Project / Make Sort Labels**: Set up project structure and generate sorting labels
+2. **Generate Lib Creation Files**: Create library preparation files and configurations
+3. **Analyze FA data**: Analyze Fragment Analyzer data for quality control
+4. **Create SPITS file**: Generate SPITS (Sample Preparation Information Tracking System) files
+5. **Process Grid Tables & Generate Barcodes**: Process grid table data and generate barcode information
+6. **Verify Scanning & Generate ESP Files**: Verify scanning results and generate ESP (Electronic Sample Processing) files
+
+### Use Cases
+- Capsule sorting and preparation workflows
+- Single-cell sorting preparation
+- Downstream analysis preparation
+- Quality control and verification processes
+
+### Repository
+- **Scripts**: `capsule-single-cell-sort-scripts`
+- **Location**: `~/.sip_lims_workflow_manager/capsule-sorting_scripts`
+
 ## Choosing the Right Workflow
 
 ### When to Use SIP Workflow
@@ -57,6 +80,12 @@ The SPS-CE workflow is a focused 6-step process for SPS library creation with Fr
 - Fragment Analyzer-based workflows
 - Iterative sample processing
 - Decision-driven workflow progression
+
+### When to Use Capsule Sorting Workflow
+- Capsule sorting and preparation processes
+- Single-cell sorting preparation
+- Downstream analysis preparation workflows
+- Quality control and verification processes
 
 ## Technical Implementation
 

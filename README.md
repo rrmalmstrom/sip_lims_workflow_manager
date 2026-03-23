@@ -32,6 +32,7 @@ A comprehensive laboratory workflow management system for Stable Isotope Probing
 
 - **SIP (Stable Isotope Probing)**: 21-step comprehensive fractionation workflow
 - **SPS-CE (Single Particle Sorts & Cell Enrichments)**: 6-step focused library creation workflow
+- **Capsule Sorting**: 6-step capsule sorting and preparation workflow for downstream analysis
 
 ## 📖 Documentation
 
