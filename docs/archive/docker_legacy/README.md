@@ -2,8 +2,9 @@
 
 This directory contains documentation from the Docker-based implementation of the SIP LIMS Workflow Manager, archived for historical reference.
 
-## Archive Date
-January 26, 2026
+## Archive Dates
+- **Initial Archive**: January 26, 2026
+- **Additional Documents**: March 24, 2026
 
 ## Context
 These documents were part of the original Docker-based architecture that was replaced with native Python execution in January 2026. The Docker removal implementation achieved:
@@ -26,6 +27,12 @@ These documents were part of the original Docker-based architecture that was rep
 ### Executive Documentation
 - `BRANCH_AWARE_DOCKER_IMPLEMENTATION_COMPLETE.md` - Branch-aware Docker implementation summary
 - `DOCKER_BUILD_STRATEGY_EXECUTIVE_SUMMARY.md` - Docker build strategy overview
+
+### Developer Guide Documents (Archived March 24, 2026)
+- `BRANCH_AWARE_ARCHITECTURE.md` - Branch-aware Docker architecture and image management
+- `ENHANCED_UPDATE_SAFETY_FEATURES.md` - Docker image update safety and fatal sync error detection
+- `windows_batch_debugging_fix.md` - Windows batch script fixes for Docker operations
+- `repository_analysis.md` - Analysis of dual-repository structure with Docker-based script management
 
 ## Current Architecture
 The current system uses native Python execution with:
