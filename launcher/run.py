@@ -14,7 +14,7 @@ import subprocess
 import argparse
 import signal
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 # Add parent directory to Python path to find src modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -54,6 +54,94 @@ except ImportError:
             if not response:
                 return default
             return response in ['y', 'yes']
+
+
+def auto_update_self() -> bool:
+    """
+    Check for and apply workflow manager updates at launch time.
+
+    Fetches the remote and compares commit hashes. If behind, runs git pull
+    and returns True so the caller can exit and prompt the user to re-launch.
+    Returns False if already up to date or if the check/pull fails (non-fatal).
+    """
+    repo_path = Path(__file__).parent.parent
+
+    click.secho("🔄 Checking for workflow manager updates...", fg='cyan')
+
+    try:
+        # Fetch latest from remote (read-only, no merge)
+        fetch_result = subprocess.run(
+            ['git', 'fetch'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        if fetch_result.returncode != 0:
+            click.secho(
+                f"⚠️  Could not reach remote to check for updates. Continuing with current version.",
+                fg='yellow'
+            )
+            return False
+
+        # Get local HEAD commit hash
+        local_result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        # Get remote tracking branch commit hash
+        remote_result = subprocess.run(
+            ['git', 'rev-parse', '@{u}'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if local_result.returncode != 0 or remote_result.returncode != 0:
+            click.secho(
+                "⚠️  Could not determine update status. Continuing with current version.",
+                fg='yellow'
+            )
+            return False
+
+        local_hash = local_result.stdout.strip()
+        remote_hash = remote_result.stdout.strip()
+
+        if local_hash == remote_hash:
+            click.secho("✅ Workflow manager is up to date.", fg='green')
+            return False
+
+        # Behind remote — apply update
+        click.secho("⬇️  Update found — applying...", fg='blue')
+        pull_result = subprocess.run(
+            ['git', 'pull'],
+            cwd=repo_path,
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if pull_result.returncode == 0:
+            click.secho("✅ Workflow manager updated successfully.", fg='green')
+            return True
+        else:
+            # Pull failed (e.g. dirty working tree)
+            stderr = pull_result.stderr.strip()
+            click.secho(f"⚠️  Auto-update failed: {stderr}", fg='yellow')
+            click.secho("   Continuing with current version. Run 'git pull' manually to update.", fg='yellow')
+            return False
+
+    except subprocess.TimeoutExpired:
+        click.secho("⚠️  Update check timed out. Continuing with current version.", fg='yellow')
+        return False
+    except Exception as e:
+        click.secho(f"⚠️  Update check error: {e}. Continuing with current version.", fg='yellow')
+        return False
 
 
 def validate_workflow_type(workflow_type: str) -> str:
@@ -523,6 +611,15 @@ def main():
                     print("⚠️  Updates completed with warnings")
             return
         
+        # Auto-update the workflow manager before doing anything else
+        was_updated = auto_update_self()
+        if was_updated:
+            click.echo()
+            click.secho("🔄 Update applied. Please re-launch run.command to start with the latest version.", fg='yellow', bold=True)
+            sys.exit(0)
+
+        click.echo()
+
         # Normal interactive workflow
         workflow_type = interactive_workflow_selection()
         project_path = interactive_project_selection()
