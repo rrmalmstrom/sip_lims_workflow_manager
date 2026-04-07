@@ -32,6 +32,10 @@ class Workflow:
                 return step
         return None
 
+    def get_all_steps(self) -> List[Dict[str, Any]]:
+        """Returns the list of all step dicts in the workflow."""
+        return self.steps
+
 class Project:
     """
     Represents a single project folder, containing a workflow, its state,

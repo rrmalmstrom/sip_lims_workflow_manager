@@ -24,15 +24,18 @@ The SIP workflow is a comprehensive 21-step process for stable isotope probing f
 ## SPS-CE (SPS-Capillary Electrophoresis) Workflow
 
 ### Overview
-The SPS-CE workflow is a focused 6-step process for SPS library creation with Fragment Analyzer integration.
+The SPS-CE workflow is a focused 9-step process for SPS library creation with Fragment Analyzer integration.
 
-### Workflow Steps (6 Total)
-1. **Make Illumina Index and FA Files**: Generate index files and Fragment Analyzer inputs
-2. **First FA Output Analysis**: Analyze initial Fragment Analyzer results
-3. **Rework First Attempt**: Rework samples based on analysis
-4. **Second FA Output Analysis**: Analyze second round results
-5. **Decision: Second Attempt Needed?**: Determine if additional rework is required
-6. **Conclude FA Analysis and Generate ESP Smear File**: Finalize analysis and generate submission files
+### Workflow Steps (9 Total)
+1. **Initiate Project & Make Sort Plate Labels**: Create the standardized project folder structure, read `sample_metadata.csv`, generate barcode labels for sort plates, create plate layout CSVs, and initialize `project_summary.db`. Supports re-runs to add additional plates.
+2. **Process WGA Results**: Read WGA (Whole Genome Amplification) kinetics summary files, filter to passing samples, sort by amplification quality, and generate `summary_MDA_results.csv`.
+3. **Read WGA Summary & Make SPITS**: Read `summary_MDA_results.csv`, assign Illumina indexes, generate the JGI SPITS sequencing submission CSV, and update `project_summary.db` with master plate data.
+4. **Make Illumina Index and FA Files**: Generate index files and Fragment Analyzer inputs
+5. **First FA Output Analysis**: Analyze initial Fragment Analyzer results
+6. **Decision: Second Attempt Needed?**: Determine if additional rework is required
+7. **Rework First Attempt**: Rework samples based on analysis
+8. **Second FA Output Analysis**: Analyze second round results
+9. **Conclude FA Analysis and Generate ESP Smear File**: Finalize analysis and generate submission files
 
 ### Use Cases
 - SPS library creation workflows

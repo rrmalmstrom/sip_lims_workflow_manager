@@ -1,25 +1,43 @@
 workflow_name: "SPS-CE Library Creation Workflow"
 steps:
+  - id: initiate_project
+    name: "Initiate Project and Make Sort Plate Labels"
+    script: "SPS_initiate_project_folder_and_make_sort_plate_labels.py"
+    allow_rerun: true
+
+  - id: process_wga_results
+    name: "Process WGA Results"
+    script: "SPS_process_WGA_results.py"
+
+  - id: read_wga_and_make_spits
+    name: "Read WGA Summary and Make SPITS"
+    script: "SPS_read_WGA_summary_and_make_SPITS.py"
+
   - id: make_library_input_files
-    name: "1. Make Library Creation Input Files"
+    name: "Make Library Creation Input Files"
     script: "SPS_make_illumina_index_and_FA_files_NEW.py"
+    allow_rerun: true
 
   - id: first_fa_analysis
-    name: "2. First FA Output Analysis"
+    name: "First FA Output Analysis"
     script: "SPS_first_FA_output_analysis_NEW.py"
+    allow_rerun: true
 
   - id: second_attempt_decision
-    name: "3. Decision: Second Attempt Needed?"
+    name: "Second Attempt Decision"
     script: "decision_second_attempt.py"
 
   - id: rework_first_attempt
-    name: "4. Rework First Attempt"
+    name: "Rework First Attempt"
     script: "SPS_rework_first_attempt_NEW.py"
+    allow_rerun: true
 
   - id: second_fa_analysis
-    name: "5. Second FA Output Analysis"
+    name: "Second FA Output Analysis"
     script: "SPS_second_FA_output_analysis_NEW.py"
+    allow_rerun: true
 
   - id: conclude_fa_analysis
-    name: "6. Conclude FA Analysis and Generate ESP Smear File"
+    name: "Conclude FA Analysis and Generate ESP Smear File"
     script: "SPS_conclude_FA_analysis_generate_ESP_smear_file.py"
+    allow_rerun: true

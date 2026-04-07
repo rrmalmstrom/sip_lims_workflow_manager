@@ -187,12 +187,15 @@ All workflow scripts create success markers in `.workflow_status/{script_name}.s
 
 **SIP Scripts**: Already had success markers
 **SPS-CE Scripts**: Enhanced with robust success marker pattern:
+- `SPS_initiate_project_folder_and_make_sort_plate_labels.py`
+- `SPS_process_WGA_results.py`
+- `SPS_read_WGA_summary_and_make_SPITS.py`
 - `SPS_make_illumina_index_and_FA_files_NEW.py`
 - `SPS_first_FA_output_analysis_NEW.py`
 - `SPS_rework_first_attempt_NEW.py`
 - `SPS_second_FA_output_analysis_NEW.py`
 - `SPS_conclude_FA_analysis_generate_ESP_smear_file.py`
-- `decision_second_attempt.py` (new decision script)
+- `decision_second_attempt.py`
 
 ## Enhanced Reliability Features
 
