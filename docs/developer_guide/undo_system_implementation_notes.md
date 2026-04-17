@@ -1,9 +1,9 @@
 # Undo System Implementation Notes — Stage 2 Deviation Log
 
-**Date:** 2026-04-17  
-**Stage:** Stage 2 — Workflow Manager Repo  
-**Plan document:** [`plans/undo_system_redesign.md`](../../plans/undo_system_redesign.md)  
-**Status:** Complete — 66 tests passing, 1 xfailed
+**Date:** 2026-04-17
+**Stage:** Stage 2 — Workflow Manager Repo
+**Plan document:** [`plans/undo_system_redesign.md`](../../plans/undo_system_redesign.md)
+**Status:** Complete — 67 tests passing, 1 xfailed (as of commit f38cc57)
 
 ---
 
@@ -132,6 +132,56 @@ The function raises `ValueError` if `SNAPSHOT_ITEMS` is not found, causing `run_
 
 ---
 
+## DEV-009: Lessons Learned from Capsule Fixture Tests — Applies to SPS-CE and SIP Fixtures
+
+**Context:** The Capsule fixture tests (13 scenarios in `tests/test_undo_system_integration.py`) were completed and validated against a real Capsule project. The following lessons must be applied when writing the SPS-CE and SIP fixture tests (Step 16 of Stage 2).
+
+### Lesson 1: Scenario 13 (empty-dir survival) must use workflow-specific directory names
+
+The Capsule Scenario 13 creates `2_library_creation/`, `3_FA_analysis/`, and `4_plate_selection_and_pooling/` as the empty directories that step 1 creates. These are Capsule-specific.
+
+When writing SPS-CE and SIP fixtures, **Scenario 13 must be adapted to use the correct empty directories for each workflow's step 1 script.** Read the real step 1 script to find which directories it creates via `create_project_folder_structure()` or equivalent, then create those same dirs in the test.
+
+The underlying fix (`_scan_project_dirs()` + `"directories"` field in manifest) is already in the core system — the test just needs to verify it for each workflow's specific structure.
+
+### Lesson 2: Mock scripts only need SNAPSHOT_ITEMS + success marker
+
+The `simulate_step_run()` helper (DEV-005) creates output files directly — it does not call the mock script for happy-path scenarios. Mock scripts are only executed by `run_step()` in Scenario 10 (missing `SNAPSHOT_ITEMS` abort test).
+
+**Therefore, SPS-CE and SIP mock scripts only need:**
+1. A correct `SNAPSHOT_ITEMS` block (matching the real script's actual file outputs)
+2. A `create_success_marker()` call
+3. A clean exit
+
+They do not need to replicate any business logic from the real scripts.
+
+### Lesson 3: Scenario 11 (FA archive protection) needs workflow-specific archive paths
+
+The Capsule test uses `archived_files/capsule_fa_analysis_results/` as the FA archive path. SIP uses multiple paths:
+- `archived_files/first_lib_attempt_fa_results/`
+- `archived_files/second_lib_attempt_fa_results/`
+- `archived_files/third_lib_attempt_fa_results/`
+
+The SIP fixture's Scenario 11 must use the correct SIP FA archive paths. SPS-CE may have its own FA archive path — check the real script to confirm.
+
+### Lesson 4: SNAPSHOT_ITEMS in mock scripts must accurately reflect real script outputs
+
+Scenario 14 (manifest diff detects newly-added files) verifies that user-added files between steps are captured in the snapshot ZIP. This test is only meaningful if the mock script's `SNAPSHOT_ITEMS` accurately reflects what the real script writes. If `SNAPSHOT_ITEMS` is wrong, the manifest diff logic won't be tested against realistic data.
+
+**Before writing mock scripts:** Read each real SPS-CE/SIP script and verify its actual file outputs. The `SNAPSHOT_ITEMS` table in Section 5.3 of the plan is a first-pass estimate — it must be verified against the actual scripts.
+
+### Lesson 5: The 13 test scenarios themselves are fully reusable
+
+The test logic in `tests/test_undo_system_integration.py` is workflow-agnostic. Only the fixture-specific data needs to change:
+- Step IDs (from the workflow YAML)
+- Directory names (from the real scripts)
+- FA archive paths (from `PERMANENT_EXCLUSIONS` in `src/logic.py`)
+- `SNAPSHOT_ITEMS` per step (from the real scripts)
+
+The recommended approach is to parameterize the existing test file or create a separate `test_undo_system_integration_sps.py` and `test_undo_system_integration_sip.py` that import the same scenario functions with different fixtures.
+
+---
+
 ## Manual Testing Checklist (from Section 14.7)
 
 After the automated tests pass, perform these 4 manual checks with a real Capsule project:
@@ -153,5 +203,82 @@ These four checks are sufficient to validate the system end-to-end with real dat
 | `tests/test_chronological_undo_ordering.py` | 5 | ✅ All passing |
 | `tests/test_cyclical_workflow_undo.py` | 5 | ✅ All passing |
 | `tests/test_core.py` | 2 (1 xfail) | ✅ 1 passing, 1 xfail (expected) |
-| `tests/test_undo_system_integration.py` | 12 | ✅ All passing |
-| **Total** | **67** | **66 passed, 1 xfailed** |
+| `tests/test_undo_system_integration.py` | 13 | ✅ All passing |
+| **Total** | **68** | **67 passed, 1 xfailed** |
+
+---
+
+## Implementation Status Summary — For Handoff
+
+**Last updated:** 2026-04-17
+**Last commit:** `f38cc57` — pushed to `origin/main`
+**Branch:** `main`
+
+### What is complete
+
+**Stage 1 (Capsule workflow scripts repo — `capsule_sort_scripts/`):**
+All 6 Capsule workflow scripts already had `SNAPSHOT_ITEMS` blocks added in a prior session. The Capsule workflow is fully integrated with the selective snapshot system.
+
+**Stage 2 (Workflow manager repo — `sip_lims_workflow_manager/`) — COMPLETE:**
+
+All workflow manager changes are done and tested. The system is workflow-agnostic — it works for any workflow whose scripts declare `SNAPSHOT_ITEMS`.
+
+Key files changed:
+- **`src/logic.py`** — `SnapshotManager`: new `scan_manifest()`, `take_selective_snapshot()`, `restore_snapshot()`, `_restore_from_selective_snapshot()`, `_scan_project_dirs()`, `_load_manifest_dirs()`, `_load_manifest_paths()`. Updated run-number methods. Manifest now records both files and directories.
+- **`src/core.py`** — `parse_snapshot_items_from_script()` (AST-based); wired into `run_step()`, `handle_step_result()`, `terminate_script()`, `skip_to_step()`. `handle_step_result()` now explicitly sets step to "pending" on failure (fixes re-run state bug).
+- **`app.py`** — `completed_script_success` now reads `project.get_state(step_id) == "completed"` after `handle_step_result()` runs (fixes false "completed" GUI display). `perform_undo()` granular path directly manipulates `_completion_order` to correctly decrement run counter.
+- **`tests/fixtures/generate_capsule_fixture.py`** — Capsule project fixture generator
+- **`tests/fixtures/mock_scripts/`** — 8 mock scripts (6 passing + 2 failure variants)
+- **`tests/test_undo_system_integration.py`** — 13 integration test scenarios (all passing)
+- **`tests/test_snapshot_manager.py`** — 43 unit tests for `SnapshotManager`
+
+Four bugs discovered during manual testing and fixed:
+1. **Empty-dir rollback bug** — manifest now records directories; empty dirs from prior steps survive rollback
+2. **GUI shows "completed" when script fails** — fixed in `app.py` (raw exit code → post-handle state check)
+3. **Failed re-run stays "completed" in state** — fixed in `src/core.py` (`handle_step_result()` now always sets pending on failure)
+4. **Run counter not decremented after granular undo** — fixed in `app.py` (`perform_undo()` directly manipulates `_completion_order`)
+
+Manual sanity check with a real Capsule project: **passed**.
+
+---
+
+### What remains to be done
+
+**Stage 3 — SPS-CE and SIP rollout (not started):**
+
+The workflow manager needs no further changes. All remaining work is in the workflow script repos.
+
+**Step A — Add `SNAPSHOT_ITEMS` to SPS-CE scripts** (in `SPS_library_creation_scripts/` repo):
+9 scripts need `SNAPSHOT_ITEMS` blocks. Scripts are at `/Users/RRMalmstrom/Desktop/Programming/SPS_library_creation_scripts/`. The workflow is defined in `templates/sps_workflow.yml` (9 steps). Read each script to verify its actual file outputs before adding `SNAPSHOT_ITEMS`.
+
+**Step B — Add `SNAPSHOT_ITEMS` to SIP scripts** (in `sip_scripts_dev/` repo):
+20 scripts need `SNAPSHOT_ITEMS` blocks. Scripts are at `/Users/RRMalmstrom/Desktop/Programming/sip_scripts_dev/`. The workflow is defined in `templates/sip_workflow.yml` (20 steps). Section 5.3 of `plans/undo_system_redesign.md` has a first-pass estimate of `SNAPSHOT_ITEMS` per script — **verify each entry against the actual script before using it.**
+
+**Step C — SPS-CE fixture tests** (back in this repo, after Step A):
+- Create `tests/fixtures/generate_sps_fixture.py`
+- Create SPS-CE mock scripts in `tests/fixtures/mock_scripts/` (9 scripts + failure variants)
+- Run the 13 integration test scenarios against the SPS-CE fixture
+- See DEV-009 for lessons learned from the Capsule fixture tests
+
+**Step D — SIP fixture tests** (back in this repo, after Step B):
+- Create `tests/fixtures/generate_sip_fixture.py`
+- Create SIP mock scripts in `tests/fixtures/mock_scripts/` (20 scripts + failure variants)
+- Run the 13 integration test scenarios against the SIP fixture
+- SIP has FA archive interactions (steps 9, 11, 13) — Scenario 11 must use SIP-specific FA archive paths
+
+**Step E — Manual sanity checks:**
+After each workflow's fixture tests pass, perform the 4-step manual sanity check (Section 14.7 of the plan) with a real project of that workflow type.
+
+**Step F — Update the plan document:**
+Review the deviation log (this file) and update `plans/undo_system_redesign.md` to reflect the actual implementation. The updated document becomes the authoritative reference.
+
+---
+
+### How to run the tests
+
+```bash
+# Run all undo system tests
+python -m pytest tests/test_undo_system_integration.py tests/test_snapshot_manager.py tests/test_chronological_undo_ordering.py tests/test_cyclical_workflow_undo.py tests/test_core.py -v
+
+# Expected: 67 passed, 1 xfailed
+```
