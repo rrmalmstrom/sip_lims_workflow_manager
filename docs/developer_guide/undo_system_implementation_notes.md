@@ -211,7 +211,8 @@ These four checks are sufficient to validate the system end-to-end with real dat
 ## Implementation Status Summary — For Handoff
 
 **Last updated:** 2026-04-17
-**Last commit:** `f38cc57` — pushed to `origin/main`
+**Last commit (workflow manager):** `f38cc57` — pushed to `origin/main`
+**Last commit (SPS-CE scripts):** `4f0ed0c` — pushed to `origin/main` (`SPS_library_creation_scripts/`)
 **Branch:** `main`
 
 ### What is complete
@@ -244,12 +245,25 @@ Manual sanity check with a real Capsule project: **passed**.
 
 ### What remains to be done
 
-**Stage 3 — SPS-CE and SIP rollout (not started):**
+**Stage 3 — SPS-CE and SIP rollout:**
 
 The workflow manager needs no further changes. All remaining work is in the workflow script repos.
 
-**Step A — Add `SNAPSHOT_ITEMS` to SPS-CE scripts** (in `SPS_library_creation_scripts/` repo):
-9 scripts need `SNAPSHOT_ITEMS` blocks. Scripts are at `/Users/RRMalmstrom/Desktop/Programming/SPS_library_creation_scripts/`. The workflow is defined in `templates/sps_workflow.yml` (9 steps). Read each script to verify its actual file outputs before adding `SNAPSHOT_ITEMS`.
+**Step A — Add `SNAPSHOT_ITEMS` to SPS-CE scripts** ✅ COMPLETE (commit `4f0ed0c`, `SPS_library_creation_scripts/`):
+
+All 9 SPS-CE scripts have been audited and updated. Final `SNAPSHOT_ITEMS` per script:
+
+| Script | `SNAPSHOT_ITEMS` |
+|--------|-----------------|
+| `SPS_initiate_project_folder_and_make_sort_plate_labels.py` | `["project_summary.db", "sample_metadata.csv", "individual_plates.csv"]` |
+| `SPS_process_WGA_results.py` | `[]` — only creates new files; manifest diff handles cleanup |
+| `SPS_read_WGA_summary_and_make_SPITS.py` | `["project_summary.db"]` |
+| `SPS_make_illumina_index_and_FA_files_NEW.py` | `["project_summary.db", "master_plate_data.csv"]` |
+| `SPS_first_FA_output_analysis_NEW.py` | `[]` — only creates new files; FA archive is PERMANENT_EXCLUSION |
+| `decision_second_attempt.py` | `[]` — only writes `workflow_state.json` (workflow manager internal state) |
+| `SPS_rework_first_attempt_NEW.py` | `["project_summary.db", "master_plate_data.csv"]` |
+| `SPS_second_FA_output_analysis_NEW.py` | `[]` — only creates new files; FA archive is PERMANENT_EXCLUSION |
+| `SPS_conclude_FA_analysis_generate_ESP_smear_file.py` | `["project_summary.db", "master_plate_data.csv"]` |
 
 **Step B — Add `SNAPSHOT_ITEMS` to SIP scripts** (in `sip_scripts_dev/` repo):
 20 scripts need `SNAPSHOT_ITEMS` blocks. Scripts are at `/Users/RRMalmstrom/Desktop/Programming/sip_scripts_dev/`. The workflow is defined in `templates/sip_workflow.yml` (20 steps). Section 5.3 of `plans/undo_system_redesign.md` has a first-pass estimate of `SNAPSHOT_ITEMS` per script — **verify each entry against the actual script before using it.**

@@ -620,7 +620,7 @@ If no deviations occur, the file contains only the header and a note confirming 
 
 17. **Review deviation log** — Open `docs/developer_guide/undo_system_implementation_notes.md` and review all recorded deviations from Stage 2.
 18. **Update this document** — For each deviation in the log, revise the corresponding sections of this document (Sections 5, 9, 11, 12, and/or 14) to reflect the actual implementation. The updated document becomes the authoritative reference for SPS-CE and SIP rollout.
-19. **SPS-CE rollout** — Using the updated plan, add `SNAPSHOT_ITEMS` to all SPS-CE scripts (in the workflow scripts repo), build the SPS-CE fixture, run the 12 integration test scenarios against it, and perform manual sanity check with a real SPS-CE project.
+19. **SPS-CE rollout** ✅ COMPLETE (2026-04-17, commit `4f0ed0c` in `SPS_library_creation_scripts/`) — All 9 SPS-CE scripts audited and updated with `SNAPSHOT_ITEMS`. See `docs/developer_guide/undo_system_implementation_notes.md` Step A for the verified `SNAPSHOT_ITEMS` per script. Remaining: build SPS-CE fixture, run 13 integration test scenarios against it, and perform manual sanity check with a real SPS-CE project.
 20. **SIP rollout** — Same process for SIP. The SIP workflow is the most complex (21 steps, FA archive interactions) — validate thoroughly before considering the implementation complete.
 
 > ✅ **Implementation fully complete when:** All three workflows pass integration tests and manual sanity checks, and this document accurately reflects the final implementation with no known deviations.
