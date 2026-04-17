@@ -35,10 +35,22 @@ script: test_script.py
     assert project.script_runner.script_path == scripts_dir
     assert project.script_runner.project_path == project_dir
 
+@pytest.mark.xfail(
+    reason=(
+        "Stage 2 undo redesign made script_path a required argument. "
+        "Project() now raises ValueError when script_path is None. "
+        "The old 'default to nested scripts/ directory' behaviour was removed "
+        "because the workflow manager must always know the exact script location "
+        "(set via SCRIPTS_PATH env var by run.py). "
+        "See plans/undo_system_redesign.md and src/core.py Project.__init__."
+    ),
+    strict=True,
+)
 def test_project_init_no_script_path(tmp_path):
     """
-    Tests that the Project class defaults to the nested 'scripts' directory
-    when no script_path is provided.
+    XFAIL: script_path is now a required argument (Stage 2 undo redesign).
+    Project() raises ValueError when called without script_path.
+    The old behaviour (defaulting to project_dir/scripts/) was removed.
     """
     # ARRANGE
     project_dir = tmp_path / "my_project"
@@ -53,9 +65,9 @@ script: test_script.py
 """
     (project_dir / "workflow.yml").write_text(workflow_content)
 
-    # ACT
+    # ACT — this now raises ValueError because script_path is required
     project = Project(project_path=project_dir)
 
-    # ASSERT
+    # ASSERT — these lines are never reached; the xfail is triggered by the ValueError above
     assert project.script_path == project_dir / "scripts"
     assert project.script_runner.script_path == project_dir / "scripts"

@@ -21,6 +21,36 @@ from src.enhanced_debug_logger import (
     debug_enabled
 )
 
+# ---------------------------------------------------------------------------
+# Undo system constants — module level so every method references the same set
+# ---------------------------------------------------------------------------
+
+# FA archive subfolders that are PERMANENTLY PROTECTED from undo/rollback.
+# The undo system will never delete files under these paths, even if they
+# appear as "newly created" relative to a pre-run manifest.
+# Add new entries here if a future workflow uses a different archive path.
+PERMANENT_EXCLUSIONS = {
+    "archived_files/FA_results_archive",            # All workflows going forward (universal)
+    "archived_files/first_lib_attempt_fa_results",  # SIP + SPS-CE legacy projects
+    "archived_files/second_lib_attempt_fa_results", # SIP + SPS-CE legacy projects
+    "archived_files/third_lib_attempt_fa_results",  # SIP + SPS-CE legacy projects
+    "archived_files/capsule_fa_analysis_results",   # Capsule legacy projects
+    "MISC",                                         # User misc folders (case variants)
+    "misc",
+    "Misc",
+}
+
+# Standard patterns excluded from manifest scans and snapshot operations.
+# These are never included in manifests and never deleted during undo/rollback.
+_MANIFEST_EXCLUDE_PATTERNS = {
+    '.snapshots',
+    '.workflow_status',
+    '.workflow_logs',
+    'workflow.yml',
+    '__pycache__',
+    '.DS_Store',
+}
+
 @dataclass
 class RunResult:
     """Holds the results of a script execution."""
@@ -181,253 +211,531 @@ class SnapshotManager:
         self.snapshots_dir = snapshots_dir
         self.snapshots_dir.mkdir(exist_ok=True)
 
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    def _scan_project_paths(self) -> set:
+        """
+        Returns a set of relative path strings for every file currently in the
+        project directory, excluding the standard manifest exclusion patterns.
+        PERMANENT_EXCLUSIONS are NOT applied here — they are only applied
+        during rollback when deciding what to delete.
+        """
+        paths = set()
+        for file_path in self.project_path.rglob('*'):
+            if not file_path.is_file():
+                continue
+            # Skip if any part of the path matches the exclude patterns
+            if any(part in _MANIFEST_EXCLUDE_PATTERNS for part in file_path.parts):
+                continue
+            if file_path.name in _MANIFEST_EXCLUDE_PATTERNS:
+                continue
+            paths.add(str(file_path.relative_to(self.project_path)))
+        return paths
+
+    def _scan_project_dirs(self) -> set:
+        """
+        Returns a set of relative path strings for every directory currently in
+        the project directory, excluding the standard manifest exclusion patterns.
+
+        This is used by scan_manifest() to explicitly record directories so that
+        empty directories created by a previous step are not mistakenly treated
+        as "newly created" during a subsequent step's rollback.
+        """
+        dirs = set()
+        for dir_path in self.project_path.rglob('*'):
+            if not dir_path.is_dir():
+                continue
+            if any(part in _MANIFEST_EXCLUDE_PATTERNS for part in dir_path.parts):
+                continue
+            if dir_path.name in _MANIFEST_EXCLUDE_PATTERNS:
+                continue
+            dirs.add(str(dir_path.relative_to(self.project_path)))
+        return dirs
+
+    def _get_run_numbers(self, step_id: str) -> list:
+        """
+        Returns a sorted list of run numbers for which any snapshot file
+        (new-format *_snapshot.zip OR legacy *_complete.zip) exists.
+        """
+        run_numbers = set()
+        # New-format snapshots
+        pattern_new = re.compile(r'_run_(\d+)_snapshot$')
+        for f in self.snapshots_dir.glob(f"{step_id}_run_*_snapshot.zip"):
+            m = pattern_new.search(f.stem)
+            if m:
+                run_numbers.add(int(m.group(1)))
+        # Legacy snapshots
+        pattern_legacy = re.compile(r'_run_(\d+)_complete$')
+        for f in self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"):
+            m = pattern_legacy.search(f.stem)
+            if m:
+                run_numbers.add(int(m.group(1)))
+        return sorted(run_numbers)
+
+    @staticmethod
+    def _safe_delete(path: Path, retries: int = 3, delay: float = 1.0):
+        """
+        Deletes a file with retry logic for network-drive "file in use" errors.
+        Logs a warning (does not raise) if all retries are exhausted.
+        """
+        for attempt in range(retries):
+            try:
+                path.unlink()
+                return
+            except OSError:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                else:
+                    print(f"WARNING: Could not delete {path} after {retries} attempts")
+
+    # -----------------------------------------------------------------------
+    # Manifest operations
+    # -----------------------------------------------------------------------
+
+    def scan_manifest(self, step_id: str, run_number: int) -> Path:
+        """
+        Writes a manifest JSON file capturing the current set of file paths AND
+        directories in the project directory.  This is a fast metadata-only scan
+        — no file contents are read.
+
+        Directories are recorded explicitly so that empty directories created by
+        a previous step are not mistakenly treated as "newly created" during a
+        subsequent step's rollback (the bug where _restore_from_selective_snapshot
+        deleted empty dirs that were not represented in the files-only manifest).
+
+        Returns the Path of the written manifest file.
+        """
+        manifest_path = self.snapshots_dir / f"{step_id}_run_{run_number}_manifest.json"
+        current_paths = sorted(self._scan_project_paths())
+        current_dirs = sorted(self._scan_project_dirs())
+
+        manifest = {
+            "step_id": step_id,
+            "run_number": run_number,
+            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "files": current_paths,
+            "directories": current_dirs,
+            "excluded_patterns": sorted(_MANIFEST_EXCLUDE_PATTERNS),
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        print(
+            f"MANIFEST: Written {manifest_path.name} "
+            f"({len(current_paths)} files, {len(current_dirs)} dirs)"
+        )
+        return manifest_path
+
+    def _load_manifest_paths(self, manifest_path: Path) -> set:
+        """
+        Loads a manifest JSON file and returns the set of file path strings it
+        contains.  Returns an empty set if the file does not exist.
+        """
+        if not manifest_path.exists():
+            return set()
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return set(data.get("files", []))
+
+    def _load_manifest_dirs(self, manifest_path: Path) -> set:
+        """
+        Loads a manifest JSON file and returns the set of directory path strings
+        it contains.  Returns an empty set if the file does not exist or if the
+        manifest was written by an older version that did not record directories.
+
+        The caller falls back to deriving dirs from file parent paths when this
+        returns an empty set (backward compatibility with old manifests).
+        """
+        if not manifest_path.exists():
+            return set()
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return set(data.get("directories", []))
+
+    # -----------------------------------------------------------------------
+    # Selective snapshot (new format)
+    # -----------------------------------------------------------------------
+
+    def take_selective_snapshot(
+        self,
+        step_id: str,
+        run_number: int,
+        snapshot_items: List[str],
+        prev_manifest_path,   # Path | None
+    ) -> Path:
+        """
+        Creates a targeted snapshot ZIP containing:
+          1. Files/folders listed in snapshot_items (the script's declared outputs)
+          2. Files newly added by the user since the previous completed run
+             (identified by diffing current paths against the previous manifest)
+
+        prev_manifest_path: Path to the manifest from the previous completed run,
+                            or None if this is the very first run of the project
+                            (in which case all current files are treated as new).
+
+        Returns the Path of the written ZIP file.
+        """
+        zip_path = self.snapshots_dir / f"{step_id}_run_{run_number}_snapshot.zip"
+
+        current_paths = self._scan_project_paths()
+        prev_paths = self._load_manifest_paths(prev_manifest_path) if prev_manifest_path else set()
+
+        # Resolve snapshot_items to relative path strings (normalise trailing slash)
+        snapshot_item_paths = set()
+        for item in snapshot_items:
+            item_path = self.project_path / item.rstrip('/')
+            if item_path.is_dir():
+                for f in item_path.rglob('*'):
+                    if f.is_file():
+                        snapshot_item_paths.add(str(f.relative_to(self.project_path)))
+            elif item_path.is_file():
+                snapshot_item_paths.add(str(item_path.relative_to(self.project_path)))
+            else:
+                # Item declared but not yet present — still record the declared path
+                # so we know to look for it during restore
+                snapshot_item_paths.add(item.rstrip('/'))
+
+        newly_added = current_paths - prev_paths - snapshot_item_paths
+
+        files_to_zip = snapshot_item_paths | newly_added
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for rel_str in sorted(files_to_zip):
+                full_path = self.project_path / rel_str
+                if full_path.is_file():
+                    zf.write(full_path, rel_str)
+
+        print(
+            f"SNAPSHOT: Selective snapshot written {zip_path.name} "
+            f"({len(files_to_zip)} files: {len(snapshot_item_paths)} declared, "
+            f"{len(newly_added)} newly-added)"
+        )
+        return zip_path
+
+    # -----------------------------------------------------------------------
+    # Restore operations
+    # -----------------------------------------------------------------------
+
+    def restore_snapshot(self, step_id: str, run_number: int):
+        """
+        Primary restore entry point.  Tries the new selective format first,
+        then falls back to the legacy complete ZIP.
+
+        Raises FileNotFoundError if neither format exists.
+        """
+        new_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_snapshot.zip"
+        new_manifest = self.snapshots_dir / f"{step_id}_run_{run_number}_manifest.json"
+
+        if new_zip.exists() and new_manifest.exists():
+            self._restore_from_selective_snapshot(new_zip, new_manifest)
+            return
+
+        # Fall back to legacy complete ZIP
+        legacy_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_complete.zip"
+        if legacy_zip.exists():
+            self._restore_from_complete_snapshot(legacy_zip)
+            return
+
+        raise FileNotFoundError(
+            f"No snapshot found for {step_id} run {run_number} "
+            f"(checked {new_zip.name} and {legacy_zip.name})"
+        )
+
+    def _restore_from_selective_snapshot(self, zip_path: Path, manifest_path: Path):
+        """
+        Restores the project to its pre-run state using the new selective format:
+          1. Diff manifest vs current state → identify newly-created files/dirs
+          2. Delete newly-created files (respecting PERMANENT_EXCLUSIONS)
+          3. Delete newly-created empty directories (deepest first)
+          4. Extract the snapshot ZIP to restore SNAPSHOT_ITEMS + user-added files
+          5. Delete the ZIP and manifest (they are consumed by this restore)
+
+        Directory tracking fix: pre_run_dirs is loaded directly from the manifest's
+        "directories" field (written by scan_manifest since the fix).  This ensures
+        that empty directories created by a *previous* step — which have no files
+        and therefore no representation in the files list — are correctly recognised
+        as pre-existing and are NOT deleted during rollback.
+
+        Backward compatibility: manifests written before the fix have no
+        "directories" key.  In that case we fall back to deriving pre_run_dirs
+        from the file parent paths (old behaviour), which may still incorrectly
+        delete empty dirs from earlier steps, but at least does not break existing
+        projects.
+        """
+        pre_run_paths = self._load_manifest_paths(manifest_path)
+        current_paths = self._scan_project_paths()
+
+        newly_created_files = current_paths - pre_run_paths
+
+        # --- Delete newly-created files (skip permanently protected paths) ---
+        for rel_str in newly_created_files:
+            if any(rel_str.startswith(prefix) for prefix in PERMANENT_EXCLUSIONS):
+                print(f"RESTORE: Skipping permanently protected path: {rel_str}")
+                continue
+            full_path = self.project_path / rel_str
+            if full_path.is_file():
+                self._safe_delete(full_path)
+                print(f"RESTORE: Deleted newly-created file {rel_str}")
+
+        # --- Delete newly-created empty directories (deepest first) ---
+        # Load pre-run dirs from the manifest's explicit "directories" field.
+        # This correctly handles empty directories created by a previous step
+        # (they have no files, so they would be invisible if we only derived
+        # dirs from file parent paths).
+        pre_run_dirs = self._load_manifest_dirs(manifest_path)
+        if not pre_run_dirs:
+            # Backward-compat fallback: manifest was written before the fix and
+            # has no "directories" key — derive from file parent paths as before.
+            for p in pre_run_paths:
+                for parent in Path(p).parents:
+                    if str(parent) != '.':
+                        pre_run_dirs.add(str(parent))
+
+        current_dirs = set()
+        for file_path in self.project_path.rglob('*'):
+            if file_path.is_dir():
+                rel = str(file_path.relative_to(self.project_path))
+                if not any(part in _MANIFEST_EXCLUDE_PATTERNS for part in file_path.parts):
+                    current_dirs.add(rel)
+
+        newly_created_dirs = current_dirs - pre_run_dirs
+        for rel_str in sorted(newly_created_dirs, key=lambda p: len(Path(p).parts), reverse=True):
+            if any(rel_str.startswith(prefix) for prefix in PERMANENT_EXCLUSIONS):
+                continue
+            full_path = self.project_path / rel_str
+            if full_path.exists() and full_path.is_dir():
+                try:
+                    if not any(full_path.iterdir()):
+                        full_path.rmdir()
+                        print(f"RESTORE: Removed newly-created empty directory {rel_str}")
+                except OSError:
+                    pass
+
+        # --- Extract snapshot ZIP to restore pre-run files ---
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for member in zf.infolist():
+                zf.extract(member, self.project_path)
+                extracted_path = self.project_path / member.filename
+                if extracted_path.exists():
+                    try:
+                        timestamp = time.mktime(member.date_time + (0, 0, -1))
+                        os.utime(extracted_path, (timestamp, timestamp))
+                    except (OSError, ValueError):
+                        pass
+
+        print(f"RESTORE: Selective snapshot restored from {zip_path.name}")
+
+        # --- Consume the snapshot pair ---
+        self._safe_delete(zip_path)
+        self._safe_delete(manifest_path)
+
+    def _restore_from_complete_snapshot(self, zip_path: Path):
+        """
+        Legacy restore path: extracts a complete-project ZIP, removing files
+        that exist now but were not in the snapshot.
+
+        This is the renamed version of the old restore_complete_snapshot() method,
+        now accepting a Path directly instead of constructing it from a step_id.
+        The old public restore_complete_snapshot(step_id) wrapper is kept below
+        for backward compatibility during the Checkpoint B transition.
+        """
+        if not zip_path.exists():
+            raise FileNotFoundError(f"Legacy snapshot not found: {zip_path}")
+
+        preserve_patterns = {
+            '.snapshots', '.workflow_status', '.workflow_logs',
+            'workflow.yml', '__pycache__',
+        }
+        fa_archive_patterns = {
+            'archived_files/first_lib_attempt_fa_results',
+            'archived_files/second_lib_attempt_fa_results',
+            'archived_files/third_lib_attempt_fa_results',
+        }
+
+        current_files = set()
+        for file_path in self.project_path.rglob('*'):
+            if file_path.is_file():
+                if any(part in preserve_patterns for part in file_path.parts):
+                    continue
+                if file_path.name in preserve_patterns:
+                    continue
+                relative_path = file_path.relative_to(self.project_path)
+                if any(str(relative_path).startswith(p) for p in fa_archive_patterns):
+                    continue
+                current_files.add(file_path.relative_to(self.project_path))
+
+        snapshot_files = set()
+        empty_dirs_to_preserve = set()
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for name in zf.namelist():
+                if not name.endswith('/'):
+                    path = Path(name)
+                    if path.name == ".keep_empty_dir":
+                        empty_dirs_to_preserve.add(path.parent)
+                    else:
+                        snapshot_files.add(path)
+
+        for rel_path in current_files - snapshot_files:
+            file_path = self.project_path / rel_path
+            if file_path.exists():
+                file_path.unlink()
+                print(f"RESTORE: Removed {rel_path}")
+
+        for dir_path in sorted(self.project_path.rglob('*'), key=lambda p: len(p.parts), reverse=True):
+            if dir_path.is_dir() and dir_path != self.project_path:
+                if any(part in preserve_patterns for part in dir_path.parts):
+                    continue
+                if dir_path.name in preserve_patterns:
+                    continue
+                rel_dir = dir_path.relative_to(self.project_path)
+                if any(str(rel_dir).startswith(p) for p in fa_archive_patterns):
+                    continue
+                if rel_dir in empty_dirs_to_preserve:
+                    continue
+                try:
+                    if not any(dir_path.iterdir()):
+                        dir_path.rmdir()
+                        print(f"RESTORE: Removed empty directory {rel_dir}")
+                except OSError:
+                    pass
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for member in zf.infolist():
+                zf.extract(member, self.project_path)
+                extracted_path = self.project_path / member.filename
+                if extracted_path.exists():
+                    try:
+                        timestamp = time.mktime(member.date_time + (0, 0, -1))
+                        os.utime(extracted_path, (timestamp, timestamp))
+                    except (OSError, ValueError):
+                        pass
+
+        for empty_dir in empty_dirs_to_preserve:
+            dir_path = self.project_path / empty_dir
+            placeholder_file = dir_path / ".keep_empty_dir"
+            dir_path.mkdir(parents=True, exist_ok=True)
+            if placeholder_file.exists():
+                placeholder_file.unlink()
+
+        print(f"RESTORE: Legacy complete snapshot restored from {zip_path.name}")
+
+    # -----------------------------------------------------------------------
+    # Run-number methods — updated to handle both new and legacy formats
+    # -----------------------------------------------------------------------
+
     def get_next_run_number(self, step_id: str, allow_rerun: bool = False) -> int:
         """
-        Gets the next run number for a step by checking existing run snapshots.
-        
-        Args:
-            step_id: The step identifier
-            allow_rerun: True if this step allows re-runs, False for regular steps
-            
+        Gets the next run number for a step by checking existing run snapshots
+        (both new *_snapshot.zip and legacy *_complete.zip formats).
+
         For normal steps: Returns 1 if no snapshots exist, or reuses the highest
                          existing run number if step is pending (after undo)
         For re-run allowed steps: Always increments based on existing snapshots
         """
-        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        if not existing_runs:
-            return 1
-        
-        # Extract run numbers from existing snapshots using regex
-        run_numbers = []
-        pattern = re.compile(r'_run_(\d+)_complete$')
-        for snapshot in existing_runs:
-            try:
-                match = pattern.search(snapshot.stem)
-                if match:
-                    run_numbers.append(int(match.group(1)))
-            except ValueError:
-                continue
-        
+        run_numbers = self._get_run_numbers(step_id)
         if not run_numbers:
             return 1
-            
+
         max_run = max(run_numbers)
-        
+
         if allow_rerun:
-            # For re-run allowed steps, always increment
             return max_run + 1
         else:
-            # For regular steps, reuse the highest run number if step is pending
-            # This handles the case where a step was undone and is being run again
+            # Reuse the highest run number — handles the case where a step was
+            # undone and is being run again
             return max_run
 
     def get_latest_run_snapshot(self, step_id: str) -> str:
         """
-        Gets the snapshot name for the most recent run of a step.
+        Gets the snapshot name prefix for the most recent run of a step.
         Returns None if no run snapshots exist.
+        Checks both new-format and legacy formats.
         """
-        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        if not existing_runs:
+        run_numbers = self._get_run_numbers(step_id)
+        if not run_numbers:
             return None
-        
-        # Find the highest run number using regex
-        latest_run = 0
-        pattern = re.compile(r'_run_(\d+)_complete$')
-        for snapshot in existing_runs:
-            try:
-                match = pattern.search(snapshot.stem)
-                if match:
-                    run_num = int(match.group(1))
-                    if run_num > latest_run:
-                        latest_run = run_num
-            except ValueError:
-                continue
-        
-        return f"{step_id}_run_{latest_run}" if latest_run > 0 else None
+        latest_run = max(run_numbers)
+        return f"{step_id}_run_{latest_run}"
 
     def get_current_run_number(self, step_id: str) -> int:
         """
         Gets the current run number for a step (highest existing run).
         Returns 0 if no runs exist.
+        Checks both new-format and legacy formats.
         """
-        existing_runs = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        if not existing_runs:
-            return 0
-        
-        # Find the highest run number using regex
-        latest_run = 0
-        pattern = re.compile(r'_run_(\d+)_complete$')
-        for snapshot in existing_runs:
-            try:
-                match = pattern.search(snapshot.stem)
-                if match:
-                    run_num = int(match.group(1))
-                    if run_num > latest_run:
-                        latest_run = run_num
-            except ValueError:
-                continue
-        
-        return latest_run
+        run_numbers = self._get_run_numbers(step_id)
+        return max(run_numbers) if run_numbers else 0
 
-    def snapshot_exists(self, snapshot_name: str) -> bool:
-        """Check if a snapshot exists."""
-        zip_path = self.snapshots_dir / f"{snapshot_name}_complete.zip"
-        exists = zip_path.exists()
-        # DEBUG: Log what we're checking for step 15 issue
-        if "run_pooling_preparation" in snapshot_name:
-            print(f"DEBUG snapshot_exists: Looking for '{zip_path}', exists={exists}")
-            print(f"DEBUG snapshot_exists: snapshots_dir='{self.snapshots_dir}'")
-        return exists
+    def snapshot_exists(self, step_id: str, run_number: int) -> bool:
+        """
+        Check if a snapshot exists for the given step and run number.
+        Checks for both new-format *_snapshot.zip and legacy *_complete.zip.
+
+        NOTE: Signature changed from snapshot_exists(snapshot_name: str) to
+        snapshot_exists(step_id: str, run_number: int) in Stage 2.
+        All callers in core.py and app.py must be updated accordingly.
+        """
+        new_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_snapshot.zip"
+        legacy_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_complete.zip"
+        return new_zip.exists() or legacy_zip.exists()
 
     def get_effective_run_number(self, step_id: str) -> int:
         """
-        Gets the effective current run number by checking which 'before' snapshots exist.
+        Gets the effective current run number by checking which snapshots exist.
         This represents how many times the step has been successfully completed.
+        Checks both new-format and legacy formats.
         """
-        # Check which 'before' snapshots exist
-        before_snapshots = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        if not before_snapshots:
-            return 0
-        
-        # Find the highest run number with a 'before' snapshot using regex
-        highest_run = 0
-        pattern = re.compile(r'_run_(\d+)_complete$')
-        for snapshot in before_snapshots:
-            try:
-                match = pattern.search(snapshot.stem)
-                if match:
-                    run_num = int(match.group(1))
-                    if run_num > highest_run:
-                        highest_run = run_num
-            except ValueError:
-                continue
-        
-        return highest_run
+        run_numbers = self._get_run_numbers(step_id)
+        return max(run_numbers) if run_numbers else 0
 
     def remove_run_snapshots_from(self, step_id: str, run_number: int):
         """
-        Remove all run snapshots from the specified run number onwards.
-        This is used to track which runs have been undone.
+        Remove all run snapshots (both new and legacy formats) from the
+        specified run number onwards, including paired manifest files.
         """
-        # Remove 'before' snapshots from this run onwards
-        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        
-        pattern = re.compile(r'_run_(\d+)_complete$')
-        for snapshot in snapshots_to_remove:
-            try:
-                match = pattern.search(snapshot.stem)
-                if match:
-                    run_num = int(match.group(1))
-                    if run_num >= run_number:
-                        snapshot.unlink()
-                        print(f"UNDO: Removed snapshot {snapshot.name}")
-            except ValueError:
-                continue
+        # New-format snapshots
+        pattern_new = re.compile(r'_run_(\d+)_snapshot$')
+        for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_snapshot.zip")):
+            m = pattern_new.search(f.stem)
+            if m and int(m.group(1)) >= run_number:
+                f.unlink()
+                print(f"UNDO: Removed snapshot {f.name}")
+                manifest = self.snapshots_dir / f.name.replace("_snapshot.zip", "_manifest.json")
+                if manifest.exists():
+                    manifest.unlink()
+                    print(f"UNDO: Removed manifest {manifest.name}")
+
+        # Legacy-format snapshots
+        pattern_legacy = re.compile(r'_run_(\d+)_complete$')
+        for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip")):
+            m = pattern_legacy.search(f.stem)
+            if m and int(m.group(1)) >= run_number:
+                f.unlink()
+                print(f"UNDO: Removed snapshot {f.name}")
 
     def remove_all_run_snapshots(self, step_id: str):
         """
-        Remove all run snapshots for a step.
-        This is used when completely undoing a step.
+        Remove all run snapshots for a step (both new and legacy formats),
+        including paired manifest files.
         """
-        # Remove all 'before' snapshots for this step
-        snapshots_to_remove = list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip"))
-        
-        for snapshot in snapshots_to_remove:
+        for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_snapshot.zip")):
             try:
-                snapshot.unlink()
-                print(f"UNDO: Removed snapshot {snapshot.name}")
+                f.unlink()
+                print(f"UNDO: Removed snapshot {f.name}")
             except OSError:
-                continue
-
-    def take(self, step_id: str, items: List[str]):
-        """Creates a zip archive of the specified items."""
-        if not items:
-            return
-        
-        zip_path = self.snapshots_dir / f"{step_id}.zip"
-        with zipfile.ZipFile(zip_path, 'w') as zf:
-            for item_name in items:
-                item_path = self.project_path / item_name
-                if item_path.exists():
-                    if item_path.is_dir():
-                        for file_path in item_path.rglob('*'):
-                            zf.write(file_path, file_path.relative_to(self.project_path))
-                    else:
-                        zf.write(item_path, item_name)
-
-    def take_complete_snapshot(self, step_id: str):
-        """
-        Creates a complete snapshot of the entire project directory.
-        Excludes the .snapshots directory itself to avoid recursion.
-        """
-        zip_path = self.snapshots_dir / f"{step_id}_complete.zip"
-        
-        # Files and directories to exclude from snapshot
-        exclude_patterns = {
-            '.snapshots',
-            '.workflow_status',
-            '.workflow_logs',
-            'workflow.yml',
-            '__pycache__',
-            '.DS_Store'
-        }
-        
-        # No FA archive exclusions from snapshots - archived files should be included
-        # Archive preservation is handled in restore_complete_snapshot()
-        
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            # Collect all directories first to preserve their timestamps
-            directories_to_add = []
-            
-            # First, add all files and collect directories
-            for file_path in self.project_path.rglob('*'):
-                # Skip if any part of the path matches exclude patterns
-                if any(part in exclude_patterns for part in file_path.parts):
-                    continue
-                
-                # Skip if it's a file/directory we want to exclude
-                if file_path.name in exclude_patterns:
-                    continue
-                
-                # Archive files are now included in snapshots
-                # (preservation during restore is handled separately)
-                
-                if file_path.is_file():
-                    relative_path = file_path.relative_to(self.project_path)
-                    zf.write(file_path, relative_path)
-                elif file_path.is_dir() and file_path != self.project_path:
-                    # Collect directory info for later processing
-                    relative_dir = file_path.relative_to(self.project_path)
-                    directories_to_add.append((file_path, relative_dir))
-            
-            # Add directories with preserved timestamps
-            for dir_path, relative_dir in directories_to_add:
+                pass
+            manifest = self.snapshots_dir / f.name.replace("_snapshot.zip", "_manifest.json")
+            if manifest.exists():
                 try:
-                    # Get the directory's modification time
-                    dir_stat = dir_path.stat()
-                    dir_mtime = time.localtime(dir_stat.st_mtime)
-                    
-                    # Create a ZipInfo for the directory with original timestamp
-                    dir_info = zipfile.ZipInfo(str(relative_dir) + '/')
-                    dir_info.date_time = dir_mtime[:6]  # (year, month, day, hour, minute, second)
-                    dir_info.external_attr = 0o755 << 16  # Directory permissions
-                    
-                    # Always add the directory entry with preserved timestamp
-                    zf.writestr(dir_info, "")
-                    
-                    # Check if directory is empty and add placeholder if needed
-                    is_empty = not any(dir_path.iterdir())
-                    if is_empty:
-                        # Add placeholder file to preserve empty directory
-                        placeholder_path = str(relative_dir / ".keep_empty_dir")
-                        placeholder_info = zipfile.ZipInfo(placeholder_path)
-                        placeholder_info.date_time = dir_mtime[:6]
-                        zf.writestr(placeholder_info, "")
-                        
+                    manifest.unlink()
+                    print(f"UNDO: Removed manifest {manifest.name}")
                 except OSError:
-                    pass  # Skip if we can't read directory
-        
-        print(f"SNAPSHOT: Complete project snapshot saved for step {step_id}")
+                    pass
+
+        for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip")):
+            try:
+                f.unlink()
+                print(f"UNDO: Removed snapshot {f.name}")
+            except OSError:
+                pass
 
     def restore_complete_snapshot(self, step_id: str):
         """

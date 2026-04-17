@@ -7,77 +7,43 @@ from src.logic import StateManager
 
 def perform_undo_test(project):
     """
-    Test version of perform_undo without Streamlit dependencies.
-    Simplified undo operation using only "before" snapshots.
-    Reverts to the state before the last completed step ran.
-    Uses chronological completion order for proper cyclical workflow support.
+    Test version of perform_undo — mirrors the logic in app.py perform_undo()
+    but without Streamlit dependencies.
+    Updated for Stage 2: uses restore_snapshot() (new + legacy fallback).
     """
-    # Get the most recently completed step using chronological order
     last_step_id = project.state_manager.get_last_completed_step_chronological()
-    
     if not last_step_id:
-        return False  # Nothing to undo
-    
-    # Get the step object
+        return False
+
     last_step = project.workflow.get_step_by_id(last_step_id)
     if not last_step:
-        print(f"UNDO ERROR: Step {last_step_id} not found in workflow")
         return False
-    
+
     try:
-        # Get the effective current run number
         effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
-        print(f"DEBUG UNDO: Step {last_step_id}, effective_run={effective_run}")
-        
+
         if effective_run > 1:
-            # Granular undo - restore to before the most recent run
-            before_snapshot = f"{last_step_id}_run_{effective_run}"
-            print(f"DEBUG UNDO: Checking for granular snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                # Remove the most recent run snapshot
-                project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
-                print(f"UNDO: Restored to before run {effective_run} of step {last_step_id}")
-                # Step remains "completed" since previous runs still exist
-                return True
-        
-        if effective_run >= 1:
-            # Full step undo - restore to before the step ever ran
-            before_snapshot = f"{last_step_id}_run_1"
-            print(f"DEBUG UNDO: Checking for first run snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-            else:
-                # Fallback to legacy snapshot naming
-                print(f"DEBUG UNDO: Falling back to legacy snapshot: {last_step_id}")
-                project.snapshot_manager.restore_complete_snapshot(last_step_id)
-            
-            # Remove all run snapshots and mark step as pending
+            project.snapshot_manager.restore_snapshot(last_step_id, effective_run)
+            project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+            return True
+
+        if effective_run == 1:
+            project.snapshot_manager.restore_snapshot(last_step_id, 1)
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
-            
-            # Remove success marker
-            script_name = last_step.get('script', '').replace('.py', '')
+            script_name = Path(last_step.get('script', '')).stem
             success_marker = project.path / ".workflow_status" / f"{script_name}.success"
             if success_marker.exists():
                 success_marker.unlink()
-                print(f"UNDO: Removed success marker for {script_name}")
-            
             project.update_state(last_step_id, "pending")
-            print(f"UNDO: Restored to before step {last_step_id} ran - marked as pending")
             return True
-        
-        # No snapshots exist - fallback to legacy behavior
-        print(f"DEBUG UNDO: No effective runs, trying legacy snapshot: {last_step_id}")
-        project.snapshot_manager.restore_complete_snapshot(last_step_id)
-        print(f"UNDO: Restored using legacy snapshot for step {last_step_id}")
-        return True
-        
+
+        return False
+
     except FileNotFoundError as e:
         print(f"UNDO ERROR: {e}")
-        print("Snapshot not found for undo operation.")
         return False
     except Exception as e:
-        print(f"UNDO ERROR: Unexpected error during undo: {e}")
+        print(f"UNDO ERROR: {e}")
         return False
 
 class TestChronologicalUndoOrdering:
@@ -119,19 +85,23 @@ steps:
         shutil.rmtree(temp_dir)
 
     def simulate_step_completion(self, project, step_id, run_number=None):
-        """Simulate step completion by updating state, creating snapshots, and success marker."""
-        # Get the next run number if not specified
+        """Simulate step completion by updating state, creating snapshots, and success marker.
+        Updated for Stage 2: uses scan_manifest() + take_selective_snapshot().
+        """
         if run_number is None:
             step = project.workflow.get_step_by_id(step_id)
             allow_rerun = step.get('allow_rerun', False)
             run_number = project.snapshot_manager.get_next_run_number(step_id, allow_rerun)
-        
-        # Create a "before" snapshot (simulating what happens before step runs)
-        project.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}")
-        
+
+        # Write manifest + selective snapshot (simulating what run_step does)
+        project.snapshot_manager.scan_manifest(step_id, run_number)
+        project.snapshot_manager.take_selective_snapshot(
+            step_id, run_number, snapshot_items=[], prev_manifest_path=None
+        )
+
         # Update state to completed
         project.update_state(step_id, "completed")
-        
+
         # Create success marker
         status_dir = project.path / ".workflow_status"
         status_dir.mkdir(exist_ok=True)

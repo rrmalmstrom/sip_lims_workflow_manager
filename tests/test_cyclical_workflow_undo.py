@@ -17,70 +17,61 @@ from src.logic import RunResult
 def perform_undo_test(project):
     """
     Test version of perform_undo without Streamlit dependencies.
-    Simplified undo operation using only "before" snapshots.
+    Updated for Stage 2: uses restore_snapshot(step_id, run_number) dispatcher.
     Reverts to the state before the last completed step ran.
     Uses chronological completion order for proper cyclical workflow support.
     """
     # Get the most recently completed step using chronological order
     last_step_id = project.state_manager.get_last_completed_step_chronological()
-    
+
     if not last_step_id:
         return False  # Nothing to undo
-    
+
     # Get the step object
     last_step = project.workflow.get_step_by_id(last_step_id)
     if not last_step:
         print(f"UNDO ERROR: Step {last_step_id} not found in workflow")
         return False
-    
+
     try:
         # Get the effective current run number
         effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
         print(f"DEBUG UNDO: Step {last_step_id}, effective_run={effective_run}")
-        
+
         if effective_run > 1:
-            # Granular undo - restore to before the most recent run
-            before_snapshot = f"{last_step_id}_run_{effective_run}"
-            print(f"DEBUG UNDO: Checking for granular snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                # Remove the most recent run snapshot
+            # Granular undo — restore to before the most recent run
+            print(f"DEBUG UNDO: Checking for granular snapshot: {last_step_id} run {effective_run}")
+            if project.snapshot_manager.snapshot_exists(last_step_id, effective_run):
+                project.snapshot_manager.restore_snapshot(last_step_id, effective_run)
+                # Remove the most recent run snapshot pair
                 project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
                 print(f"UNDO: Restored to before run {effective_run} of step {last_step_id}")
                 # Step remains "completed" since previous runs still exist
                 return True
-        
+
         if effective_run >= 1:
-            # Full step undo - restore to before the step ever ran
-            before_snapshot = f"{last_step_id}_run_1"
-            print(f"DEBUG UNDO: Checking for first run snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-            else:
-                # Fallback to legacy snapshot naming
-                print(f"DEBUG UNDO: Falling back to legacy snapshot: {last_step_id}")
-                project.snapshot_manager.restore_complete_snapshot(last_step_id)
-            
+            # Full step undo — restore to before the step ever ran
+            print(f"DEBUG UNDO: Checking for first run snapshot: {last_step_id} run 1")
+            if project.snapshot_manager.snapshot_exists(last_step_id, 1):
+                project.snapshot_manager.restore_snapshot(last_step_id, 1)
+
             # Remove all run snapshots and mark step as pending
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
-            
+
             # Remove success marker
             script_name = last_step.get('script', '').replace('.py', '')
             success_marker = project.path / ".workflow_status" / f"{script_name}.success"
             if success_marker.exists():
                 success_marker.unlink()
                 print(f"UNDO: Removed success marker for {script_name}")
-            
+
             project.update_state(last_step_id, "pending")
             print(f"UNDO: Restored to before step {last_step_id} ran - marked as pending")
             return True
-        
-        # No snapshots exist - fallback to legacy behavior
-        print(f"DEBUG UNDO: No effective runs, trying legacy snapshot: {last_step_id}")
-        project.snapshot_manager.restore_complete_snapshot(last_step_id)
-        print(f"UNDO: Restored using legacy snapshot for step {last_step_id}")
-        return True
-        
+
+        print(f"DEBUG UNDO: No effective runs found for step {last_step_id}")
+        return False
+
     except FileNotFoundError as e:
         print(f"UNDO ERROR: {e}")
         print("Snapshot not found for undo operation.")
@@ -163,21 +154,26 @@ steps:
         success_file.write_text("success")
     
     def simulate_step_completion(self, project: Project, step_id: str, run_number: int = 1):
-        """Simulate a step completion with proper snapshots and state updates."""
-        # Take a "before" snapshot (simulating what run_step does)
-        project.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}")
-        
+        """Simulate a step completion with proper snapshots and state updates.
+        Updated for Stage 2: uses scan_manifest() + take_selective_snapshot().
+        """
+        # Write manifest + selective snapshot (simulating what run_step does)
+        project.snapshot_manager.scan_manifest(step_id, run_number)
+        project.snapshot_manager.take_selective_snapshot(
+            step_id, run_number, snapshot_items=[], prev_manifest_path=None
+        )
+
         # Simulate script execution result
         step = project.workflow.get_step_by_id(step_id)
         script_name = step.get('script', '')
-        
+
         # Create success marker
         self.create_success_marker(project.path, script_name)
-        
+
         # Handle the successful result
         result = RunResult(success=True, stdout="", stderr="", return_code=0)
         project.handle_step_result(step_id, result)
-        
+
         # Modify some files to simulate script changes
         if step_id == "pool_fa12_analysis":
             outputs_dir = project.path / "outputs"
@@ -206,15 +202,15 @@ steps:
         assert project.get_state("pool_fa12_analysis") == "completed"
         
         # Verify snapshot was created
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
         assert project.snapshot_manager.get_effective_run_number("pool_fa12_analysis") == 1
-        
+
         # Run step 17 (first time)
         self.simulate_step_completion(project, "rework_pooling", run_number=1)
         assert project.get_state("rework_pooling") == "completed"
-        
+
         # Verify snapshot was created
-        assert project.snapshot_manager.snapshot_exists("rework_pooling_run_1")
+        assert project.snapshot_manager.snapshot_exists("rework_pooling", 1)
         assert project.snapshot_manager.get_effective_run_number("rework_pooling") == 1
         
         # Test undo step 17
@@ -246,16 +242,16 @@ steps:
         
         # Verify we have 2 runs of step 16
         assert project.snapshot_manager.get_effective_run_number("pool_fa12_analysis") == 2
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_2")
-        
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 2)
+
         # Re-run step 17
         self.simulate_step_completion(project, "rework_pooling", run_number=2)
-        
+
         # Verify we have 2 runs of step 17
         assert project.snapshot_manager.get_effective_run_number("rework_pooling") == 2
-        assert project.snapshot_manager.snapshot_exists("rework_pooling_run_1")
-        assert project.snapshot_manager.snapshot_exists("rework_pooling_run_2")
+        assert project.snapshot_manager.snapshot_exists("rework_pooling", 1)
+        assert project.snapshot_manager.snapshot_exists("rework_pooling", 2)
         
         # Test granular undo - should undo step 17 run 2, but keep it completed
         result = perform_undo_test(project)
@@ -301,7 +297,7 @@ steps:
         self.simulate_step_completion(project, "run_pooling_preparation", run_number=1)
         
         # Verify the snapshot was created with correct naming
-        assert project.snapshot_manager.snapshot_exists("run_pooling_preparation_run_1")
+        assert project.snapshot_manager.snapshot_exists("run_pooling_preparation", 1)
         
         # Test that get_effective_run_number works correctly with the regex fix
         effective_run = project.snapshot_manager.get_effective_run_number("run_pooling_preparation")
@@ -351,33 +347,33 @@ steps:
         self.simulate_step_completion(project, "pool_fa12_analysis", run_number=3)
         
         # Verify all snapshots exist
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_2")
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_3")
-        
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 2)
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 3)
+
         # Undo run 3
         result = perform_undo_test(project)
         assert result is True
-        
+
         # Run 3 snapshot should be removed, others should remain
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_2")
-        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_3")
-        
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 2)
+        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 3)
+
         # Undo run 2
         result = perform_undo_test(project)
         assert result is True
-        
+
         # Run 2 snapshot should be removed
-        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
-        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_2")
-        
+        assert project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
+        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 2)
+
         # Undo run 1 (should mark step as pending and remove all snapshots)
         result = perform_undo_test(project)
         assert result is True
-        
+
         # All snapshots should be removed, step should be pending
-        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis_run_1")
+        assert not project.snapshot_manager.snapshot_exists("pool_fa12_analysis", 1)
         assert project.get_state("pool_fa12_analysis") == "pending"
 
 

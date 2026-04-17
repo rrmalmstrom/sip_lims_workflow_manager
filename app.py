@@ -375,70 +375,72 @@ def create_inline_file_browser(input_key: str, start_path: str = None):
 
 def perform_undo(project):
     """
-    Simplified undo operation using only "before" snapshots.
-    Reverts to the state before the last completed step ran.
+    Undo the last completed step using the new selective snapshot system.
+    Falls back to legacy complete ZIPs for steps completed before the upgrade.
     Uses chronological completion order for proper cyclical workflow support.
     """
     # Get the most recently completed step using chronological order
     last_step_id = project.state_manager.get_last_completed_step_chronological()
-    
+
     if not last_step_id:
         return False  # Nothing to undo
-    
+
     # Get the step object
     last_step = project.workflow.get_step_by_id(last_step_id)
     if not last_step:
         print(f"UNDO ERROR: Step {last_step_id} not found in workflow")
         return False
-    
+
     try:
-        # Get the effective current run number
+        # Get the effective current run number (highest snapshot that exists)
         effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
-        print(f"DEBUG UNDO: Step {last_step_id}, effective_run={effective_run}")
-        
+        print(f"UNDO: Step {last_step_id}, effective_run={effective_run}")
+
         if effective_run > 1:
-            # Granular undo - restore to before the most recent run
-            before_snapshot = f"{last_step_id}_run_{effective_run}"
-            print(f"DEBUG UNDO: Checking for granular snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                # Remove the most recent run snapshot
-                project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
-                print(f"UNDO: Restored to before run {effective_run} of step {last_step_id}")
-                # Step remains "completed" since previous runs still exist
-                return True
-        
-        if effective_run >= 1:
-            # Full step undo - restore to before the step ever ran
-            before_snapshot = f"{last_step_id}_run_1"
-            print(f"DEBUG UNDO: Checking for first run snapshot: {before_snapshot}")
-            if project.snapshot_manager.snapshot_exists(before_snapshot):
-                project.snapshot_manager.restore_complete_snapshot(before_snapshot)
-            else:
-                # Fallback to legacy snapshot naming
-                print(f"DEBUG UNDO: Falling back to legacy snapshot: {last_step_id}")
-                project.snapshot_manager.restore_complete_snapshot(last_step_id)
-            
-            # Remove all run snapshots and mark step as pending
+            # Granular undo — restore to before the most recent run.
+            # restore_snapshot() handles both new-format and legacy ZIPs.
+            print(f"UNDO: Restoring to before run {effective_run} of step {last_step_id}")
+            project.snapshot_manager.restore_snapshot(last_step_id, effective_run)
+            # Remove the most recent run snapshot (consumed by restore)
+            project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+            print(f"UNDO: Restored to before run {effective_run} of step {last_step_id}")
+            # Step remains "completed" since earlier runs still exist.
+            # Remove the most recent occurrence of this step from _completion_order
+            # so the GUI run counter decrements correctly.
+            state = project.state_manager.load()
+            completion_order = state.get("_completion_order", [])
+            for i in range(len(completion_order) - 1, -1, -1):
+                if completion_order[i] == last_step_id:
+                    completion_order.pop(i)
+                    break
+            state["_completion_order"] = completion_order
+            project.state_manager.save(state)
+            print(f"UNDO: Decremented completion count for {last_step_id} "
+                  f"(now {completion_order.count(last_step_id)} runs)")
+            return True
+
+        if effective_run == 1:
+            # Full step undo — restore to before the step ever ran.
+            print(f"UNDO: Full undo of step {last_step_id} (run 1)")
+            project.snapshot_manager.restore_snapshot(last_step_id, 1)
+            # Remove all run snapshots for this step
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
-            
+
             # Remove success marker
-            script_name = last_step.get('script', '').replace('.py', '')
+            script_name = Path(last_step.get('script', '')).stem
             success_marker = project.path / ".workflow_status" / f"{script_name}.success"
             if success_marker.exists():
                 success_marker.unlink()
                 print(f"UNDO: Removed success marker for {script_name}")
-            
+
             project.update_state(last_step_id, "pending")
-            print(f"UNDO: Restored to before step {last_step_id} ran - marked as pending")
+            print(f"UNDO: Step {last_step_id} marked as pending")
             return True
-        
-        # No snapshots exist - fallback to legacy behavior
-        print(f"DEBUG UNDO: No effective runs, trying legacy snapshot: {last_step_id}")
-        project.snapshot_manager.restore_complete_snapshot(last_step_id)
-        print(f"UNDO: Restored using legacy snapshot for step {last_step_id}")
-        return True
-        
+
+        # No snapshots found at all
+        print(f"UNDO ERROR: No snapshot found for step {last_step_id}")
+        return False
+
     except FileNotFoundError as e:
         print(f"UNDO ERROR: {e}")
         print("Snapshot not found for undo operation.")
@@ -1293,10 +1295,19 @@ def main():
                 # Use the handle_step_result method which includes rollback logic
                 st.session_state.project.handle_step_result(step_id, result)
 
-                # Preserve the terminal output for completed script display
+                # Preserve the terminal output for completed script display.
+                # Use the post-handle_step_result state to determine success — NOT
+                # result.success (raw exit code).  A script can exit with code 0
+                # (sys.exit() with no argument) but still fail the two-factor check
+                # (exit code OK but no success marker written), in which case
+                # handle_step_result() performs rollback and leaves the step as
+                # "pending".  Showing "✅ SCRIPT COMPLETED" in that case is wrong.
+                actual_step_success = (
+                    st.session_state.project.get_state(step_id) == "completed"
+                )
                 st.session_state.completed_script_output = st.session_state.terminal_output
                 st.session_state.completed_script_step = step_id
-                st.session_state.completed_script_success = result.success
+                st.session_state.completed_script_success = actual_step_success
 
                 st.session_state.last_run_result = {"step_name": st.session_state.project.workflow.get_step_by_id(step_id)['name'], **result.__dict__}
                 st.session_state.running_step_id = None

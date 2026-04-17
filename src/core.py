@@ -1,13 +1,36 @@
+import ast
 import yaml
 import os
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult
 # Native execution only - Smart Sync removed
 from src.enhanced_debug_logger import (
     debug_context, log_info, log_error, log_warning,
     debug_enabled
 )
+
+
+def parse_snapshot_items_from_script(script_path: Path) -> List[str]:
+    """
+    Reads SNAPSHOT_ITEMS from a workflow script without executing it.
+    Uses Python's ast module for safe static analysis — no import side effects.
+
+    Returns the list of strings declared in SNAPSHOT_ITEMS.
+    Raises ValueError if SNAPSHOT_ITEMS is not found — caller must abort the
+    step and display a clear error to the user.
+    """
+    source = script_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "SNAPSHOT_ITEMS":
+                    return ast.literal_eval(node.value)
+    raise ValueError(
+        f"SNAPSHOT_ITEMS not found in {script_path.name}. "
+        f"Cannot proceed — add SNAPSHOT_ITEMS to the script before running."
+    )
 
 class Workflow:
     """
@@ -97,36 +120,47 @@ class Project:
     def skip_to_step(self, target_step_id: str) -> str:
         """
         Skip all steps before target step, marking them as 'skipped'.
-        Creates a safety snapshot for undo capability.
+        Creates a manifest + selective snapshot for each skipped step so that
+        undo can work past the skip point.
         Returns a message describing the action taken.
         """
         # Validate target step exists
         target_step = self.workflow.get_step_by_id(target_step_id)
         if not target_step:
             raise ValueError(f"Step {target_step_id} not found")
-        
-        # Create safety snapshot of current project state
-        self.snapshot_manager.take_complete_snapshot("skip_to_initial")
-        
+
         # Initialize ALL steps in the workflow state for consistency
         target_step_found = False
         steps_skipped = 0
-        
+        prev_manifest_path = None
+
         for step in self.workflow.steps:
             step_id = step['id']
-            
+
             if step_id == target_step_id:
                 target_step_found = True
                 # Mark target step as pending
                 self.update_state(step_id, 'pending')
             elif not target_step_found:
-                # Mark all steps before target as skipped
+                # For each skipped step: write a manifest + empty selective snapshot
+                # snapshot_items=[] because no script ran — nothing to back up.
+                # The manifest captures the current folder state as the baseline
+                # for this skipped step, enabling undo past the skip point.
+                run_number = 1
+                manifest_path = self.snapshot_manager.scan_manifest(step_id, run_number)
+                self.snapshot_manager.take_selective_snapshot(
+                    step_id, run_number,
+                    snapshot_items=[],
+                    prev_manifest_path=prev_manifest_path,
+                )
+                prev_manifest_path = manifest_path
+                # Mark step as skipped and record in completion order
                 self.update_state(step_id, 'skipped')
                 steps_skipped += 1
             else:
                 # Mark all steps after target as pending
                 self.update_state(step_id, 'pending')
-        
+
         return f"Skipped to {target_step['name']}"
 
     def get_next_available_step(self):
@@ -142,14 +176,21 @@ class Project:
         Starts a workflow step asynchronously for interactive execution.
         This method is used by the UI for scripts that require user interaction.
         The UI must handle the result and call handle_step_result() when complete.
+
+        Pre-run sequence (new selective snapshot system):
+          1. Resolve the script path and parse SNAPSHOT_ITEMS from it (abort if missing)
+          2. Determine run_number
+          3. Write manifest (fast path-only scan)
+          4. Write selective snapshot ZIP (SNAPSHOT_ITEMS + newly-added user files)
+          5. Launch the script asynchronously
         """
         with debug_context("workflow_step_execution",
                           step_id=step_id,
                           user_inputs=user_inputs) as debug_logger:
-            
+
             if user_inputs is None:
                 user_inputs = {}
-                
+
             step = self.workflow.get_step_by_id(step_id)
             if not step:
                 raise ValueError(f"Step '{step_id}' not found in workflow.")
@@ -162,27 +203,55 @@ class Project:
                                 user_inputs=user_inputs,
                                 execution_mode="native")
 
-            # Native execution - proceeding directly to step
-            if debug_logger:
-                debug_logger.info("Native execution mode - proceeding directly to step",
-                                step_id=step_id)
+        # --- Resolve script path and parse SNAPSHOT_ITEMS ---
+        script_filename = Path(step["script"]).name
+        script_full_path = self.script_path / script_filename
 
-        is_first_run = self.get_state(step_id) == "pending"
-        snapshot_items = step.get("snapshot_items", [])
+        try:
+            snapshot_items = parse_snapshot_items_from_script(script_full_path)
+        except ValueError as e:
+            # SNAPSHOT_ITEMS missing — abort with a clear error, do not run the script
+            print(f"❌ CANNOT RUN STEP: {e}")
+            log_error("run_step aborted: SNAPSHOT_ITEMS missing from script",
+                     step_id=step_id, script=str(script_full_path), error=str(e))
+            return
+        except FileNotFoundError as e:
+            print(f"❌ CANNOT RUN STEP: Script not found — {e}")
+            log_error("run_step aborted: script file not found",
+                     step_id=step_id, script=str(script_full_path), error=str(e))
+            return
 
-        # Get the next run number for this step
+        # --- Determine run number ---
         allow_rerun = step.get('allow_rerun', False)
         run_number = self.snapshot_manager.get_next_run_number(step_id, allow_rerun)
-        
-        # Always take a snapshot before running (for both first runs and re-runs)
-        if is_first_run:
-            # Take both the old-style snapshot (for compatibility) and complete snapshot
-            self.snapshot_manager.take(step_id, snapshot_items)
-        
-        # Take a run-specific complete snapshot for granular undo
-        self.snapshot_manager.take_complete_snapshot(f"{step_id}_run_{run_number}")
 
-        # Prepare arguments for the script
+        # --- Find previous manifest for diff (newly-added user file detection) ---
+        completion_order = self.state_manager.get_completion_order()
+        prev_manifest_path: Optional[Path] = None
+        if completion_order:
+            prev_step_id = completion_order[-1]
+            prev_run = self.snapshot_manager.get_effective_run_number(prev_step_id)
+            if prev_run > 0:
+                candidate = (self.snapshot_manager.snapshots_dir /
+                             f"{prev_step_id}_run_{prev_run}_manifest.json")
+                if candidate.exists():
+                    prev_manifest_path = candidate
+
+        # --- Write manifest (fast metadata-only scan) ---
+        self.snapshot_manager.scan_manifest(step_id, run_number)
+
+        # --- Write selective snapshot ZIP ---
+        self.snapshot_manager.take_selective_snapshot(
+            step_id, run_number, snapshot_items, prev_manifest_path
+        )
+
+        if debug_logger:
+            log_info("Selective snapshot created",
+                    step_id=step_id, run_number=run_number,
+                    snapshot_items=snapshot_items,
+                    prev_manifest=str(prev_manifest_path))
+
+        # --- Prepare arguments for the script ---
         args = []
         if "inputs" in step:
             for i, input_def in enumerate(step["inputs"]):
@@ -193,7 +262,7 @@ class Project:
                         args.append(input_def["arg"])
                     args.append(value)
 
-        # Start the script asynchronously
+        # --- Start the script asynchronously ---
         self.script_runner.run(step["script"], args=args)
 
     def handle_step_result(self, step_id: str, result: RunResult):
@@ -238,12 +307,10 @@ class Project:
                            step_script=step.get('script', 'No script'))
 
             is_first_run = self.get_state(step_id) == "pending"
-            snapshot_items = step.get("snapshot_items", [])
 
             log_step_detail("Current step state analysis",
                            current_state=self.get_state(step_id),
-                           is_first_run=is_first_run,
-                           snapshot_items=snapshot_items)
+                           is_first_run=is_first_run)
 
             # Two-factor success detection: exit code and success marker (native execution)
             exit_code_success = result.success
@@ -369,10 +436,9 @@ class Project:
                     # Re-raise to ensure the error is visible
                     raise
                 
-                # Note: "after" snapshots removed for simplified undo system
-                # Only "before" snapshots are now used for undo functionality
+                # Snapshot ZIP and manifest remain in .snapshots/ as the undo record
             else:
-                # Step failed - log the failure
+                # Step failed — automatic rollback using the new restore_snapshot()
                 log_error("Workflow step failed",
                          step_id=step_id,
                          step_name=step.get('name', 'Unknown'),
@@ -380,68 +446,35 @@ class Project:
                          marker_file_success=marker_file_success,
                          is_first_run=is_first_run,
                          execution_mode="native")
-                
-                # If this was the first run and it failed, restore the snapshot
-                if is_first_run:
-                    rollback_msg = f"ROLLBACK: Restoring snapshot for failed step '{step_id}'"
-                    print(rollback_msg)
-                    
-                    log_info("Starting automatic rollback for failed step",
-                            step_id=step_id,
-                            step_name=step.get('name', 'Unknown'),
-                            is_first_run=is_first_run)
-                try:
-                    # Create hidden log directory if it doesn't exist
-                    log_dir = self.path / ".workflow_logs"
-                    log_dir.mkdir(exist_ok=True)
-                    debug_file = log_dir / "workflow_debug.log"
-                    with open(debug_file, "a") as f:
-                        import datetime
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        f.write(f"[{timestamp}] {rollback_msg}\n")
-                        f.write(f"[{timestamp}] Using complete snapshot restoration to 'before' state\n")
-                except:
-                    pass
-                
-                # Use complete snapshot restoration for consistency with undo button
-                # Restore to the "before" snapshot taken immediately before this step started
+
                 run_number = self.snapshot_manager.get_current_run_number(step_id)
                 if run_number > 0:
-                    # Use the granular system - restore to "before" snapshot (as if step never ran)
-                    before_snapshot = f"{step_id}_run_{run_number}"
-                    if self.snapshot_manager.snapshot_exists(before_snapshot):
-                        self.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                        # CRITICAL FIX: Remove the "before" snapshot after automatic rollback
-                        # This prevents corrupting the run counter for future runs
+                    rollback_msg = (f"ROLLBACK: Restoring snapshot for failed step "
+                                    f"'{step_id}' (run {run_number})")
+                    print(rollback_msg)
+                    log_info("Starting automatic rollback for failed step",
+                            step_id=step_id, run_number=run_number)
+                    try:
+                        self.snapshot_manager.restore_snapshot(step_id, run_number)
+                        # Remove the snapshot pair — it was consumed by rollback
                         self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
-                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) for step '{step_id}' and cleaned up snapshot"
-                    else:
-                        # Fallback to legacy complete snapshot if granular doesn't exist
-                        if self.snapshot_manager.snapshot_exists(step_id):
-                            self.snapshot_manager.restore_complete_snapshot(step_id)
-                            rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy complete snapshot for step '{step_id}'"
-                        else:
-                            # Last resort: use legacy selective restore
-                            self.snapshot_manager.restore(step_id, snapshot_items)
-                            rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy selective restore for step '{step_id}'"
+                        print(f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) "
+                              f"for step '{step_id}'")
+                    except Exception as rollback_err:
+                        print(f"ROLLBACK ERROR: {rollback_err}")
+                        log_error("Automatic rollback failed",
+                                 step_id=step_id, run_number=run_number,
+                                 error=str(rollback_err))
                 else:
-                    # No granular snapshots exist, try legacy complete snapshot
-                    if self.snapshot_manager.snapshot_exists(step_id):
-                        self.snapshot_manager.restore_complete_snapshot(step_id)
-                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy complete snapshot for step '{step_id}'"
-                    else:
-                        # Last resort: use legacy selective restore
-                        self.snapshot_manager.restore(step_id, snapshot_items)
-                        rollback_complete_msg = f"ROLLBACK COMPLETE: Restored using legacy selective restore for step '{step_id}'"
-                
-                print(rollback_complete_msg)
-                try:
-                    with open(debug_file, "a") as f:
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        f.write(f"[{timestamp}] {rollback_complete_msg}\n")
-                except:
-                    pass
-            # Keep the state as "pending" for failed steps
+                    print(f"ROLLBACK: No snapshot found for step '{step_id}' — "
+                          f"project state may be inconsistent")
+                    log_warning("No snapshot available for rollback", step_id=step_id)
+
+                # Always mark a failed step as pending — regardless of its previous
+                # state (e.g. a re-run of a previously-completed step that fails must
+                # revert to pending, not remain "completed").
+                self.update_state(step_id, "pending")
+                print(f"ROLLBACK: Step '{step_id}' marked as pending after failure")
             
             log_step_detail("=== STEP RESULT HANDLING COMPLETED ===",
                            final_step_state=self.get_state(step_id),
@@ -479,27 +512,22 @@ class Project:
         self.script_runner.terminate()
         log_info("Script runner terminate method completed", step_id=step_id)
         
-        # Get the current run number to find the correct "before" snapshot
+        # Get the current run number to find the correct pre-run snapshot
         run_number = self.snapshot_manager.get_current_run_number(step_id)
         if run_number == 0:
             run_number = 1  # If no runs recorded yet, assume this is run 1
-        
-        # Restore to the "before" snapshot (state before script started)
-        before_snapshot = f"{step_id}_run_{run_number}"
+
+        # Restore to the pre-run snapshot (state before script started)
         try:
-            if self.snapshot_manager.snapshot_exists(before_snapshot):
-                self.snapshot_manager.restore_complete_snapshot(before_snapshot)
-                # CRITICAL FIX: Remove the "before" snapshot after termination rollback
-                # This prevents corrupting the run counter for future runs
+            if self.snapshot_manager.snapshot_exists(step_id, run_number):
+                self.snapshot_manager.restore_snapshot(step_id, run_number)
+                # Remove the snapshot pair — it was consumed by the termination rollback
                 self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
-                print(f"TERMINATE: Restored project to state before step {step_id} (run {run_number}) and cleaned up snapshot")
+                print(f"TERMINATE: Restored project to state before step {step_id} "
+                      f"(run {run_number}) and cleaned up snapshot")
             else:
-                # Fallback to legacy snapshot if granular doesn't exist
-                if self.snapshot_manager.snapshot_exists(step_id):
-                    self.snapshot_manager.restore_complete_snapshot(step_id)
-                    print(f"TERMINATE: Restored project using legacy snapshot for step {step_id}")
-                else:
-                    print(f"TERMINATE: No snapshot found for step {step_id} - script terminated but no rollback performed")
+                print(f"TERMINATE: No snapshot found for step {step_id} run {run_number} "
+                      f"— script terminated but no rollback performed")
         except Exception as e:
             print(f"TERMINATE: Error during rollback: {e}")
         
