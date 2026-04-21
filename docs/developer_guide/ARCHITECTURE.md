@@ -183,7 +183,21 @@ Both templates follow the same YAML structure but contain different workflow ste
 
 ### Success Marker Integration
 
-All workflow scripts create success markers in `.workflow_status/{script_name}.success` for workflow manager integration:
+Workflow scripts signal successful completion by writing a flat marker file:
+
+```
+.workflow_status/<script_stem>.success
+```
+
+The workflow manager (`handle_step_result()` in [`src/core.py`](../../src/core.py)) immediately renames this flat marker to a **run-number-specific** form after the script exits:
+
+```
+.workflow_status/<script_stem>.run_<N>.success
+```
+
+`_check_success_marker()` then looks for the run-number-specific marker. This prevents a stale marker from a prior successful run (e.g. `.run_2.success`) from being mistaken for a fresh marker from the current run (e.g. `.run_3.success`) when a step with `allow_rerun: true` is re-run and fails.
+
+**Rerun failure state preservation**: When a re-run of an already-completed step fails, the snapshot rollback restores `workflow_state.json` to its pre-run state (showing "completed"). The workflow manager does **not** overwrite this with "pending" — the step remains "completed" to reflect that the prior successful run is still valid. Only a first-run failure sets the step to "pending".
 
 **SIP Scripts**: Already had success markers
 **SPS-CE Scripts**: Enhanced with robust success marker pattern:
@@ -196,6 +210,8 @@ All workflow scripts create success markers in `.workflow_status/{script_name}.s
 - `SPS_second_FA_output_analysis_NEW.py`
 - `SPS_conclude_FA_analysis_generate_ESP_smear_file.py`
 - `decision_second_attempt.py`
+
+> ⚠️ **MANUAL VALIDATION PENDING**: The run-number-specific marker fix and rerun-failure state-preservation fix have passing automated tests (19/19 in `tests/test_rerun_success_marker.py`) but have **not yet been validated with a live manual run** through the GUI. Manual validation should be performed before relying on these fixes in production.
 
 ## Enhanced Reliability Features
 

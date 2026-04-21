@@ -113,26 +113,36 @@ steps:
         assert project2.get_state("step_3") == "pending"
 
     def test_snapshot_functionality_native(self, temp_project):
-        """Test snapshot functionality in native mode."""
+        """Test snapshot functionality in native mode using the selective snapshot API."""
         project = Project(temp_project, script_path=temp_project / "scripts")
-        
-        # Create some test files
+
+        # Create a test file that will be snapshotted
         test_file = temp_project / "test_data.txt"
         test_file.write_text("Original data")
-        
-        # Take a snapshot
-        project.snapshot_manager.take_complete_snapshot("test_snapshot")
-        
+
+        step_id = "step_1"
+        run_number = 1
+
+        # Write a manifest (records current file set as the pre-run baseline)
+        project.snapshot_manager.scan_manifest(step_id, run_number)
+
+        # Take a selective snapshot declaring test_data.txt as a snapshot item
+        project.snapshot_manager.take_selective_snapshot(
+            step_id, run_number,
+            snapshot_items=["test_data.txt"],
+            prev_manifest_path=None,
+        )
+
         # Verify snapshot exists
-        assert project.snapshot_manager.snapshot_exists("test_snapshot")
-        
+        assert project.snapshot_manager.snapshot_exists(step_id, run_number)
+
         # Modify the file
         test_file.write_text("Modified data")
         assert test_file.read_text() == "Modified data"
-        
-        # Restore snapshot
-        project.snapshot_manager.restore_complete_snapshot("test_snapshot")
-        
+
+        # Restore snapshot — should bring back "Original data"
+        project.snapshot_manager.restore_snapshot(step_id, run_number)
+
         # Verify restoration
         assert test_file.read_text() == "Original data"
 
@@ -163,20 +173,27 @@ steps:
         assert script_file.exists()
 
     def test_success_marker_functionality(self, temp_project):
-        """Test success marker functionality in native mode."""
+        """Test success marker functionality in native mode.
+
+        Success markers are now run-number-specific: <script_stem>.run_<N>.success.
+        The flat <script_stem>.success written by individual scripts is renamed by
+        handle_step_result() before _check_success_marker() is called.
+        """
         project = Project(temp_project, script_path=temp_project / "scripts")
-        
-        # Test success marker checking
-        assert not project._check_success_marker("import_data.py")
-        
-        # Create success marker
+
+        # No marker present → False for any run number
+        assert not project._check_success_marker("import_data.py", 1)
+
+        # Place a run-1-specific marker (as handle_step_result would after renaming)
         status_dir = temp_project / ".workflow_status"
         status_dir.mkdir(exist_ok=True)
-        success_file = status_dir / "import_data.success"
-        success_file.touch()
-        
-        # Verify success marker detection
-        assert project._check_success_marker("import_data.py")
+        run_marker = status_dir / "import_data.run_1.success"
+        run_marker.touch()
+
+        # Correct run number → True
+        assert project._check_success_marker("import_data.py", 1)
+        # Different run number → False (stale marker rejection)
+        assert not project._check_success_marker("import_data.py", 2)
 
     def test_chronological_completion_tracking(self, temp_project):
         """Test chronological completion tracking in native mode."""

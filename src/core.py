@@ -315,16 +315,41 @@ class Project:
             # Two-factor success detection: exit code and success marker (native execution)
             exit_code_success = result.success
             script_name = step.get("script", "")
-            
-            log_step_detail("Starting success marker check",
+
+            # Determine the run number for this result so we can look for the
+            # run-number-specific marker (e.g. script.run_3.success).
+            result_run_number = self.snapshot_manager.get_current_run_number(step_id)
+
+            log_step_detail("Starting success marker rename + check",
                            script_name=script_name,
-                           exit_code_success=exit_code_success)
-            
-            marker_file_success = self._check_success_marker(script_name)
-            
+                           exit_code_success=exit_code_success,
+                           result_run_number=result_run_number)
+
+            # --- Rename flat marker → run-number-specific marker ---
+            # Individual scripts write a flat ``<script_stem>.success`` file.
+            # We rename it to ``<script_stem>.run_<N>.success`` immediately
+            # after the script exits so that _check_success_marker() can
+            # distinguish a fresh marker (this run) from a stale one (prior run).
+            if script_name:
+                script_stem = Path(script_name).stem
+                status_dir = self.path / ".workflow_status"
+                flat_marker = status_dir / f"{script_stem}.success"
+                run_marker = status_dir / f"{script_stem}.run_{result_run_number}.success"
+                if flat_marker.exists():
+                    try:
+                        flat_marker.rename(run_marker)
+                        log_step_detail("Renamed flat marker to run-specific marker",
+                                       flat_marker=str(flat_marker),
+                                       run_marker=str(run_marker))
+                    except OSError as e:
+                        log_step_detail("WARNING: Could not rename success marker",
+                                       error=str(e))
+
+            marker_file_success = self._check_success_marker(script_name, result_run_number)
+
             log_step_detail("Success marker check completed",
                            marker_file_success=marker_file_success,
-                           marker_file_path=f".workflow_status/{Path(script_name).stem}.success" if script_name else "N/A")
+                           marker_file_path=f".workflow_status/{Path(script_name).stem}.run_{result_run_number}.success" if script_name else "N/A")
             
             # Both conditions must be true for actual success
             actual_success = exit_code_success and marker_file_success
@@ -361,24 +386,12 @@ class Project:
                 failure_msg = f"❌ STEP FAILED: '{step.get('name', step_id)}' - Script execution failed"
                 print(failure_msg)
                 print("   Script exited with non-zero error code.")
-                
+
                 log_error("Step failed: Script execution error",
                          step_id=step_id,
                          script_name=script_name,
                          exit_code_success=exit_code_success,
                          marker_file_success=marker_file_success)
-                
-                try:
-                    # Create hidden log directory if it doesn't exist
-                    log_dir = self.path / ".workflow_logs"
-                    log_dir.mkdir(exist_ok=True)
-                    debug_file = log_dir / "workflow_debug.log"
-                    with open(debug_file, "a") as f:
-                        import datetime
-                        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        f.write(f"[{timestamp}] {debug_msg}\n")
-                except:
-                    pass
 
             # Handle the result based on our two-factor success detection
             if actual_success:
@@ -470,11 +483,28 @@ class Project:
                           f"project state may be inconsistent")
                     log_warning("No snapshot available for rollback", step_id=step_id)
 
-                # Always mark a failed step as pending — regardless of its previous
-                # state (e.g. a re-run of a previously-completed step that fails must
-                # revert to pending, not remain "completed").
-                self.update_state(step_id, "pending")
-                print(f"ROLLBACK: Step '{step_id}' marked as pending after failure")
+                # After rollback, workflow_state.json is restored to its pre-run
+                # state (because it is included in snapshots).
+                #
+                # For a FIRST-RUN failure (is_first_run is True): the step was
+                # "pending" before this run; the restored state reflects that.
+                # Explicitly set to "pending" to be safe.
+                #
+                # For a RERUN failure (is_first_run is False): the step was
+                # "completed" before this run; the restored state already shows
+                # "completed" (reflecting the last successful run).  Do NOT
+                # overwrite it with "pending" — the prior successful run is still
+                # valid and the UI should show the step as completed.
+                if is_first_run:
+                    self.update_state(step_id, "pending")
+                    print(f"ROLLBACK: Step '{step_id}' marked as pending after first-run failure")
+                else:
+                    # Rerun failure: rollback already restored "completed" state.
+                    # No state change needed.
+                    print(f"ROLLBACK: Step '{step_id}' remains completed — "
+                          f"prior successful run is still valid")
+                    log_info("Rerun failure: step remains completed after rollback",
+                             step_id=step_id, run_number=run_number)
             
             log_step_detail("=== STEP RESULT HANDLING COMPLETED ===",
                            final_step_state=self.get_state(step_id),
@@ -531,33 +561,52 @@ class Project:
         except Exception as e:
             print(f"TERMINATE: Error during rollback: {e}")
         
-        # Remove any success marker that might have been created
+        # Remove any success marker that might have been created.
+        # The script may have written the flat marker before being killed;
+        # handle_step_result() may also have already renamed it to the
+        # run-number-specific form.  Clean up both to be safe.
         script_name = step.get("script", "")
         if script_name:
-            script_filename = Path(script_name).stem
+            script_stem = Path(script_name).stem
             status_dir = self.path / ".workflow_status"
-            success_file = status_dir / f"{script_filename}.success"
-            if success_file.exists():
-                success_file.unlink()
-                print(f"TERMINATE: Removed success marker for {script_filename}")
+
+            # Flat marker (written by the script, not yet renamed)
+            flat_marker = status_dir / f"{script_stem}.success"
+            if flat_marker.exists():
+                flat_marker.unlink()
+                print(f"TERMINATE: Removed flat success marker for {script_stem}")
+
+            # Run-number-specific marker (already renamed by handle_step_result)
+            run_marker = status_dir / f"{script_stem}.run_{run_number}.success"
+            if run_marker.exists():
+                run_marker.unlink()
+                print(f"TERMINATE: Removed run-specific success marker for {script_stem} run {run_number}")
         
         # Ensure step state remains "pending" (not completed)
         self.update_state(step_id, "pending")
         
         return True
 
-    def _check_success_marker(self, script_name: str) -> bool:
+    def _check_success_marker(self, script_name: str, run_number: int) -> bool:
         """
-        Check if a script completed successfully by looking for its success marker file.
+        Check if a script completed successfully by looking for its
+        run-number-specific success marker file.
+
+        The marker is named ``<script_stem>.run_<N>.success`` (e.g.
+        ``SPS_initiate_project_folder_and_make_sort_plate_labels.run_3.success``).
+        handle_step_result() renames the flat ``<script_stem>.success`` written
+        by the individual script to this run-number-specific name immediately
+        after the script exits, before this check is performed.
+
+        A stale marker from a previous successful run (e.g. ``.run_2.success``)
+        will never match the current run number, so it is correctly rejected.
         """
         if not script_name:
             return True  # No script name, can't check marker
-            
-        # Extract just the filename without path and extension
-        script_filename = Path(script_name).stem
-        
+
+        script_stem = Path(script_name).stem
         status_dir = self.path / ".workflow_status"
-        success_file = status_dir / f"{script_filename}.success"
+        success_file = status_dir / f"{script_stem}.run_{run_number}.success"
         return success_file.exists()
 
     # Native execution only - Smart Sync methods removed
