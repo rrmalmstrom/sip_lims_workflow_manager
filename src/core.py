@@ -536,6 +536,14 @@ class Project:
             raise ValueError(f"Step '{step_id}' not found in workflow.")
         
         log_info("Script termination proceeding", step_id=step_id, step_name=step.get('name', 'Unknown'))
+
+        # Capture is_first_run BEFORE the rollback restores workflow_state.json.
+        # This mirrors the same pattern used in handle_step_result():
+        #   - "pending"   → this was the first attempt (step had never succeeded)
+        #   - "completed" → this is a rerun (step had at least one prior success)
+        is_first_run = self.get_state(step_id) == "pending"
+        log_info("Terminate: captured is_first_run before rollback",
+                 step_id=step_id, is_first_run=is_first_run)
         
         # Terminate the running script
         log_info("Calling script runner terminate method", step_id=step_id)
@@ -547,7 +555,9 @@ class Project:
         if run_number == 0:
             run_number = 1  # If no runs recorded yet, assume this is run 1
 
-        # Restore to the pre-run snapshot (state before script started)
+        # Restore to the pre-run snapshot (state before script started).
+        # For a rerun, this restore will put workflow_state.json back to
+        # "completed" (the state from the last successful run).
         try:
             if self.snapshot_manager.snapshot_exists(step_id, run_number):
                 self.snapshot_manager.restore_snapshot(step_id, run_number)
@@ -582,8 +592,27 @@ class Project:
                 run_marker.unlink()
                 print(f"TERMINATE: Removed run-specific success marker for {script_stem} run {run_number}")
         
-        # Ensure step state remains "pending" (not completed)
-        self.update_state(step_id, "pending")
+        # After rollback, workflow_state.json is restored to its pre-run state.
+        #
+        # For a FIRST-RUN termination (is_first_run is True): the step was
+        # "pending" before this run; the restored state reflects that.
+        # Explicitly set to "pending" to be safe (handles the no-snapshot case).
+        #
+        # For a RERUN termination (is_first_run is False): the step was
+        # "completed" before this run; the restored state already shows
+        # "completed" (reflecting the last successful run).  Do NOT overwrite
+        # it with "pending" — the prior successful run is still valid and the
+        # UI should show the step as completed.
+        if is_first_run:
+            self.update_state(step_id, "pending")
+            print(f"TERMINATE: Step '{step_id}' marked as pending after first-run termination")
+        else:
+            # Rerun termination: rollback already restored "completed" state.
+            # No state change needed.
+            print(f"TERMINATE: Step '{step_id}' remains completed — "
+                  f"prior successful run is still valid")
+            log_info("Rerun termination: step remains completed after rollback",
+                     step_id=step_id, run_number=run_number)
         
         return True
 

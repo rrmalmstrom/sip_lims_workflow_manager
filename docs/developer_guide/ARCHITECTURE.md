@@ -211,7 +211,7 @@ The workflow manager (`handle_step_result()` in [`src/core.py`](../../src/core.p
 - `SPS_conclude_FA_analysis_generate_ESP_smear_file.py`
 - `decision_second_attempt.py`
 
-> ⚠️ **MANUAL VALIDATION PENDING**: The run-number-specific marker fix and rerun-failure state-preservation fix have passing automated tests (19/19 in `tests/test_rerun_success_marker.py`) but have **not yet been validated with a live manual run** through the GUI. Manual validation should be performed before relying on these fixes in production.
+> ✅ **VALIDATED**: The run-number-specific marker fix and rerun-failure state-preservation fix have passing automated tests (19/19 in `tests/test_rerun_success_marker.py`) and were manually validated through the GUI on 2026-04-21. All 5 checklist items confirmed: run-N marker written correctly, failed rerun leaves step "completed", no stale marker accepted, snapshot pair consumed by rollback, project files restored to pre-run state.
 
 ## Enhanced Reliability Features
 

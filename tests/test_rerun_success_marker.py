@@ -514,17 +514,60 @@ class TestTerminateScriptMarkerCleanup:
 
         assert not run_marker.exists(), "Run-specific marker should be removed by terminate_script()"
 
-    def test_terminate_marks_step_pending(self, project, project_dir):
-        """terminate_script() must always leave the step in pending state."""
+    def test_terminate_first_run_marks_step_pending(self, project, project_dir):
+        """
+        Terminating a FIRST-RUN (step was 'pending' before the run) must leave
+        the step in 'pending' state — the step has never succeeded.
+        """
         from unittest.mock import patch
 
         step_id = "rerun_step"
         _simulate_snapshot(project, step_id, 1)
-        project.update_state(step_id, "completed")
+        # Step is "pending" — this is the first attempt
+        project.update_state(step_id, "pending")
 
         with patch.object(project.script_runner, 'is_running', return_value=True):
             with patch.object(project.script_runner, 'terminate'):
                 with patch.object(project.snapshot_manager, 'snapshot_exists', return_value=False):
                     project.terminate_script(step_id)
 
-        assert project.get_state(step_id) == "pending"
+        assert project.get_state(step_id) == "pending", (
+            "First-run termination: step should remain 'pending' (never succeeded)"
+        )
+
+    def test_terminate_rerun_preserves_completed_state(self, project, project_dir):
+        """
+        Terminating a RERUN (step was 'completed' before the run) must NOT
+        reset the step to 'pending'.  The prior successful run is still valid;
+        the rollback restores workflow_state.json to 'completed' and
+        terminate_script() must not overwrite it.
+
+        Regression test for the terminate-rerun bug: the unconditional
+        update_state("pending") call was erasing the prior successful run.
+        """
+        from unittest.mock import patch
+
+        step_id = "rerun_step"
+        _simulate_snapshot(project, step_id, 2)
+        # Step is "completed" — a prior run succeeded; this is a rerun
+        project.update_state(step_id, "completed")
+
+        # Simulate restore_snapshot putting workflow_state.json back to
+        # "completed" (which is what the real SnapshotManager does, because
+        # workflow_state.json is included in the snapshot ZIP).
+        def fake_restore(sid, rnum):
+            project.update_state(step_id, "completed")
+
+        with patch.object(project.script_runner, 'is_running', return_value=True):
+            with patch.object(project.script_runner, 'terminate'):
+                with patch.object(project.snapshot_manager, 'snapshot_exists', return_value=True):
+                    with patch.object(project.snapshot_manager, 'restore_snapshot',
+                                      side_effect=fake_restore):
+                        with patch.object(project.snapshot_manager,
+                                          'remove_run_snapshots_from'):
+                            project.terminate_script(step_id)
+
+        assert project.get_state(step_id) == "completed", (
+            "Rerun termination: step should remain 'completed' — "
+            "prior successful run is still valid and rollback restored that state"
+        )
