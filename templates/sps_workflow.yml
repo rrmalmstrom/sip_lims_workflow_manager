@@ -16,12 +16,10 @@ steps:
   - id: make_library_input_files
     name: "Make Library Creation Input Files"
     script: "SPS_make_illumina_index_and_FA_files_NEW.py"
-    allow_rerun: true
 
   - id: first_fa_analysis
     name: "First FA Output Analysis"
     script: "SPS_first_FA_output_analysis_NEW.py"
-    allow_rerun: true
 
   - id: second_attempt_decision
     name: "Second Attempt Decision"
@@ -30,14 +28,11 @@ steps:
   - id: rework_first_attempt
     name: "Rework First Attempt"
     script: "SPS_rework_first_attempt_NEW.py"
-    allow_rerun: true
 
   - id: second_fa_analysis
     name: "Second FA Output Analysis"
     script: "SPS_second_FA_output_analysis_NEW.py"
-    allow_rerun: true
 
   - id: conclude_fa_analysis
     name: "Conclude FA Analysis and Generate ESP Smear File"
     script: "SPS_conclude_FA_analysis_generate_ESP_smear_file.py"
-    allow_rerun: true
