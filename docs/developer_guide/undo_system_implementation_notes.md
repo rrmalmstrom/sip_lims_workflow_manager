@@ -1,9 +1,9 @@
-# Undo System Implementation Notes — Stage 2 & 3 Deviation Log
+# Undo System Implementation Notes — Stage 2, 3 & Post-Stage 3 Deviation Log
 
-**Date:** 2026-04-20
-**Stage:** Stage 3 — SPS-CE and SIP Fixture Tests (complete)
+**Date:** 2026-04-23
+**Stage:** Post-Stage 3 — Manual undo marker cleanup bug fix
 **Plan document:** [`plans/undo_system_redesign.md`](../../plans/undo_system_redesign.md)
-**Status:** Complete — 82 tests passing, 1 xfailed (as of Stage 3 completion)
+**Status:** Complete — 103 tests passing, 1 xfailed (as of post-Stage 3 fix)
 
 ---
 
@@ -112,6 +112,79 @@ PERMANENT_EXCLUSIONS = {
 
 ---
 
+## DEV-010: Manual Undo Did Not Remove Run-Number-Specific Success Markers
+
+**Date:** 2026-04-23
+**Files changed:** [`app.py`](../../app.py), [`tests/test_chronological_undo_ordering.py`](../../tests/test_chronological_undo_ordering.py)
+**New test file:** [`tests/test_undo_marker_cleanup.py`](../../tests/test_undo_marker_cleanup.py)
+
+### Bug description
+
+`perform_undo()` in [`app.py`](../../app.py) was only trying to delete the flat
+`<script_stem>.success` marker when undoing a step.  However,
+`handle_step_result()` in [`src/core.py`](../../src/core.py) **renames** that flat
+marker to `<script_stem>.run_<N>.success` immediately after every successful
+script exit (the run-number rename system introduced to prevent stale markers
+from being mistaken for fresh ones).
+
+By the time the user clicks "Undo Last Step", the flat marker no longer exists
+on disk — only the run-specific marker does.  The `if success_marker.exists()`
+check in `perform_undo()` silently returned `False`, and the run-specific marker
+was left behind in `.workflow_status/` indefinitely.
+
+There were two affected code paths:
+
+| Case | `effective_run` | Old behaviour | Bug |
+|------|----------------|---------------|-----|
+| Full undo | `== 1` | Tried to delete `<stem>.success` | Flat marker gone (renamed); run-1 marker left behind |
+| Granular undo | `> 1` | No marker cleanup at all | Run-N marker always left behind |
+
+### Fix
+
+**Case 1 — full undo (`effective_run == 1`):**
+- Delete `<script_stem>.run_1.success` (current format, written by all new runs)
+- Also attempt `<script_stem>.success` as a safety net for **legacy projects**
+  completed before the run-number rename system was introduced (those still have
+  the flat marker on disk)
+
+**Case 2 — granular undo (`effective_run > 1`):**
+- Delete `<script_stem>.run_<N>.success` for the specific run being undone
+- Run markers for earlier runs (which are still valid) are left untouched
+
+Both deletions are guarded by `if marker.exists()` so neither raises if the
+marker is already absent.
+
+### Mirror fix in test helper
+
+[`tests/test_chronological_undo_ordering.py`](../../tests/test_chronological_undo_ordering.py)
+contains a local `perform_undo_test()` helper that mirrors `app.py`'s
+`perform_undo()` for use in tests without Streamlit.  This helper was updated
+with the same fix so that the chronological ordering tests remain accurate
+representations of the real undo logic.
+
+### Tests added
+
+[`tests/test_undo_marker_cleanup.py`](../../tests/test_undo_marker_cleanup.py) —
+9 new tests covering:
+
+- `TestFullUndoMarkerCleanup` (5 tests):
+  - Run-1 marker removed after full undo
+  - Legacy flat marker removed after full undo (backward compatibility)
+  - Both markers removed if both present simultaneously
+  - No error if no marker exists
+  - Other steps' markers are not touched
+
+- `TestGranularUndoMarkerCleanup` (4 tests):
+  - Run-N marker removed after granular undo
+  - Only the correct run's marker removed (earlier runs untouched)
+  - No error if no marker exists
+  - Sequential granular undos each remove the correct marker in order
+
+All 9 tests pass. Manual verification with a real project folder confirmed the
+fix resolves the stale-marker accumulation observed in `.workflow_status/`.
+
+---
+
 ## DEV-007: `skip_to_step()` Uses Empty Selective Snapshots
 
 **Section in plan:** Section 4.1  
@@ -203,17 +276,19 @@ These four checks are sufficient to validate the system end-to-end with real dat
 | `tests/test_chronological_undo_ordering.py` | 5 | ✅ All passing |
 | `tests/test_cyclical_workflow_undo.py` | 5 | ✅ All passing |
 | `tests/test_core.py` | 2 (1 xfail) | ✅ 1 passing, 1 xfail (expected) |
+| `tests/test_rerun_success_marker.py` | 15 | ✅ All passing |
+| `tests/test_undo_marker_cleanup.py` | 9 | ✅ All passing (DEV-010 fix) |
 | `tests/test_undo_system_integration.py` | 13 | ✅ All passing (Capsule workflow) |
 | `tests/test_undo_system_integration_sps.py` | 13 | ✅ All passing (SPS-CE workflow) |
 | `tests/test_undo_system_integration_sip.py` | 13 | ✅ All passing (SIP workflow) |
-| **Total** | **94** | **93 passed, 1 xfailed** |
+| **Total** | **118** | **117 passed, 1 xfailed** |
 
 ---
 
 ## Implementation Status Summary — For Handoff
 
-**Last updated:** 2026-04-20
-**Last commit (workflow manager):** Stage 3 complete — SPS-CE and SIP fixture tests added
+**Last updated:** 2026-04-23
+**Last commit (workflow manager):** Post-Stage 3 — manual undo marker cleanup bug fix (DEV-010)
 **Last commit (SPS-CE scripts):** `4f0ed0c` — pushed to `origin/main` (`SPS_library_creation_scripts/`)
 **Branch:** `main`
 
@@ -235,11 +310,12 @@ Key files changed:
 - **`tests/test_undo_system_integration.py`** — 13 integration test scenarios for Capsule (all passing)
 - **`tests/test_snapshot_manager.py`** — 43 unit tests for `SnapshotManager`
 
-Four bugs discovered during manual testing and fixed:
+Five bugs discovered during manual testing and fixed:
 1. **Empty-dir rollback bug** — manifest now records directories; empty dirs from prior steps survive rollback
 2. **GUI shows "completed" when script fails** — fixed in `app.py` (raw exit code → post-handle state check)
 3. **Failed re-run stays "completed" in state** — fixed in `src/core.py` (`handle_step_result()` now always sets pending on failure)
 4. **Run counter not decremented after granular undo** — fixed in `app.py` (`perform_undo()` directly manipulates `_completion_order`)
+5. **Manual undo leaves stale run-specific success markers** — fixed in `app.py` (`perform_undo()` now deletes `<stem>.run_<N>.success` for both full and granular undo; also retains flat-marker fallback for legacy projects). See DEV-010.
 
 Manual sanity check with a real Capsule project: **passed**.
 
@@ -300,13 +376,27 @@ The plan document still has placeholder deviation log entries (`DEV-001: [Short 
 ### How to run the tests
 
 ```bash
-# Run all undo system tests (all three workflow fixtures + unit tests)
-python -m pytest tests/test_undo_system_integration.py tests/test_undo_system_integration_sps.py tests/test_undo_system_integration_sip.py tests/test_snapshot_manager.py tests/test_chronological_undo_ordering.py tests/test_cyclical_workflow_undo.py tests/test_core.py -v
+# Run all undo system tests (all three workflow fixtures + unit tests + marker cleanup)
+python -m pytest \
+  tests/test_undo_system_integration.py \
+  tests/test_undo_system_integration_sps.py \
+  tests/test_undo_system_integration_sip.py \
+  tests/test_snapshot_manager.py \
+  tests/test_chronological_undo_ordering.py \
+  tests/test_cyclical_workflow_undo.py \
+  tests/test_rerun_success_marker.py \
+  tests/test_undo_marker_cleanup.py \
+  tests/test_core.py -v
 
-# Expected: 93 passed, 1 xfailed
+# Expected: 117 passed, 1 xfailed
 
 # Run only the workflow fixture integration tests
 python -m pytest tests/test_undo_system_integration.py tests/test_undo_system_integration_sps.py tests/test_undo_system_integration_sip.py -v
 
 # Expected: 39 passed
+
+# Run only the marker cleanup fix tests (DEV-010)
+python -m pytest tests/test_undo_marker_cleanup.py tests/test_rerun_success_marker.py -v
+
+# Expected: 24 passed
 ```

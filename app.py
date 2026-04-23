@@ -417,6 +417,20 @@ def perform_undo(project):
             project.state_manager.save(state)
             print(f"UNDO: Decremented completion count for {last_step_id} "
                   f"(now {completion_order.count(last_step_id)} runs)")
+
+            # Remove the run-number-specific success marker for the undone run.
+            # handle_step_result() renames the flat <script_stem>.success written
+            # by the script to <script_stem>.run_<N>.success immediately after the
+            # script exits, so the flat marker no longer exists at undo time —
+            # only the run-specific one does.
+            script_name = Path(last_step.get('script', '')).stem
+            if script_name:
+                status_dir = project.path / ".workflow_status"
+                run_marker = status_dir / f"{script_name}.run_{effective_run}.success"
+                if run_marker.exists():
+                    run_marker.unlink()
+                    print(f"UNDO: Removed run-specific success marker {run_marker.name}")
+
             return True
 
         if effective_run == 1:
@@ -426,12 +440,26 @@ def perform_undo(project):
             # Remove all run snapshots for this step
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
 
-            # Remove success marker
+            # Remove the success marker for this step.
+            # handle_step_result() renames the flat <script_stem>.success written
+            # by the script to <script_stem>.run_1.success immediately after the
+            # script exits, so the flat marker no longer exists at undo time.
+            # We delete the run-specific marker (current format) and also attempt
+            # the flat marker as a safety net for legacy projects completed before
+            # the run-number rename system was introduced.
             script_name = Path(last_step.get('script', '')).stem
-            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
-            if success_marker.exists():
-                success_marker.unlink()
-                print(f"UNDO: Removed success marker for {script_name}")
+            if script_name:
+                status_dir = project.path / ".workflow_status"
+                # Run-number-specific marker (current format — written by all new runs)
+                run_marker = status_dir / f"{script_name}.run_1.success"
+                if run_marker.exists():
+                    run_marker.unlink()
+                    print(f"UNDO: Removed run-specific success marker {run_marker.name}")
+                # Flat marker (legacy format — safety net for old projects)
+                flat_marker = status_dir / f"{script_name}.success"
+                if flat_marker.exists():
+                    flat_marker.unlink()
+                    print(f"UNDO: Removed flat success marker for {script_name}")
 
             project.update_state(last_step_id, "pending")
             print(f"UNDO: Step {last_step_id} marked as pending")

@@ -10,6 +10,7 @@ def perform_undo_test(project):
     Test version of perform_undo — mirrors the logic in app.py perform_undo()
     but without Streamlit dependencies.
     Updated for Stage 2: uses restore_snapshot() (new + legacy fallback).
+    Updated for marker fix: deletes run-number-specific markers, not just flat markers.
     """
     last_step_id = project.state_manager.get_last_completed_step_chronological()
     if not last_step_id:
@@ -25,15 +26,29 @@ def perform_undo_test(project):
         if effective_run > 1:
             project.snapshot_manager.restore_snapshot(last_step_id, effective_run)
             project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
+            # Remove the run-number-specific success marker for the undone run.
+            script_name = Path(last_step.get('script', '')).stem
+            if script_name:
+                status_dir = project.path / ".workflow_status"
+                run_marker = status_dir / f"{script_name}.run_{effective_run}.success"
+                if run_marker.exists():
+                    run_marker.unlink()
             return True
 
         if effective_run == 1:
             project.snapshot_manager.restore_snapshot(last_step_id, 1)
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
             script_name = Path(last_step.get('script', '')).stem
-            success_marker = project.path / ".workflow_status" / f"{script_name}.success"
-            if success_marker.exists():
-                success_marker.unlink()
+            if script_name:
+                status_dir = project.path / ".workflow_status"
+                # Run-number-specific marker (current format)
+                run_marker = status_dir / f"{script_name}.run_1.success"
+                if run_marker.exists():
+                    run_marker.unlink()
+                # Flat marker (legacy format — safety net for old projects)
+                flat_marker = status_dir / f"{script_name}.success"
+                if flat_marker.exists():
+                    flat_marker.unlink()
             project.update_state(last_step_id, "pending")
             return True
 

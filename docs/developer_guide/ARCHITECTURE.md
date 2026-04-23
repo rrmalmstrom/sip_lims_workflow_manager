@@ -199,6 +199,15 @@ The workflow manager (`handle_step_result()` in [`src/core.py`](../../src/core.p
 
 **Rerun failure state preservation**: When a re-run of an already-completed step fails, the snapshot rollback restores `workflow_state.json` to its pre-run state (showing "completed"). The workflow manager does **not** overwrite this with "pending" — the step remains "completed" to reflect that the prior successful run is still valid. Only a first-run failure sets the step to "pending".
 
+**Manual undo marker cleanup**: `perform_undo()` in [`app.py`](../../app.py) removes the run-number-specific marker for the run being undone. Because the flat marker is renamed to `<stem>.run_<N>.success` immediately after the script exits, the flat marker no longer exists at undo time — only the run-specific one does. Two cases are handled:
+
+| Undo case | `effective_run` | Marker removed |
+|-----------|----------------|----------------|
+| Full undo (step ran once) | `== 1` | `<stem>.run_1.success` + `<stem>.success` (legacy fallback) |
+| Granular undo (step ran N times, undoing latest) | `> 1` | `<stem>.run_<N>.success` |
+
+The legacy flat-marker fallback ensures backward compatibility with project folders completed before the run-number rename system was introduced.
+
 **SIP Scripts**: Already had success markers
 **SPS-CE Scripts**: Enhanced with robust success marker pattern:
 - `SPS_initiate_project_folder_and_make_sort_plate_labels.py`
@@ -211,7 +220,7 @@ The workflow manager (`handle_step_result()` in [`src/core.py`](../../src/core.p
 - `SPS_conclude_FA_analysis_generate_ESP_smear_file.py`
 - `decision_second_attempt.py`
 
-> ✅ **VALIDATED**: The run-number-specific marker fix and rerun-failure state-preservation fix have passing automated tests (19/19 in `tests/test_rerun_success_marker.py`) and were manually validated through the GUI on 2026-04-21. All 5 checklist items confirmed: run-N marker written correctly, failed rerun leaves step "completed", no stale marker accepted, snapshot pair consumed by rollback, project files restored to pre-run state.
+> ✅ **VALIDATED**: The run-number-specific marker fix, rerun-failure state-preservation fix, and manual undo marker cleanup fix have passing automated tests and were manually validated through the GUI. See [`docs/developer_guide/undo_system_implementation_notes.md`](undo_system_implementation_notes.md) (DEV-010) for full details.
 
 ## Enhanced Reliability Features
 
