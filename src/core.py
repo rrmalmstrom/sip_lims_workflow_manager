@@ -3,7 +3,7 @@ import yaml
 import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult
+from src.logic import StateManager, SnapshotManager, ScriptRunner, RunResult, RollbackError
 # Native execution only - Smart Sync removed
 from src.enhanced_debug_logger import (
     debug_context, log_info, log_error, log_warning,
@@ -462,26 +462,28 @@ class Project:
 
                 run_number = self.snapshot_manager.get_current_run_number(step_id)
                 if run_number > 0:
-                    rollback_msg = (f"ROLLBACK: Restoring snapshot for failed step "
-                                    f"'{step_id}' (run {run_number})")
-                    print(rollback_msg)
                     log_info("Starting automatic rollback for failed step",
                             step_id=step_id, run_number=run_number)
-                    try:
-                        self.snapshot_manager.restore_snapshot(step_id, run_number)
-                        # Remove the snapshot pair — it was consumed by rollback
-                        self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
-                        print(f"ROLLBACK COMPLETE: Restored to before state (run {run_number}) "
-                              f"for step '{step_id}'")
-                    except Exception as rollback_err:
-                        print(f"ROLLBACK ERROR: {rollback_err}")
-                        log_error("Automatic rollback failed",
-                                 step_id=step_id, run_number=run_number,
-                                 error=str(rollback_err))
+                    # restore_snapshot() raises RollbackError on failure — let it
+                    # propagate so the UI can display a critical recovery alert.
+                    self.snapshot_manager.restore_snapshot(step_id, run_number)
+                    # Remove the snapshot pair — it was consumed by rollback
+                    self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
+                    log_info("Automatic rollback completed successfully",
+                             step_id=step_id, run_number=run_number)
                 else:
-                    print(f"ROLLBACK: No snapshot found for step '{step_id}' — "
-                          f"project state may be inconsistent")
-                    log_warning("No snapshot available for rollback", step_id=step_id)
+                    log_warning("No snapshot available for automatic rollback",
+                                step_id=step_id)
+                    # No snapshot means we cannot restore — raise so the UI knows
+                    raise RollbackError(
+                        step_id=step_id,
+                        run_number=0,
+                        reason=(
+                            "No pre-run snapshot was found. The project folder may "
+                            "contain partial changes from the failed script. "
+                            "Manual inspection is required."
+                        ),
+                    )
 
                 # After rollback, workflow_state.json is restored to its pre-run
                 # state (because it is included in snapshots).
@@ -497,13 +499,13 @@ class Project:
                 # valid and the UI should show the step as completed.
                 if is_first_run:
                     self.update_state(step_id, "pending")
-                    print(f"ROLLBACK: Step '{step_id}' marked as pending after first-run failure")
+                    log_info("Automatic rollback: step marked as pending after first-run failure",
+                             step_id=step_id)
                 else:
                     # Rerun failure: rollback already restored "completed" state.
                     # No state change needed.
-                    print(f"ROLLBACK: Step '{step_id}' remains completed — "
-                          f"prior successful run is still valid")
-                    log_info("Rerun failure: step remains completed after rollback",
+                    log_info("Automatic rollback: step remains completed — "
+                             "prior successful run is still valid",
                              step_id=step_id, run_number=run_number)
             
             log_step_detail("=== STEP RESULT HANDLING COMPLETED ===",
@@ -558,18 +560,19 @@ class Project:
         # Restore to the pre-run snapshot (state before script started).
         # For a rerun, this restore will put workflow_state.json back to
         # "completed" (the state from the last successful run).
-        try:
-            if self.snapshot_manager.snapshot_exists(step_id, run_number):
-                self.snapshot_manager.restore_snapshot(step_id, run_number)
-                # Remove the snapshot pair — it was consumed by the termination rollback
-                self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
-                print(f"TERMINATE: Restored project to state before step {step_id} "
-                      f"(run {run_number}) and cleaned up snapshot")
-            else:
-                print(f"TERMINATE: No snapshot found for step {step_id} run {run_number} "
-                      f"— script terminated but no rollback performed")
-        except Exception as e:
-            print(f"TERMINATE: Error during rollback: {e}")
+        # restore_snapshot() raises RollbackError on failure — let it propagate
+        # so the UI can display a critical recovery alert.
+        if self.snapshot_manager.snapshot_exists(step_id, run_number):
+            self.snapshot_manager.restore_snapshot(step_id, run_number)
+            # Remove the snapshot pair — it was consumed by the termination rollback
+            self.snapshot_manager.remove_run_snapshots_from(step_id, run_number)
+            log_info("Terminate: restored project to pre-run state",
+                     step_id=step_id, run_number=run_number)
+        else:
+            log_warning(
+                "Terminate: no snapshot found — script terminated but no rollback performed",
+                step_id=step_id, run_number=run_number,
+            )
         
         # Remove any success marker that might have been created.
         # The script may have written the flat marker before being killed;
@@ -584,14 +587,16 @@ class Project:
             flat_marker = status_dir / f"{script_stem}.success"
             if flat_marker.exists():
                 flat_marker.unlink()
-                print(f"TERMINATE: Removed flat success marker for {script_stem}")
+                log_info("Terminate: removed flat success marker",
+                         script=script_stem)
 
             # Run-number-specific marker (already renamed by handle_step_result)
             run_marker = status_dir / f"{script_stem}.run_{run_number}.success"
             if run_marker.exists():
                 run_marker.unlink()
-                print(f"TERMINATE: Removed run-specific success marker for {script_stem} run {run_number}")
-        
+                log_info("Terminate: removed run-specific success marker",
+                         script=script_stem, run_number=run_number)
+
         # After rollback, workflow_state.json is restored to its pre-run state.
         #
         # For a FIRST-RUN termination (is_first_run is True): the step was
@@ -605,13 +610,12 @@ class Project:
         # UI should show the step as completed.
         if is_first_run:
             self.update_state(step_id, "pending")
-            print(f"TERMINATE: Step '{step_id}' marked as pending after first-run termination")
+            log_info("Terminate: step marked as pending after first-run termination",
+                     step_id=step_id)
         else:
             # Rerun termination: rollback already restored "completed" state.
             # No state change needed.
-            print(f"TERMINATE: Step '{step_id}' remains completed — "
-                  f"prior successful run is still valid")
-            log_info("Rerun termination: step remains completed after rollback",
+            log_info("Terminate: step remains completed — prior successful run is still valid",
                      step_id=step_id, run_number=run_number)
         
         return True

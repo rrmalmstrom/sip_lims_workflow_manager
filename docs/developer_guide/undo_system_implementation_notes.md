@@ -1,9 +1,9 @@
 # Undo System Implementation Notes — Stage 2, 3 & Post-Stage 3 Deviation Log
 
-**Date:** 2026-04-23
-**Stage:** Post-Stage 3 — Manual undo marker cleanup bug fix
+**Date:** 2026-04-24
+**Stage:** Post-Stage 3 — Rollback logging & silent-failure elimination (DEV-011)
 **Plan document:** [`plans/undo_system_redesign.md`](../../plans/undo_system_redesign.md)
-**Status:** Complete — 103 tests passing, 1 xfailed (as of post-Stage 3 fix)
+**Status:** Complete — 96 tests passing, 1 xfailed (as of DEV-011 fix)
 
 ---
 
@@ -109,6 +109,83 @@ PERMANENT_EXCLUSIONS = {
     "Misc",
 }
 ```
+
+---
+
+## DEV-011: Rollback Logging Was Silent — All Rollback Activity Now Logged + UI Alerts on Failure
+
+**Date:** 2026-04-24
+**Files changed:**
+- [`src/logic.py`](../../src/logic.py) — `SnapshotManager`, `StateManager`, new `RollbackError` exception
+- [`src/core.py`](../../src/core.py) — `handle_step_result()`, `terminate_script()`
+- [`app.py`](../../app.py) — `perform_undo()`, result handler, terminate handler, critical alert display
+- [`tests/test_snapshot_manager.py`](../../tests/test_snapshot_manager.py) — updated `test_raises_when_no_snapshot_exists`
+
+### Problem
+
+All rollback and restore activity used bare `print()` calls. In a Streamlit application, `print()` goes to the server process stdout — invisible to the user in the browser. When a rollback *failed*, the error was caught, printed to nowhere the user could see, and execution continued silently. The project folder could be left in a corrupt, partially-modified state with the user having no indication anything went wrong.
+
+Three specific failure modes were completely silent:
+1. **Automatic rollback failure** — script fails mid-run, rollback also fails → project in unknown state, UI shows nothing
+2. **Terminate rollback failure** — user clicks Terminate, rollback fails → project in unknown state, UI shows nothing
+3. **Manual undo failure** — user clicks Undo, restore fails → project in unknown state, UI shows "✅ Undo completed!" regardless
+
+### Fix: Three Layers of Defense
+
+**Layer 1 — `SnapshotManager._log_rollback()` (new method in `src/logic.py`)**
+
+Every rollback/restore operation now writes to two destinations simultaneously:
+
+- **`.workflow_logs/rollback.log`** inside the project folder — always written, regardless of the `WORKFLOW_DEBUG` environment variable. Plain-text timestamped entries that a developer or power user can inspect after the fact.
+- **The enhanced debug logger** (`log_info` / `log_warning` / `log_error`) — which writes to the centralized `debug_output/` log files.
+
+All `print()` calls in `scan_manifest()`, `take_selective_snapshot()`, `_restore_from_selective_snapshot()`, `_restore_from_complete_snapshot()`, `remove_run_snapshots_from()`, `remove_all_run_snapshots()`, and `_safe_delete()` were replaced with `_log_rollback()` calls.
+
+`StateManager.load()` retry-loop `print()` calls were also replaced with `log_warning()` / `log_error()` calls.
+
+**Layer 2 — `RollbackError`: a structured exception (new class in `src/logic.py`)**
+
+```python
+class RollbackError(Exception):
+    def __init__(self, step_id: str, run_number: int, reason: str,
+                 partial_files: Optional[List[str]] = None):
+        self.step_id = step_id
+        self.run_number = run_number
+        self.reason = reason
+        self.partial_files = partial_files or []
+```
+
+`restore_snapshot()` now raises `RollbackError` (not `FileNotFoundError`) in all failure cases:
+- No snapshot file found (neither new-format nor legacy)
+- Selective snapshot restore throws an exception mid-way
+- Legacy complete snapshot restore throws an exception mid-way
+
+This means callers cannot accidentally catch it as a generic `Exception` and silently continue — it has a specific type that must be handled explicitly.
+
+**Layer 3 — Persistent critical alert in the UI (`app.py`)**
+
+Three places in `app.py` can trigger a rollback. All three now catch `RollbackError` and store it in `st.session_state.critical_rollback_alert` — a **persistent** session state key that survives page reruns and stays visible until the user explicitly dismisses it.
+
+The alert is displayed at the very top of the main content area (above all workflow steps) as a prominent `st.error()` block with:
+- Which step and run number failed
+- The specific reason the rollback failed
+- Clear instructions: do not run further steps, check `rollback.log`, inspect `.snapshots/`, contact admin or restore from backup
+- A "✅ I understand — dismiss this alert" button
+
+`perform_undo()` was also refactored to return `(success: bool, error)` instead of just `bool`, so the undo confirmation handler can distinguish success from failure and show the appropriate UI response.
+
+### Test update
+
+`tests/test_snapshot_manager.py::TestRestoreSnapshotLegacyFallback::test_raises_when_no_snapshot_exists` was updated to expect `RollbackError` instead of `FileNotFoundError`, and now also asserts `step_id` and `run_number` on the exception.
+
+### Log file location
+
+The rollback log is written to:
+```
+<project_folder>/.workflow_logs/rollback.log
+```
+
+This file is in the `.workflow_logs/` directory, which is excluded from manifests and snapshots (it is never rolled back). It accumulates across all runs and is the primary diagnostic tool when a rollback failure occurs.
 
 ---
 
@@ -272,7 +349,7 @@ These four checks are sufficient to validate the system end-to-end with real dat
 
 | Test file | Tests | Status |
 |-----------|-------|--------|
-| `tests/test_snapshot_manager.py` | 43 | ✅ All passing |
+| `tests/test_snapshot_manager.py` | 43 | ✅ All passing (DEV-011: `RollbackError` assertion updated) |
 | `tests/test_chronological_undo_ordering.py` | 5 | ✅ All passing |
 | `tests/test_cyclical_workflow_undo.py` | 5 | ✅ All passing |
 | `tests/test_core.py` | 2 (1 xfail) | ✅ 1 passing, 1 xfail (expected) |
@@ -287,8 +364,8 @@ These four checks are sufficient to validate the system end-to-end with real dat
 
 ## Implementation Status Summary — For Handoff
 
-**Last updated:** 2026-04-23
-**Last commit (workflow manager):** Post-Stage 3 — manual undo marker cleanup bug fix (DEV-010)
+**Last updated:** 2026-04-24
+**Last commit (workflow manager):** Post-Stage 3 — rollback logging & silent-failure elimination (DEV-011)
 **Last commit (SPS-CE scripts):** `4f0ed0c` — pushed to `origin/main` (`SPS_library_creation_scripts/`)
 **Branch:** `main`
 

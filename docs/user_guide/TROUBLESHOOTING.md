@@ -110,6 +110,84 @@ This guide helps you resolve common issues with the Native Mac Distribution of t
      2.  **Check permissions**: Ensure you have read/write access to the external drive
      3.  **Try local copy**: Copy project to local drive temporarily to test
 
+---
+
+## Rollback and Undo Failures
+
+The workflow manager automatically protects your project folder by taking a snapshot before every script runs. If a script fails, the system rolls back the project folder to the state it was in before the script started. If you manually click **Undo Last Step**, the system restores the previous state from that snapshot.
+
+In rare cases — for example, if the snapshot file is missing or the external drive becomes unavailable mid-restore — the rollback itself can fail.
+
+### 🚨 "CRITICAL: ROLLBACK FAILED" Alert
+
+If a rollback fails, a **prominent red alert** will appear at the top of the workflow manager page. It will stay visible until you explicitly dismiss it by clicking **"✅ I understand — dismiss this alert"**.
+
+**Do not dismiss this alert and continue running steps until you have resolved the issue.** Running further steps on a partially-modified project folder can corrupt your data.
+
+The alert will tell you:
+- Which step and run number was affected
+- The specific reason the rollback failed
+- What to do next
+
+### What to do when a rollback fails
+
+**Step 1 — Do not run any more workflow steps.**
+
+The project folder may contain partial changes from the failed script. Running the next step on top of a corrupt state will make recovery harder.
+
+**Step 2 — Check the rollback log.**
+
+Open your project folder and look for the file:
+```
+<your_project_folder>/.workflow_logs/rollback.log
+```
+
+This file records every rollback operation with timestamps. Look for `[ERROR]` lines near the bottom — they will describe exactly what the system tried to do and what went wrong.
+
+> **Note:** `.workflow_logs/` is a hidden folder. In Finder, press **⌘ + Shift + .** to show hidden files.
+
+**Step 3 — Check for remaining snapshot files.**
+
+Look inside:
+```
+<your_project_folder>/.snapshots/
+```
+
+If a snapshot ZIP file exists for the failed step (e.g. `step_name_run_1_snapshot.zip`), the snapshot was taken successfully before the script ran — the problem was only in the restore step. You may be able to manually extract this ZIP to recover the pre-run state.
+
+**Step 4 — Identify what changed.**
+
+The rollback log will list files that were deleted and files that were extracted during the attempted restore. Compare the current state of your project folder against what you expect. Files that the failed script created but the rollback could not remove will still be present.
+
+**Step 5 — Manual recovery options.**
+
+| Situation | Recovery action |
+|-----------|----------------|
+| Snapshot ZIP exists in `.snapshots/` | Manually extract the ZIP into the project folder to restore pre-run files |
+| No snapshot ZIP exists | Restore the project folder from an external backup (Time Machine, etc.) |
+| Only a few unexpected files were added | Manually delete the files the failed script created, then re-run the step |
+| Unsure what changed | Contact your system administrator before proceeding |
+
+**Step 6 — After manual recovery, re-run the failed step.**
+
+Once the project folder is back to its expected state, click **Run** on the failed step again. The workflow manager will take a fresh snapshot before the script starts.
+
+### Why does rollback failure happen?
+
+The most common causes are:
+
+- **External drive disconnected mid-restore** — the snapshot ZIP is on an external drive that became unavailable during extraction
+- **Snapshot file missing** — the `.snapshots/` folder was manually modified or the snapshot was never written (e.g. the application crashed before the snapshot completed)
+- **Disk full** — no space to extract the snapshot ZIP
+- **File permissions** — the project folder became read-only between the snapshot and the restore
+
+### Preventing rollback failures
+
+- Keep your project folder on a **reliable, always-connected drive**
+- Ensure you have **sufficient free disk space** (at least 2× the size of your project folder)
+- Do not manually modify the `.snapshots/` or `.workflow_logs/` folders inside your project
+- If using an external drive, ensure it is **ejected safely** after each session
+
 ## Update and Network Issues
 
 ### Update Detection Fails
@@ -157,6 +235,8 @@ If you need to report an issue, please gather this information:
 3.  **Environment status**: Run `conda env list`
 4.  **Git version**: Run `git --version`
 5.  **Error messages**: Copy any error messages you see
+6.  **Rollback log**: If a rollback failure occurred, attach `<project_folder>/.workflow_logs/rollback.log`
+7.  **Debug log**: Attach the most recent file from `debug_output/` in the workflow manager folder
 
 ### Common Solutions Summary
 

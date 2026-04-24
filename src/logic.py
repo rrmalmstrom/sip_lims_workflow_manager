@@ -12,7 +12,7 @@ import queue
 import time
 import re
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 
 # Native execution debug logging
@@ -20,6 +20,35 @@ from src.enhanced_debug_logger import (
     debug_context, log_info, log_error, log_warning,
     debug_enabled
 )
+
+# ---------------------------------------------------------------------------
+# Custom exceptions for rollback failures
+# ---------------------------------------------------------------------------
+
+class RollbackError(Exception):
+    """
+    Raised when an automatic or manual rollback fails to restore the project
+    to its pre-run state.  Carries structured context so the UI can display
+    a meaningful recovery message to the user.
+
+    Attributes:
+        step_id:      The workflow step whose rollback failed.
+        run_number:   The run number that was being rolled back.
+        reason:       Human-readable description of why the rollback failed.
+        partial_files: List of relative paths that may be in an inconsistent
+                       state (newly created by the failed script but not
+                       cleaned up by the failed rollback).
+    """
+    def __init__(self, step_id: str, run_number: int, reason: str,
+                 partial_files: Optional[List[str]] = None):
+        self.step_id = step_id
+        self.run_number = run_number
+        self.reason = reason
+        self.partial_files = partial_files or []
+        super().__init__(
+            f"Rollback failed for step '{step_id}' run {run_number}: {reason}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Undo system constants — module level so every method references the same set
@@ -88,7 +117,11 @@ class StateManager:
                             continue
                         else:
                             # Last attempt failed - return empty state
-                            print(f"WARNING: workflow_state.json is empty after {max_retries} attempts")
+                            log_warning(
+                                "workflow_state.json is empty after all retries",
+                                path=str(self.path),
+                                retries=max_retries,
+                            )
                             return {}
                     
                     # Parse the JSON content
@@ -99,25 +132,43 @@ class StateManager:
                 if attempt < max_retries - 1:
                     # Temporary corruption - retry after delay
                     import time
-                    print(f"JSON decode error (attempt {attempt + 1}/{max_retries}): {e}")
+                    log_warning(
+                        "JSON decode error reading workflow_state.json — retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        error=str(e),
+                    )
                     time.sleep(retry_delay)
                     continue
                 else:
                     # Final attempt failed - log error and return empty state
-                    print(f"CRITICAL: JSON corruption persists after {max_retries} attempts: {e}")
-                    print(f"File path: {self.path}")
-                    print("Returning empty state to prevent application crash")
+                    log_error(
+                        "CRITICAL: workflow_state.json JSON corruption persists after all retries",
+                        path=str(self.path),
+                        retries=max_retries,
+                        error=str(e),
+                    )
                     return {}
             except Exception as e:
                 if attempt < max_retries - 1:
                     # Other error - retry after delay
                     import time
-                    print(f"File read error (attempt {attempt + 1}/{max_retries}): {e}")
+                    log_warning(
+                        "File read error reading workflow_state.json — retrying",
+                        attempt=attempt + 1,
+                        max_retries=max_retries,
+                        error=str(e),
+                    )
                     time.sleep(retry_delay)
                     continue
                 else:
                     # Final attempt failed - log error and return empty state
-                    print(f"CRITICAL: File read error persists after {max_retries} attempts: {e}")
+                    log_error(
+                        "CRITICAL: workflow_state.json file read error persists after all retries",
+                        path=str(self.path),
+                        retries=max_retries,
+                        error=str(e),
+                    )
                     return {}
         
         # Should never reach here, but return empty state as fallback
@@ -212,6 +263,47 @@ class SnapshotManager:
         self.snapshots_dir.mkdir(exist_ok=True)
 
     # -----------------------------------------------------------------------
+    # Internal structured logging — writes to .workflow_logs/rollback.log
+    # AND to the enhanced_debug_logger so all rollback activity is captured
+    # in one place.  Never raises — logging must not break the caller.
+    # -----------------------------------------------------------------------
+
+    def _log_rollback(self, level: str, message: str, **kwargs):
+        """
+        Write a rollback/restore log entry to:
+          1. <project>/.workflow_logs/rollback.log  (always, regardless of
+             WORKFLOW_DEBUG env var — rollback events are always important)
+          2. The enhanced_debug_logger (log_info / log_warning / log_error)
+
+        level must be one of: 'INFO', 'WARNING', 'ERROR'
+        """
+        try:
+            log_dir = self.project_path / ".workflow_logs"
+            log_dir.mkdir(exist_ok=True)
+            rollback_log = log_dir / "rollback.log"
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+            detail_str = "  ".join(f"{k}={v}" for k, v in kwargs.items())
+            line = f"[{timestamp}] [{level}] {message}"
+            if detail_str:
+                line += f"  |  {detail_str}"
+            with open(rollback_log, "a", encoding="utf-8") as f:
+                f.write(line + "\n")
+                f.flush()
+        except Exception:
+            pass  # Never let logging break the caller
+
+        # Also route to the enhanced debug logger
+        try:
+            if level == "ERROR":
+                log_error(message, **kwargs)
+            elif level == "WARNING":
+                log_warning(message, **kwargs)
+            else:
+                log_info(message, **kwargs)
+        except Exception:
+            pass
+
+    # -----------------------------------------------------------------------
     # Helpers
     # -----------------------------------------------------------------------
 
@@ -274,8 +366,7 @@ class SnapshotManager:
                 run_numbers.add(int(m.group(1)))
         return sorted(run_numbers)
 
-    @staticmethod
-    def _safe_delete(path: Path, retries: int = 3, delay: float = 1.0):
+    def _safe_delete(self, path: Path, retries: int = 3, delay: float = 1.0):
         """
         Deletes a file with retry logic for network-drive "file in use" errors.
         Logs a warning (does not raise) if all retries are exhausted.
@@ -288,7 +379,12 @@ class SnapshotManager:
                 if attempt < retries - 1:
                     time.sleep(delay)
                 else:
-                    print(f"WARNING: Could not delete {path} after {retries} attempts")
+                    self._log_rollback(
+                        "WARNING",
+                        f"Could not delete file after {retries} attempts",
+                        path=str(path),
+                        retries=retries,
+                    )
 
     # -----------------------------------------------------------------------
     # Manifest operations
@@ -320,9 +416,11 @@ class SnapshotManager:
             "excluded_patterns": sorted(_MANIFEST_EXCLUDE_PATTERNS),
         }
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        print(
-            f"MANIFEST: Written {manifest_path.name} "
-            f"({len(current_paths)} files, {len(current_dirs)} dirs)"
+        self._log_rollback(
+            "INFO",
+            f"Manifest written: {manifest_path.name}",
+            files=len(current_paths),
+            dirs=len(current_dirs),
         )
         return manifest_path
 
@@ -403,10 +501,12 @@ class SnapshotManager:
                 if full_path.is_file():
                     zf.write(full_path, rel_str)
 
-        print(
-            f"SNAPSHOT: Selective snapshot written {zip_path.name} "
-            f"({len(files_to_zip)} files: {len(snapshot_item_paths)} declared, "
-            f"{len(newly_added)} newly-added)"
+        self._log_rollback(
+            "INFO",
+            f"Selective snapshot written: {zip_path.name}",
+            total_files=len(files_to_zip),
+            declared=len(snapshot_item_paths),
+            newly_added=len(newly_added),
         )
         return zip_path
 
@@ -419,24 +519,89 @@ class SnapshotManager:
         Primary restore entry point.  Tries the new selective format first,
         then falls back to the legacy complete ZIP.
 
-        Raises FileNotFoundError if neither format exists.
+        Raises RollbackError if no snapshot exists or if the restore itself
+        fails — callers must NOT silently swallow this exception.  The UI
+        layer is responsible for surfacing it to the user with recovery
+        instructions.
         """
         new_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_snapshot.zip"
         new_manifest = self.snapshots_dir / f"{step_id}_run_{run_number}_manifest.json"
 
+        self._log_rollback(
+            "INFO",
+            "Starting snapshot restore",
+            step_id=step_id,
+            run_number=run_number,
+            new_zip_exists=new_zip.exists(),
+            new_manifest_exists=new_manifest.exists(),
+        )
+
         if new_zip.exists() and new_manifest.exists():
-            self._restore_from_selective_snapshot(new_zip, new_manifest)
-            return
+            try:
+                self._restore_from_selective_snapshot(new_zip, new_manifest)
+                self._log_rollback(
+                    "INFO",
+                    "Selective snapshot restore completed successfully",
+                    step_id=step_id,
+                    run_number=run_number,
+                )
+                return
+            except Exception as exc:
+                self._log_rollback(
+                    "ERROR",
+                    "Selective snapshot restore FAILED",
+                    step_id=step_id,
+                    run_number=run_number,
+                    error=str(exc),
+                )
+                raise RollbackError(
+                    step_id=step_id,
+                    run_number=run_number,
+                    reason=f"Restore from selective snapshot failed: {exc}",
+                ) from exc
 
         # Fall back to legacy complete ZIP
         legacy_zip = self.snapshots_dir / f"{step_id}_run_{run_number}_complete.zip"
         if legacy_zip.exists():
-            self._restore_from_complete_snapshot(legacy_zip)
-            return
+            try:
+                self._restore_from_complete_snapshot(legacy_zip)
+                self._log_rollback(
+                    "INFO",
+                    "Legacy complete snapshot restore completed successfully",
+                    step_id=step_id,
+                    run_number=run_number,
+                )
+                return
+            except Exception as exc:
+                self._log_rollback(
+                    "ERROR",
+                    "Legacy complete snapshot restore FAILED",
+                    step_id=step_id,
+                    run_number=run_number,
+                    error=str(exc),
+                )
+                raise RollbackError(
+                    step_id=step_id,
+                    run_number=run_number,
+                    reason=f"Restore from legacy snapshot failed: {exc}",
+                ) from exc
 
-        raise FileNotFoundError(
-            f"No snapshot found for {step_id} run {run_number} "
-            f"(checked {new_zip.name} and {legacy_zip.name})"
+        # No snapshot found at all
+        self._log_rollback(
+            "ERROR",
+            "No snapshot found for restore — project state may be inconsistent",
+            step_id=step_id,
+            run_number=run_number,
+            checked_new=str(new_zip),
+            checked_legacy=str(legacy_zip),
+        )
+        raise RollbackError(
+            step_id=step_id,
+            run_number=run_number,
+            reason=(
+                f"No snapshot file found. Checked: {new_zip.name} and {legacy_zip.name}. "
+                "The project folder may be in an inconsistent state."
+            ),
         )
 
     def _restore_from_selective_snapshot(self, zip_path: Path, manifest_path: Path):
@@ -468,12 +633,15 @@ class SnapshotManager:
         # --- Delete newly-created files (skip permanently protected paths) ---
         for rel_str in newly_created_files:
             if any(rel_str.startswith(prefix) for prefix in PERMANENT_EXCLUSIONS):
-                print(f"RESTORE: Skipping permanently protected path: {rel_str}")
+                self._log_rollback(
+                    "INFO",
+                    f"Restore: skipping permanently protected path: {rel_str}",
+                )
                 continue
             full_path = self.project_path / rel_str
             if full_path.is_file():
                 self._safe_delete(full_path)
-                print(f"RESTORE: Deleted newly-created file {rel_str}")
+                self._log_rollback("INFO", f"Restore: deleted newly-created file", path=rel_str)
 
         # --- Delete newly-created empty directories (deepest first) ---
         # Load pre-run dirs from the manifest's explicit "directories" field.
@@ -505,7 +673,11 @@ class SnapshotManager:
                 try:
                     if not any(full_path.iterdir()):
                         full_path.rmdir()
-                        print(f"RESTORE: Removed newly-created empty directory {rel_str}")
+                        self._log_rollback(
+                            "INFO",
+                            "Restore: removed newly-created empty directory",
+                            path=rel_str,
+                        )
                 except OSError:
                     pass
 
@@ -521,7 +693,11 @@ class SnapshotManager:
                     except (OSError, ValueError):
                         pass
 
-        print(f"RESTORE: Selective snapshot restored from {zip_path.name}")
+        self._log_rollback(
+            "INFO",
+            f"Selective snapshot restored successfully",
+            zip=zip_path.name,
+        )
 
         # --- Consume the snapshot pair ---
         self._safe_delete(zip_path)
@@ -577,7 +753,7 @@ class SnapshotManager:
             file_path = self.project_path / rel_path
             if file_path.exists():
                 file_path.unlink()
-                print(f"RESTORE: Removed {rel_path}")
+                self._log_rollback("INFO", "Legacy restore: removed file", path=str(rel_path))
 
         for dir_path in sorted(self.project_path.rglob('*'), key=lambda p: len(p.parts), reverse=True):
             if dir_path.is_dir() and dir_path != self.project_path:
@@ -593,7 +769,11 @@ class SnapshotManager:
                 try:
                     if not any(dir_path.iterdir()):
                         dir_path.rmdir()
-                        print(f"RESTORE: Removed empty directory {rel_dir}")
+                        self._log_rollback(
+                            "INFO",
+                            "Legacy restore: removed empty directory",
+                            path=str(rel_dir),
+                        )
                 except OSError:
                     pass
 
@@ -615,7 +795,11 @@ class SnapshotManager:
             if placeholder_file.exists():
                 placeholder_file.unlink()
 
-        print(f"RESTORE: Legacy complete snapshot restored from {zip_path.name}")
+        self._log_rollback(
+            "INFO",
+            "Legacy complete snapshot restored successfully",
+            zip=zip_path.name,
+        )
 
     # -----------------------------------------------------------------------
     # Run-number methods — updated to handle both new and legacy formats
@@ -697,11 +881,11 @@ class SnapshotManager:
             m = pattern_new.search(f.stem)
             if m and int(m.group(1)) >= run_number:
                 f.unlink()
-                print(f"UNDO: Removed snapshot {f.name}")
+                self._log_rollback("INFO", "Removed snapshot file", file=f.name)
                 manifest = self.snapshots_dir / f.name.replace("_snapshot.zip", "_manifest.json")
                 if manifest.exists():
                     manifest.unlink()
-                    print(f"UNDO: Removed manifest {manifest.name}")
+                    self._log_rollback("INFO", "Removed manifest file", file=manifest.name)
 
         # Legacy-format snapshots
         pattern_legacy = re.compile(r'_run_(\d+)_complete$')
@@ -709,7 +893,7 @@ class SnapshotManager:
             m = pattern_legacy.search(f.stem)
             if m and int(m.group(1)) >= run_number:
                 f.unlink()
-                print(f"UNDO: Removed snapshot {f.name}")
+                self._log_rollback("INFO", "Removed legacy snapshot file", file=f.name)
 
     def remove_all_run_snapshots(self, step_id: str):
         """
@@ -719,23 +903,32 @@ class SnapshotManager:
         for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_snapshot.zip")):
             try:
                 f.unlink()
-                print(f"UNDO: Removed snapshot {f.name}")
-            except OSError:
-                pass
+                self._log_rollback("INFO", "Removed snapshot file", file=f.name)
+            except OSError as e:
+                self._log_rollback(
+                    "WARNING", "Could not remove snapshot file",
+                    file=f.name, error=str(e)
+                )
             manifest = self.snapshots_dir / f.name.replace("_snapshot.zip", "_manifest.json")
             if manifest.exists():
                 try:
                     manifest.unlink()
-                    print(f"UNDO: Removed manifest {manifest.name}")
-                except OSError:
-                    pass
+                    self._log_rollback("INFO", "Removed manifest file", file=manifest.name)
+                except OSError as e:
+                    self._log_rollback(
+                        "WARNING", "Could not remove manifest file",
+                        file=manifest.name, error=str(e)
+                    )
 
         for f in list(self.snapshots_dir.glob(f"{step_id}_run_*_complete.zip")):
             try:
                 f.unlink()
-                print(f"UNDO: Removed snapshot {f.name}")
-            except OSError:
-                pass
+                self._log_rollback("INFO", "Removed legacy snapshot file", file=f.name)
+            except OSError as e:
+                self._log_rollback(
+                    "WARNING", "Could not remove legacy snapshot file",
+                    file=f.name, error=str(e)
+                )
 
     def restore_complete_snapshot(self, step_id: str):
         """

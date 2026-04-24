@@ -25,7 +25,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import patch, call
 
-from src.logic import SnapshotManager, PERMANENT_EXCLUSIONS
+from src.logic import SnapshotManager, PERMANENT_EXCLUSIONS, RollbackError
 
 
 # ---------------------------------------------------------------------------
@@ -514,9 +514,13 @@ class TestRestoreSnapshotLegacyFallback:
         assert (tmp_path / "project_database.db").read_text() == "original"
 
     def test_raises_when_no_snapshot_exists(self, tmp_path):
+        """restore_snapshot() raises RollbackError (not FileNotFoundError) when
+        neither the new-format nor the legacy snapshot file exists."""
         sm = make_manager(tmp_path)
-        with pytest.raises(FileNotFoundError):
+        with pytest.raises(RollbackError) as exc_info:
             sm.restore_snapshot("step_a", 1)
+        assert exc_info.value.step_id == "step_a"
+        assert exc_info.value.run_number == 1
 
 
 # ===========================================================================

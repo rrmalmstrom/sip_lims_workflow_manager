@@ -11,7 +11,7 @@ import yaml
 import webbrowser
 import os
 from src.core import Project
-from src.logic import RunResult
+from src.logic import RunResult, RollbackError
 from src.workflow_utils import get_workflow_template_path, get_workflow_type_display
 # Docker validation imports removed - native execution only
 import argparse
@@ -378,32 +378,40 @@ def perform_undo(project):
     Undo the last completed step using the new selective snapshot system.
     Falls back to legacy complete ZIPs for steps completed before the upgrade.
     Uses chronological completion order for proper cyclical workflow support.
+
+    Returns:
+        (True, None)           — undo succeeded
+        (False, error_msg)     — undo failed; error_msg is a human-readable string
+        (False, RollbackError) — undo failed with a structured rollback error
     """
     # Get the most recently completed step using chronological order
     last_step_id = project.state_manager.get_last_completed_step_chronological()
 
     if not last_step_id:
-        return False  # Nothing to undo
+        return False, "No completed steps to undo."
 
     # Get the step object
     last_step = project.workflow.get_step_by_id(last_step_id)
     if not last_step:
-        print(f"UNDO ERROR: Step {last_step_id} not found in workflow")
-        return False
+        msg = f"Step '{last_step_id}' not found in workflow definition."
+        log_error("Undo failed: step not found in workflow", step_id=last_step_id)
+        return False, msg
 
     try:
         # Get the effective current run number (highest snapshot that exists)
         effective_run = project.snapshot_manager.get_effective_run_number(last_step_id)
-        print(f"UNDO: Step {last_step_id}, effective_run={effective_run}")
+        log_info("Undo requested", step_id=last_step_id, effective_run=effective_run)
 
         if effective_run > 1:
             # Granular undo — restore to before the most recent run.
-            # restore_snapshot() handles both new-format and legacy ZIPs.
-            print(f"UNDO: Restoring to before run {effective_run} of step {last_step_id}")
+            # restore_snapshot() raises RollbackError on failure.
+            log_info("Undo: granular restore to before most recent run",
+                     step_id=last_step_id, run=effective_run)
             project.snapshot_manager.restore_snapshot(last_step_id, effective_run)
             # Remove the most recent run snapshot (consumed by restore)
             project.snapshot_manager.remove_run_snapshots_from(last_step_id, effective_run)
-            print(f"UNDO: Restored to before run {effective_run} of step {last_step_id}")
+            log_info("Undo: granular restore completed",
+                     step_id=last_step_id, run=effective_run)
             # Step remains "completed" since earlier runs still exist.
             # Remove the most recent occurrence of this step from _completion_order
             # so the GUI run counter decrements correctly.
@@ -415,67 +423,65 @@ def perform_undo(project):
                     break
             state["_completion_order"] = completion_order
             project.state_manager.save(state)
-            print(f"UNDO: Decremented completion count for {last_step_id} "
-                  f"(now {completion_order.count(last_step_id)} runs)")
+            log_info("Undo: decremented completion count",
+                     step_id=last_step_id,
+                     remaining_runs=completion_order.count(last_step_id))
 
             # Remove the run-number-specific success marker for the undone run.
-            # handle_step_result() renames the flat <script_stem>.success written
-            # by the script to <script_stem>.run_<N>.success immediately after the
-            # script exits, so the flat marker no longer exists at undo time —
-            # only the run-specific one does.
             script_name = Path(last_step.get('script', '')).stem
             if script_name:
                 status_dir = project.path / ".workflow_status"
                 run_marker = status_dir / f"{script_name}.run_{effective_run}.success"
                 if run_marker.exists():
                     run_marker.unlink()
-                    print(f"UNDO: Removed run-specific success marker {run_marker.name}")
+                    log_info("Undo: removed run-specific success marker",
+                             marker=run_marker.name)
 
-            return True
+            return True, None
 
         if effective_run == 1:
             # Full step undo — restore to before the step ever ran.
-            print(f"UNDO: Full undo of step {last_step_id} (run 1)")
+            log_info("Undo: full step undo (run 1)", step_id=last_step_id)
             project.snapshot_manager.restore_snapshot(last_step_id, 1)
             # Remove all run snapshots for this step
             project.snapshot_manager.remove_all_run_snapshots(last_step_id)
 
             # Remove the success marker for this step.
-            # handle_step_result() renames the flat <script_stem>.success written
-            # by the script to <script_stem>.run_1.success immediately after the
-            # script exits, so the flat marker no longer exists at undo time.
-            # We delete the run-specific marker (current format) and also attempt
-            # the flat marker as a safety net for legacy projects completed before
-            # the run-number rename system was introduced.
             script_name = Path(last_step.get('script', '')).stem
             if script_name:
                 status_dir = project.path / ".workflow_status"
-                # Run-number-specific marker (current format — written by all new runs)
+                # Run-number-specific marker (current format)
                 run_marker = status_dir / f"{script_name}.run_1.success"
                 if run_marker.exists():
                     run_marker.unlink()
-                    print(f"UNDO: Removed run-specific success marker {run_marker.name}")
+                    log_info("Undo: removed run-specific success marker",
+                             marker=run_marker.name)
                 # Flat marker (legacy format — safety net for old projects)
                 flat_marker = status_dir / f"{script_name}.success"
                 if flat_marker.exists():
                     flat_marker.unlink()
-                    print(f"UNDO: Removed flat success marker for {script_name}")
+                    log_info("Undo: removed flat success marker (legacy)",
+                             script=script_name)
 
             project.update_state(last_step_id, "pending")
-            print(f"UNDO: Step {last_step_id} marked as pending")
-            return True
+            log_info("Undo: step marked as pending", step_id=last_step_id)
+            return True, None
 
         # No snapshots found at all
-        print(f"UNDO ERROR: No snapshot found for step {last_step_id}")
-        return False
+        msg = (f"No snapshot found for step '{last_step.get('name', last_step_id)}'. "
+               "Cannot undo — the snapshot may have already been consumed.")
+        log_error("Undo failed: no snapshot found", step_id=last_step_id)
+        return False, msg
 
-    except FileNotFoundError as e:
-        print(f"UNDO ERROR: {e}")
-        print("Snapshot not found for undo operation.")
-        return False
+    except RollbackError as e:
+        log_error("Undo failed with RollbackError",
+                  step_id=last_step_id, reason=e.reason)
+        return False, e
     except Exception as e:
-        print(f"UNDO ERROR: Unexpected error during undo: {e}")
-        return False
+        msg = f"Unexpected error during undo: {e}"
+        log_error("Undo failed with unexpected exception",
+                  step_id=last_step_id, error=str(e))
+        return False, msg
 
 def run_step_background(project, step_id, user_inputs):
     """
@@ -552,6 +558,10 @@ def main():
         st.session_state.completed_script_step = None
     if 'completed_script_success' not in st.session_state:
         st.session_state.completed_script_success = None
+    # Persistent critical alert shown when an automatic or manual rollback fails.
+    # Stored as a dict so it survives reruns until the user explicitly dismisses it.
+    if 'critical_rollback_alert' not in st.session_state:
+        st.session_state.critical_rollback_alert = None
 
     # --- Native Auto-Detection ---
     # Try to auto-detect and load native project
@@ -646,10 +656,39 @@ def main():
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button("✅ Yes, Undo", key="confirm_undo"):
-                        perform_undo(st.session_state.project)
+                        success, err = perform_undo(st.session_state.project)
                         st.session_state.undo_confirmation = False
-                        st.success("✅ Undo completed!")
-                        st.rerun()
+                        if success:
+                            st.success("✅ Undo completed!")
+                            st.rerun()
+                        else:
+                            # Surface the failure as a persistent critical alert so it
+                            # survives the st.rerun() and stays visible until dismissed.
+                            # Both RollbackError (structured) and plain string errors
+                            # are stored in critical_rollback_alert — never shown via
+                            # st.error() which would be wiped by the rerun.
+                            if isinstance(err, RollbackError):
+                                st.session_state.critical_rollback_alert = {
+                                    "context": "manual_undo",
+                                    "step_id": err.step_id,
+                                    "run_number": err.run_number,
+                                    "reason": err.reason,
+                                }
+                            else:
+                                # Plain string error (e.g. "No snapshot found" or
+                                # "Step not found in workflow") — store as alert too
+                                last_step_id = (
+                                    st.session_state.project.state_manager
+                                    .get_last_completed_step_chronological()
+                                    or "unknown"
+                                )
+                                st.session_state.critical_rollback_alert = {
+                                    "context": "manual_undo",
+                                    "step_id": last_step_id,
+                                    "run_number": 0,
+                                    "reason": str(err),
+                                }
+                            st.rerun()
                 with col2:
                     if st.button("❌ Cancel", key="cancel_undo"):
                         st.session_state.undo_confirmation = False
@@ -1036,7 +1075,48 @@ def main():
         st.info("Select a project folder using the 'Browse' button in the sidebar.")
     else:
         project = st.session_state.project
-        
+
+        # ---------------------------------------------------------------
+        # CRITICAL ROLLBACK FAILURE ALERT
+        # Shown persistently at the top of the page until dismissed.
+        # This fires when an automatic rollback (script failure) or a
+        # manual undo fails to restore the project folder.
+        # ---------------------------------------------------------------
+        if st.session_state.critical_rollback_alert:
+            alert = st.session_state.critical_rollback_alert
+            context = alert.get("context", "rollback")
+            step_id = alert.get("step_id", "unknown")
+            run_number = alert.get("run_number", 0)
+            reason = alert.get("reason", "Unknown error")
+
+            context_label = {
+                "auto_rollback": "AUTOMATIC ROLLBACK AFTER SCRIPT FAILURE",
+                "manual_undo": "MANUAL UNDO",
+                "terminate": "SCRIPT TERMINATION ROLLBACK",
+            }.get(context, "ROLLBACK")
+
+            st.error(
+                f"🚨 **CRITICAL: {context_label} FAILED**\n\n"
+                f"**Step**: `{step_id}`  |  **Run**: {run_number}\n\n"
+                f"**Reason**: {reason}\n\n"
+                "---\n"
+                "⚠️ **The project folder may be in an inconsistent state.** "
+                "Some files may have been added or modified by the failed script "
+                "but could not be removed by the rollback.\n\n"
+                "**What to do:**\n"
+                "1. Do NOT run any further workflow steps until this is resolved.\n"
+                "2. Check the rollback log at `.workflow_logs/rollback.log` inside "
+                "your project folder for details on what was attempted.\n"
+                "3. Manually inspect the project folder and compare it against the "
+                "last known good state (check `.snapshots/` for any remaining ZIP files).\n"
+                "4. If you cannot restore manually, contact your system administrator "
+                "or restore the project folder from an external backup."
+            )
+            if st.button("✅ I understand — dismiss this alert", key="dismiss_rollback_alert"):
+                st.session_state.critical_rollback_alert = None
+                st.rerun()
+            st.markdown("---")
+
         # Display project folder name prominently beneath the main header
         st.markdown(f"## 📁 {project.path.name}")
 
@@ -1087,13 +1167,31 @@ def main():
                     type="secondary",
                     help="Stop the running script and rollback to before it started"
                 ):
-                    if project.terminate_script(st.session_state.running_step_id):
+                    try:
+                        terminated = project.terminate_script(st.session_state.running_step_id)
+                        if terminated:
+                            st.session_state.running_step_id = None
+                            st.session_state.terminal_output = ""
+                            st.success("✅ Script terminated and project rolled back!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Failed to terminate script — no script was running.")
+                    except RollbackError as rollback_err:
+                        log_error(
+                            "Rollback failed after script termination — storing critical alert",
+                            step_id=rollback_err.step_id,
+                            run_number=rollback_err.run_number,
+                            reason=rollback_err.reason,
+                        )
+                        st.session_state.critical_rollback_alert = {
+                            "context": "terminate",
+                            "step_id": rollback_err.step_id,
+                            "run_number": rollback_err.run_number,
+                            "reason": rollback_err.reason,
+                        }
                         st.session_state.running_step_id = None
                         st.session_state.terminal_output = ""
-                        st.success("✅ Script terminated and project rolled back!")
                         st.rerun()
-                    else:
-                        st.error("❌ Failed to terminate script")
             
         
         # Show terminal for completed scripts
@@ -1320,8 +1418,26 @@ def main():
                 # Script is done - handle the result
                 step_id = st.session_state.running_step_id
                 
-                # Use the handle_step_result method which includes rollback logic
-                st.session_state.project.handle_step_result(step_id, result)
+                # Use the handle_step_result method which includes rollback logic.
+                # If an automatic rollback fails, handle_step_result() raises
+                # RollbackError — catch it and store a persistent critical alert.
+                try:
+                    st.session_state.project.handle_step_result(step_id, result)
+                except RollbackError as rollback_err:
+                    log_error(
+                        "Automatic rollback failed after script failure — storing critical alert",
+                        step_id=step_id,
+                        run_number=rollback_err.run_number,
+                        reason=rollback_err.reason,
+                    )
+                    st.session_state.critical_rollback_alert = {
+                        "context": "auto_rollback",
+                        "step_id": rollback_err.step_id,
+                        "run_number": rollback_err.run_number,
+                        "reason": rollback_err.reason,
+                    }
+                    # Mark the step as failed/inconsistent so the UI reflects reality
+                    st.session_state.project.update_state(step_id, "pending")
 
                 # Preserve the terminal output for completed script display.
                 # Use the post-handle_step_result state to determine success — NOT
