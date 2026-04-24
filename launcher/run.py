@@ -611,12 +611,17 @@ def main():
                     print("⚠️  Updates completed with warnings")
             return
         
-        # Auto-update the workflow manager before doing anything else
-        was_updated = auto_update_self()
-        if was_updated:
-            click.echo()
-            click.secho("🔄 Update applied. Please re-launch run.command to start with the latest version.", fg='yellow', bold=True)
-            sys.exit(0)
+        # Auto-update the workflow manager before doing anything else.
+        # Skip entirely on developer machines — the developer.marker file signals
+        # that local code should be used as-is, without pulling from remote.
+        if detect_mode() == "developer":
+            click.secho("🔧 Developer mode detected — skipping auto-update.", fg='blue')
+        else:
+            was_updated = auto_update_self()
+            if was_updated:
+                click.echo()
+                click.secho("🔄 Update applied. Please re-launch run.command to start with the latest version.", fg='yellow', bold=True)
+                sys.exit(0)
 
         click.echo()
 

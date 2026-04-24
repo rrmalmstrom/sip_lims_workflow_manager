@@ -98,14 +98,17 @@ The application operates in one of two modes, determined by the presence of a ma
 -   **Updates**: Scripts are automatically updated via Git operations
 
 ### Developer Mode
-Activated by the presence of a `config/developer.marker` file:
+Activated by the presence of a `config/developer.marker` file (git-ignored; never distributed):
 
+-   **Auto-Update Skipped**: [`auto_update_self()`](../../launcher/run.py:59) is bypassed entirely — the launcher detects the marker via [`detect_mode()`](../../launcher/run.py:295) **before** any git fetch/pull is attempted, so the local codebase is always used as-is.
 -   **Local Development**: Uses local conda environment for development
 -   **Script Choice**: Interactive prompts to choose between:
     -   **Production Mode**: Uses centralized scripts with auto-updates
     -   **Development Mode**: Uses local scripts with direct file system access
 -   **Flexibility**: Allows testing with local script modifications
 -   **Native Debugging**: Full access to Python debugging tools
+
+> ⚠️ **Bug fixed (2026-04-24)**: Previously, `auto_update_self()` was called unconditionally at the top of `main()`, causing developer machines to pull from remote and demand a re-launch even though the developer marker was present. The fix gates the auto-update call on `detect_mode() != "developer"`.
 
 ### Environment Management:
 -   **Conda Integration**: Seamless integration with conda package management
