@@ -67,6 +67,8 @@ PERMANENT_EXCLUSIONS = {
     "MISC",                                         # User misc folders (case variants)
     "misc",
     "Misc",
+    "FA_results",                                   # Top-level FA results folder (all workflows)
+    "Metabolomics_QC",                              # Top-level metabolomics QC folder
 }
 
 # Entry *names* (not paths) that are always excluded from scans — matched

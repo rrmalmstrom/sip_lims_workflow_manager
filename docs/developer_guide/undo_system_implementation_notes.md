@@ -89,13 +89,16 @@ The integration tests do **not** call `run_step()` for the happy-path scenarios.
 
 ---
 
-## DEV-006: `PERMANENT_EXCLUSIONS` Includes MISC Variants
+## DEV-006: `PERMANENT_EXCLUSIONS` Includes MISC Variants and Top-Level User Folders
 
-**Section in plan:** Section 0 (FA Archive Permanent Protection Rule)  
-**Original plan:** 5 FA archive paths only.  
-**What was implemented:** 8 entries — 5 FA archive paths + `MISC`, `misc`, `Misc`.
+**Section in plan:** Section 0 (FA Archive Permanent Protection Rule)
+**Original plan:** 5 FA archive paths only.
+**What was implemented:** 10 entries — 5 FA archive paths + `MISC`/`misc`/`Misc` variants + 2 top-level user data folders.
 
-**Reason:** User request during implementation. MISC folders are used to store miscellaneous project files that should never be deleted during undo/rollback.
+**Reason:** User requests during implementation:
+- MISC folders are used to store miscellaneous project files that should never be deleted during undo/rollback.
+- `FA_results` is a top-level folder used across all workflows to store FA instrument output files. It may contain hundreds of large BMP/instrument files and must never be touched by rollback.
+- `Metabolomics_QC` is a top-level folder containing metabolomics QC data files that are managed independently of the workflow and must be permanently protected.
 
 ```python
 PERMANENT_EXCLUSIONS = {
@@ -107,6 +110,8 @@ PERMANENT_EXCLUSIONS = {
     "MISC",
     "misc",
     "Misc",
+    "FA_results",        # Top-level FA results folder (all workflows)
+    "Metabolomics_QC",   # Top-level metabolomics QC folder
 }
 ```
 

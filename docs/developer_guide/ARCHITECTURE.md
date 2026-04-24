@@ -253,7 +253,7 @@ The snapshot system must scan the project folder before and after each step to b
 The system now uses a single `os.scandir()` pass with **early directory pruning**:
 
 - **`_SCAN_EXCLUDE_NAMES`** — system folder/file names (`.snapshots`, `.workflow_status`, `.workflow_logs`, `workflow.yml`, `__pycache__`, `.DS_Store`) pruned by name at any depth. The scanner never descends into them.
-- **`_SCAN_EXCLUDE_PREFIXES`** — `PERMANENT_EXCLUSIONS` paths (FA archives, MISC variants) pruned by top-level relative path before the scanner enters them.
+- **`_SCAN_EXCLUDE_PREFIXES`** — `PERMANENT_EXCLUSIONS` paths pruned by top-level relative path before the scanner enters them. Includes FA archive subdirectories (`archived_files/FA_results_archive`, `archived_files/*_lib_attempt_fa_results`, `archived_files/capsule_fa_analysis_results`), MISC variants (`MISC`, `misc`, `Misc`), and top-level user data folders (`FA_results`, `Metabolomics_QC`).
 
 The single `_scan_project()` call returns a `(files, dirs)` tuple that is reused across both `scan_manifest()` and `take_selective_snapshot()`, eliminating the third redundant walk entirely.
 
