@@ -69,16 +69,29 @@ PERMANENT_EXCLUSIONS = {
     "Misc",
 }
 
-# Standard patterns excluded from manifest scans and snapshot operations.
-# These are never included in manifests and never deleted during undo/rollback.
-_MANIFEST_EXCLUDE_PATTERNS = {
+# Entry *names* (not paths) that are always excluded from scans — matched
+# against entry.name so they are pruned at any depth without descending.
+_SCAN_EXCLUDE_NAMES: frozenset = frozenset({
     '.snapshots',
     '.workflow_status',
     '.workflow_logs',
     'workflow.yml',
     '__pycache__',
     '.DS_Store',
-}
+})
+
+# Relative path PREFIXES that are excluded from scans entirely.
+# Combines PERMANENT_EXCLUSIONS so that FA archive and MISC subtrees are
+# pruned before os.scandir() ever enters them.
+#
+# NOTE: Files under these prefixes are already protected from deletion
+# during rollback (PERMANENT_EXCLUSIONS). Excluding them from scans is
+# consistent with that intent — scripts must never modify these paths.
+_SCAN_EXCLUDE_PREFIXES: frozenset = frozenset(PERMANENT_EXCLUSIONS)
+
+# Keep _MANIFEST_EXCLUDE_PATTERNS as an alias for backward compatibility
+# with any external code that references it directly.
+_MANIFEST_EXCLUDE_PATTERNS = _SCAN_EXCLUDE_NAMES
 
 @dataclass
 class RunResult:
@@ -307,43 +320,56 @@ class SnapshotManager:
     # Helpers
     # -----------------------------------------------------------------------
 
+    def _scan_project(self) -> tuple:
+        """
+        Single-pass iterative scan of the project directory using os.scandir().
+
+        Returns (files, dirs) — both as sets of relative path strings.
+
+        Key improvements over the old rglob-based _scan_project_paths() /
+        _scan_project_dirs() pair:
+          - Single pass instead of two separate rglob walks
+          - Prunes _SCAN_EXCLUDE_NAMES directories before entering them
+            (os.scandir never calls readdir() on excluded subtrees)
+          - Prunes PERMANENT_EXCLUSIONS paths (FA archive, MISC) entirely,
+            skipping hundreds of instrument files that were previously
+            traversed and then discarded
+          - Iterative stack — no Python recursion depth concerns
+        """
+        files: set = set()
+        dirs: set = set()
+        stack: list = [self.project_path]
+
+        while stack:
+            current_dir = stack.pop()
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        # Prune by name first (cheap string comparison)
+                        if entry.name in _SCAN_EXCLUDE_NAMES:
+                            continue
+                        rel = str(Path(entry.path).relative_to(self.project_path))
+                        if entry.is_dir(follow_symlinks=False):
+                            # Prune PERMANENT_EXCLUSIONS paths before descending
+                            if rel in _SCAN_EXCLUDE_PREFIXES:
+                                continue
+                            dirs.add(rel)
+                            stack.append(Path(entry.path))
+                        else:
+                            files.add(rel)
+            except PermissionError:
+                pass  # Skip directories we cannot read
+
+        return files, dirs
+
     def _scan_project_paths(self) -> set:
-        """
-        Returns a set of relative path strings for every file currently in the
-        project directory, excluding the standard manifest exclusion patterns.
-        PERMANENT_EXCLUSIONS are NOT applied here — they are only applied
-        during rollback when deciding what to delete.
-        """
-        paths = set()
-        for file_path in self.project_path.rglob('*'):
-            if not file_path.is_file():
-                continue
-            # Skip if any part of the path matches the exclude patterns
-            if any(part in _MANIFEST_EXCLUDE_PATTERNS for part in file_path.parts):
-                continue
-            if file_path.name in _MANIFEST_EXCLUDE_PATTERNS:
-                continue
-            paths.add(str(file_path.relative_to(self.project_path)))
-        return paths
+        """Thin wrapper around _scan_project() — returns files only."""
+        files, _ = self._scan_project()
+        return files
 
     def _scan_project_dirs(self) -> set:
-        """
-        Returns a set of relative path strings for every directory currently in
-        the project directory, excluding the standard manifest exclusion patterns.
-
-        This is used by scan_manifest() to explicitly record directories so that
-        empty directories created by a previous step are not mistakenly treated
-        as "newly created" during a subsequent step's rollback.
-        """
-        dirs = set()
-        for dir_path in self.project_path.rglob('*'):
-            if not dir_path.is_dir():
-                continue
-            if any(part in _MANIFEST_EXCLUDE_PATTERNS for part in dir_path.parts):
-                continue
-            if dir_path.name in _MANIFEST_EXCLUDE_PATTERNS:
-                continue
-            dirs.add(str(dir_path.relative_to(self.project_path)))
+        """Thin wrapper around _scan_project() — returns dirs only."""
+        _, dirs = self._scan_project()
         return dirs
 
     def _get_run_numbers(self, step_id: str) -> list:
@@ -393,19 +419,19 @@ class SnapshotManager:
     def scan_manifest(self, step_id: str, run_number: int) -> Path:
         """
         Writes a manifest JSON file capturing the current set of file paths AND
-        directories in the project directory.  This is a fast metadata-only scan
-        — no file contents are read.
+        directories in the project directory using a single os.scandir() pass.
 
         Directories are recorded explicitly so that empty directories created by
         a previous step are not mistakenly treated as "newly created" during a
-        subsequent step's rollback (the bug where _restore_from_selective_snapshot
-        deleted empty dirs that were not represented in the files-only manifest).
+        subsequent step's rollback.
 
-        Returns the Path of the written manifest file.
+        Returns (manifest_path, (files, dirs)) so the caller can pass the scan
+        result directly to take_selective_snapshot() without a second walk.
         """
         manifest_path = self.snapshots_dir / f"{step_id}_run_{run_number}_manifest.json"
-        current_paths = sorted(self._scan_project_paths())
-        current_dirs = sorted(self._scan_project_dirs())
+        files, dirs = self._scan_project()          # single pass — no rglob
+        current_paths = sorted(files)
+        current_dirs = sorted(dirs)
 
         manifest = {
             "step_id": step_id,
@@ -413,7 +439,7 @@ class SnapshotManager:
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
             "files": current_paths,
             "directories": current_dirs,
-            "excluded_patterns": sorted(_MANIFEST_EXCLUDE_PATTERNS),
+            "excluded_patterns": sorted(_SCAN_EXCLUDE_NAMES | _SCAN_EXCLUDE_PREFIXES),
         }
         manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         self._log_rollback(
@@ -422,7 +448,7 @@ class SnapshotManager:
             files=len(current_paths),
             dirs=len(current_dirs),
         )
-        return manifest_path
+        return manifest_path, (files, dirs)
 
     def _load_manifest_paths(self, manifest_path: Path) -> set:
         """
@@ -457,7 +483,8 @@ class SnapshotManager:
         step_id: str,
         run_number: int,
         snapshot_items: List[str],
-        prev_manifest_path,   # Path | None
+        prev_manifest_path,       # Path | None
+        current_scan=None,        # tuple[set, set] | None  — (files, dirs) from _scan_project()
     ) -> Path:
         """
         Creates a targeted snapshot ZIP containing:
@@ -469,11 +496,18 @@ class SnapshotManager:
                             or None if this is the very first run of the project
                             (in which case all current files are treated as new).
 
+        current_scan: Optional pre-computed (files, dirs) tuple from _scan_project().
+                      If provided, skips the internal scan entirely (no second walk).
+                      Pass the second element of scan_manifest()'s return value.
+
         Returns the Path of the written ZIP file.
         """
         zip_path = self.snapshots_dir / f"{step_id}_run_{run_number}_snapshot.zip"
 
-        current_paths = self._scan_project_paths()
+        if current_scan is not None:
+            current_paths, _ = current_scan   # reuse — no second walk
+        else:
+            current_paths = self._scan_project_paths()   # fallback for direct callers
         prev_paths = self._load_manifest_paths(prev_manifest_path) if prev_manifest_path else set()
 
         # Resolve snapshot_items to relative path strings (normalise trailing slash)

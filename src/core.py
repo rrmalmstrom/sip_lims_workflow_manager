@@ -147,11 +147,12 @@ class Project:
                 # The manifest captures the current folder state as the baseline
                 # for this skipped step, enabling undo past the skip point.
                 run_number = 1
-                manifest_path = self.snapshot_manager.scan_manifest(step_id, run_number)
+                manifest_path, current_scan = self.snapshot_manager.scan_manifest(step_id, run_number)
                 self.snapshot_manager.take_selective_snapshot(
                     step_id, run_number,
                     snapshot_items=[],
                     prev_manifest_path=prev_manifest_path,
+                    current_scan=current_scan,
                 )
                 prev_manifest_path = manifest_path
                 # Mark step as skipped and record in completion order
@@ -237,12 +238,13 @@ class Project:
                 if candidate.exists():
                     prev_manifest_path = candidate
 
-        # --- Write manifest (fast metadata-only scan) ---
-        self.snapshot_manager.scan_manifest(step_id, run_number)
+        # --- Write manifest and capture scan result for reuse ---
+        manifest_path, current_scan = self.snapshot_manager.scan_manifest(step_id, run_number)
 
-        # --- Write selective snapshot ZIP ---
+        # --- Write selective snapshot ZIP (reuses scan — no second walk) ---
         self.snapshot_manager.take_selective_snapshot(
-            step_id, run_number, snapshot_items, prev_manifest_path
+            step_id, run_number, snapshot_items, prev_manifest_path,
+            current_scan=current_scan,
         )
 
         if debug_logger:

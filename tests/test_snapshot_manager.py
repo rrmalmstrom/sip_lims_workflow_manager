@@ -92,7 +92,7 @@ class TestScanManifest:
         write_file(tmp_path / "project_database.db")
         write_file(tmp_path / "lib_info.csv")
 
-        manifest_path = sm.scan_manifest("step_a", 1)
+        manifest_path, _ = sm.scan_manifest("step_a", 1)
 
         assert manifest_path.exists()
         assert manifest_path.name == "step_a_run_1_manifest.json"
@@ -130,16 +130,20 @@ class TestScanManifest:
         assert not any(".workflow_status" in f for f in data["files"])
         assert "real_file.txt" in data["files"]
 
-    def test_manifest_includes_permanent_exclusion_paths(self, tmp_path):
-        """PERMANENT_EXCLUSIONS are NOT applied during manifest creation."""
+    def test_manifest_excludes_permanent_exclusion_paths(self, tmp_path):
+        """PERMANENT_EXCLUSIONS paths must NOT appear in the manifest (scan pruning)."""
         sm = make_manager(tmp_path)
         fa_file = tmp_path / "archived_files" / "FA_results_archive" / "result.txt"
-        write_file(fa_file)
+        fa_file.parent.mkdir(parents=True)
+        fa_file.write_text("fa data")
+        normal_file = tmp_path / "project_database.db"
+        normal_file.write_text("db")
 
         sm.scan_manifest("step_a", 1)
         data = json.loads((tmp_path / ".snapshots" / "step_a_run_1_manifest.json").read_text())
 
-        assert "archived_files/FA_results_archive/result.txt" in data["files"]
+        assert "project_database.db" in data["files"]
+        assert not any("FA_results_archive" in f for f in data["files"])
 
     def test_manifest_metadata_fields(self, tmp_path):
         sm = make_manager(tmp_path)

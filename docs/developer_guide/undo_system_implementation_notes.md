@@ -1,9 +1,9 @@
 # Undo System Implementation Notes — Stage 2, 3 & Post-Stage 3 Deviation Log
 
 **Date:** 2026-04-24
-**Stage:** Post-Stage 3 — Rollback logging & silent-failure elimination (DEV-011)
+**Stage:** Post-Stage 3 — Scan performance optimization (DEV-012)
 **Plan document:** [`plans/undo_system_redesign.md`](../../plans/undo_system_redesign.md)
-**Status:** Complete — 96 tests passing, 1 xfailed (as of DEV-011 fix)
+**Status:** Complete — 43/43 snapshot manager tests passing (as of DEV-012 fix)
 
 ---
 
@@ -109,6 +109,134 @@ PERMANENT_EXCLUSIONS = {
     "Misc",
 }
 ```
+
+---
+
+## DEV-012: Scan Performance Optimization — `os.scandir()` Single-Pass with Early Pruning
+
+**Date:** 2026-04-24
+**Files changed:**
+- [`src/logic.py`](../../src/logic.py) — `SnapshotManager`: new constants, new `_scan_project()` method, updated `scan_manifest()` return type, updated `take_selective_snapshot()` signature
+- [`src/core.py`](../../src/core.py) — `run_step()`, `skip_to_step()`: updated to capture and reuse scan tuple
+- [`tests/test_snapshot_manager.py`](../../tests/test_snapshot_manager.py) — updated `test_writes_manifest_json` (tuple unpack), renamed and inverted `test_manifest_excludes_permanent_exclusion_paths`
+
+### Problem
+
+The snapshot system performed **three separate `rglob('*')` walks** per step execution:
+
+1. `_scan_project_paths()` → `rglob` #1 (called inside `scan_manifest()`)
+2. `_scan_project_dirs()` → `rglob` #2 (called inside `scan_manifest()`)
+3. `_scan_project_paths()` → `rglob` #3 (called inside `take_selective_snapshot()`)
+
+On an external drive with large FA archive directories (hundreds of BMP/instrument files) and MISC folders, each `rglob('*')` walk took 55–60 seconds. Three walks = **~166 seconds per step execution** (measured via `utils/benchmark_scan.py`).
+
+Additionally, `rglob('*')` has no early-exit mechanism — it descends into every subdirectory including `PERMANENT_EXCLUSIONS` paths (FA archives, MISC folders) that are never included in manifests or snapshots anyway.
+
+### Benchmark Results (`utils/benchmark_scan.py`)
+
+| Strategy | Average time | Speedup |
+|----------|-------------|---------|
+| Strategy 1: Baseline (3× `rglob`) | 166.28 s | 1× |
+| Strategy 2: Single `rglob` | 58.29 s | 2.85× |
+| Strategy 3: Single `rglob` + exclusions | 40.00 s | 4.16× |
+| Strategy 4: `os.scandir` + early pruning | **1.87 s** | **89×** |
+
+### Fix: Single-Pass `os.scandir()` with Early Directory Pruning
+
+**New constants in `src/logic.py`:**
+
+```python
+_SCAN_EXCLUDE_NAMES: frozenset = frozenset({
+    '.snapshots',
+    '.workflow_status',
+    '.workflow_logs',
+    'workflow.yml',
+    '__pycache__',
+    '.DS_Store',
+})
+
+_SCAN_EXCLUDE_PREFIXES: frozenset = frozenset(PERMANENT_EXCLUSIONS)
+```
+
+`_SCAN_EXCLUDE_NAMES` prunes system folders/files by name at **any depth** — the scanner never descends into them.
+
+`_SCAN_EXCLUDE_PREFIXES` prunes `PERMANENT_EXCLUSIONS` paths (FA archives, MISC variants) by their top-level relative path — the scanner never enters them. These are always top-level directories in the project folder, so prefix matching is correct and sufficient.
+
+`workflow.yml` is excluded from scans so it never appears in manifests or snapshots (it is a workflow configuration file, not a project data file).
+
+**New `_scan_project()` method in `SnapshotManager`:**
+
+```python
+def _scan_project(self) -> tuple:
+    files: set = set()
+    dirs: set = set()
+    stack: list = [self.project_path]
+    while stack:
+        current_dir = stack.pop()
+        try:
+            with os.scandir(current_dir) as it:
+                for entry in it:
+                    if entry.name in _SCAN_EXCLUDE_NAMES:
+                        continue
+                    rel = str(Path(entry.path).relative_to(self.project_path))
+                    if entry.is_dir(follow_symlinks=False):
+                        if rel in _SCAN_EXCLUDE_PREFIXES:
+                            continue
+                        dirs.add(rel)
+                        stack.append(Path(entry.path))
+                    else:
+                        files.add(rel)
+        except PermissionError:
+            pass
+    return files, dirs
+```
+
+The key insight: `os.scandir()` with an explicit stack allows **pruning entire subtrees before entering them**. When a directory name matches `_SCAN_EXCLUDE_NAMES` or its relative path matches `_SCAN_EXCLUDE_PREFIXES`, it is skipped entirely — the scanner never descends into it. `rglob('*')` has no equivalent mechanism.
+
+**`_scan_project_paths()` and `_scan_project_dirs()` retained as thin wrappers** for backward compatibility with any callers that use them directly.
+
+**`scan_manifest()` return type changed** from `Path` to `tuple[Path, tuple[set, set]]`:
+
+```python
+# Before:
+manifest_path = sm.scan_manifest(step_id, run_number)
+
+# After:
+manifest_path, current_scan = sm.scan_manifest(step_id, run_number)
+# current_scan = (files: set, dirs: set)
+```
+
+**`take_selective_snapshot()` accepts optional `current_scan` parameter:**
+
+```python
+def take_selective_snapshot(self, step_id, run_number, snapshot_items,
+                            prev_manifest_path, current_scan=None):
+    if current_scan is not None:
+        current_paths, _ = current_scan  # reuse — no second walk
+    else:
+        current_paths = self._scan_project_paths()  # fallback
+```
+
+**Callers in `src/core.py`** (`run_step()` and `skip_to_step()`) capture the scan tuple from `scan_manifest()` and pass it to `take_selective_snapshot()`, eliminating the third walk entirely.
+
+### Why `PERMANENT_EXCLUSIONS` Are Now Also Excluded from Scans
+
+`PERMANENT_EXCLUSIONS` previously only protected these paths from **deletion during rollback** — they were still traversed during scanning. The fix extends their protection to scanning as well: the scanner now skips them entirely. This is correct because:
+
+1. FA archive directories contain hundreds of large BMP/instrument files — the dominant source of scan latency
+2. MISC folders are user-managed and should never appear in manifests or snapshots
+3. These paths are never rolled back, so there is no reason to scan them
+
+### Test Updates
+
+- `test_writes_manifest_json`: changed `manifest_path = sm.scan_manifest(...)` to `manifest_path, _ = sm.scan_manifest(...)` to unpack the new tuple return type
+- `test_manifest_includes_permanent_exclusion_paths` → renamed to `test_manifest_excludes_permanent_exclusion_paths` and assertion **inverted**: FA archive paths must **not** appear in the manifest (previously the test incorrectly asserted they were included)
+
+### Real-World Validation
+
+Tested on an external drive project with FA archive and MISC folders:
+- Manifest JSON + ZIP creation: **~10 seconds** (cold cache, vs. ~166 seconds before)
+- The remaining latency after manifest creation is Python subprocess startup + heavy library imports (pandas, numpy, openpyxl, sqlalchemy) — a separate issue unrelated to this optimization
 
 ---
 

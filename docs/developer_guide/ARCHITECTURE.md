@@ -243,4 +243,24 @@ The system includes comprehensive protection against race conditions, especially
 -   **Memory Management**: Improved memory usage for long-running workflows
 -   **External Drive Performance**: Optimized for laboratory environments with network storage
 
+#### Scan Performance: `os.scandir()` with Early Directory Pruning (DEV-012)
+
+The snapshot system must scan the project folder before and after each step to build a manifest and detect changed files. On external drives with large FA archive directories (hundreds of BMP/instrument files), the original `rglob('*')`-based scan took **~166 seconds per step** (three separate walks).
+
+The system now uses a single `os.scandir()` pass with **early directory pruning**:
+
+- **`_SCAN_EXCLUDE_NAMES`** — system folder/file names (`.snapshots`, `.workflow_status`, `.workflow_logs`, `workflow.yml`, `__pycache__`, `.DS_Store`) pruned by name at any depth. The scanner never descends into them.
+- **`_SCAN_EXCLUDE_PREFIXES`** — `PERMANENT_EXCLUSIONS` paths (FA archives, MISC variants) pruned by top-level relative path before the scanner enters them.
+
+The single `_scan_project()` call returns a `(files, dirs)` tuple that is reused across both `scan_manifest()` and `take_selective_snapshot()`, eliminating the third redundant walk entirely.
+
+**Benchmark results** (measured on an external drive with FA archive data):
+
+| Strategy | Average time | Speedup |
+|----------|-------------|---------|
+| Baseline (3× `rglob`) | 166 s | 1× |
+| Single `os.scandir` + early pruning | **1.87 s** | **89×** |
+
+Real-world validation: manifest JSON + ZIP creation dropped from ~166 s to ~10 s (cold cache). See [`docs/developer_guide/undo_system_implementation_notes.md`](undo_system_implementation_notes.md) (DEV-012) for full implementation details.
+
 This native Python architecture ensures optimal performance, simplified deployment, and enhanced reliability while maintaining the scientific reproducibility and robustness required for laboratory environments.
