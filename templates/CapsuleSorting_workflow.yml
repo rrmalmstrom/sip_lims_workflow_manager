@@ -31,3 +31,13 @@ steps:
     script: "verify_scanning_and_generate_ESP_files.py"
     allow_rerun: false
     notes: "Validates barcode scanning results. Will exit if any mismatches detected."
+
+# Auxiliary scripts can be launched at any time and do not affect workflow state.
+# On success: snapshot, manifest, and success marker are deleted (no trace left).
+# On failure: automatic rollback fires, restoring the project to its pre-run state.
+# Scripts must write a <script_stem>.success marker file (same contract as workflow scripts).
+auxiliary_scripts: []
+  # Example entry (uncomment and fill in when adding real auxiliary scripts):
+  # - id: aux_example
+  #   name: "Example Auxiliary Tool"
+  #   script: "example_auxiliary_tool.py"

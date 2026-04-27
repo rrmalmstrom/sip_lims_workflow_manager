@@ -42,6 +42,7 @@ class Workflow:
         
         self.name: str = self._data.get("workflow_name", "Untitled Workflow")
         self.steps: List[Dict[str, Any]] = self._data.get("steps", [])
+        self.auxiliary_scripts: List[Dict[str, Any]] = self._data.get("auxiliary_scripts", [])
 
     def _load_workflow(self) -> Dict[str, Any]:
         """Loads and parses the workflow YAML file."""
@@ -58,6 +59,13 @@ class Workflow:
     def get_all_steps(self) -> List[Dict[str, Any]]:
         """Returns the list of all step dicts in the workflow."""
         return self.steps
+
+    def get_auxiliary_script_by_id(self, aux_id: str) -> Optional[Dict[str, Any]]:
+        """Finds an auxiliary script entry by its ID. Returns None if not found."""
+        for aux in self.auxiliary_scripts:
+            if aux.get("id") == aux_id:
+                return aux
+        return None
 
 class Project:
     """
@@ -621,6 +629,181 @@ class Project:
                      step_id=step_id, run_number=run_number)
         
         return True
+
+    def run_auxiliary_script(self, aux_id: str):
+        """
+        Starts an auxiliary script asynchronously.
+
+        Auxiliary scripts:
+        - Can be launched at any time regardless of workflow state.
+        - NEVER modify workflow_state.json (not even temporarily).
+        - Take a manifest + empty selective snapshot before running so that
+          automatic rollback is possible on failure.
+        - Must write a <script_stem>.success marker file (same contract as
+          workflow scripts) for the two-factor success check to work.
+
+        On success: handle_auxiliary_result() deletes the snapshot, manifest,
+        and success marker — leaving no trace in the workflow tracking system.
+        On failure: handle_auxiliary_result() rolls back from the snapshot.
+        """
+        aux = self.workflow.get_auxiliary_script_by_id(aux_id)
+        if not aux:
+            raise ValueError(f"Auxiliary script '{aux_id}' not found in workflow.")
+
+        script_filename = Path(aux["script"]).name
+        script_full_path = self.script_path / script_filename
+
+        if not script_full_path.exists():
+            raise FileNotFoundError(
+                f"Auxiliary script not found: {script_full_path}"
+            )
+
+        log_info("run_auxiliary_script: starting", aux_id=aux_id,
+                 script=str(script_full_path))
+
+        # Always run_number=1 for auxiliary scripts (no rerun tracking).
+        run_number = 1
+
+        # Write manifest and take an empty selective snapshot.
+        # snapshot_items=[] means no specific files are backed up by name —
+        # the manifest diff will still catch any newly-created files on failure.
+        # This is the same pattern used by skip_to_step() for skipped steps.
+        manifest_path, current_scan = self.snapshot_manager.scan_manifest(
+            aux_id, run_number
+        )
+        self.snapshot_manager.take_selective_snapshot(
+            aux_id, run_number,
+            snapshot_items=[],
+            prev_manifest_path=None,   # no previous manifest needed for aux scripts
+            current_scan=current_scan,
+        )
+
+        log_info("run_auxiliary_script: snapshot taken", aux_id=aux_id,
+                 run_number=run_number)
+
+        # Launch the script — auxiliary scripts take no arguments.
+        self.script_runner.run(aux["script"], args=[])
+
+    def handle_auxiliary_result(self, aux_id: str, result: RunResult):
+        """
+        Handles the result of an auxiliary script.
+
+        INVARIANT: workflow_state.json is NEVER read, written, or modified
+        by this method. The JSON is captured passively in the manifest scan
+        but is never changed.
+
+        On success (exit code 0 + marker present):
+          1. Rename flat marker → run-specific marker (same as handle_step_result).
+          2. Verify two-factor success.
+          3. Delete run-specific success marker.
+          4. Delete snapshot ZIP and manifest.
+          workflow_state.json is NOT touched.
+
+        On failure:
+          1. Rollback from snapshot (restore_snapshot).
+          2. Delete snapshot ZIP and manifest.
+          3. Clean up any stale marker files.
+          workflow_state.json is NOT touched.
+        """
+        aux = self.workflow.get_auxiliary_script_by_id(aux_id)
+        if not aux:
+            raise ValueError(f"Auxiliary script '{aux_id}' not found in workflow.")
+
+        script_name = aux.get("script", "")
+        run_number = 1  # auxiliary scripts always use run_number=1
+
+        log_info("handle_auxiliary_result: processing result",
+                 aux_id=aux_id, result_success=result.success)
+
+        # --- Rename flat marker → run-specific marker (same as handle_step_result) ---
+        if script_name:
+            script_stem = Path(script_name).stem
+            status_dir = self.path / ".workflow_status"
+            flat_marker = status_dir / f"{script_stem}.success"
+            run_marker = status_dir / f"{script_stem}.run_{run_number}.success"
+            if flat_marker.exists():
+                try:
+                    flat_marker.rename(run_marker)
+                    log_info("handle_auxiliary_result: renamed flat marker to run-specific",
+                             flat_marker=str(flat_marker), run_marker=str(run_marker))
+                except OSError as e:
+                    log_warning("handle_auxiliary_result: could not rename marker",
+                                error=str(e))
+
+        # --- Two-factor success check (same as handle_step_result) ---
+        exit_code_success = result.success
+        marker_file_success = self._check_success_marker(script_name, run_number)
+        actual_success = exit_code_success and marker_file_success
+
+        log_info("handle_auxiliary_result: success determination",
+                 exit_code_success=exit_code_success,
+                 marker_file_success=marker_file_success,
+                 actual_success=actual_success)
+
+        # Helper: delete snapshot ZIP and manifest for this aux run
+        def _cleanup_snapshot_and_manifest():
+            self.snapshot_manager.remove_all_run_snapshots(aux_id)
+            manifest_path = (
+                self.snapshot_manager.snapshots_dir
+                / f"{aux_id}_run_{run_number}_manifest.json"
+            )
+            if manifest_path.exists():
+                manifest_path.unlink()
+                log_info("handle_auxiliary_result: deleted manifest",
+                         manifest=str(manifest_path))
+
+        if actual_success:
+            # SUCCESS: clean up all temporary artifacts, leave no trace.
+            # 1. Delete the run-specific success marker.
+            if script_name:
+                script_stem = Path(script_name).stem
+                status_dir = self.path / ".workflow_status"
+                run_marker = status_dir / f"{script_stem}.run_{run_number}.success"
+                if run_marker.exists():
+                    run_marker.unlink()
+                    log_info("handle_auxiliary_result: deleted success marker",
+                             marker=str(run_marker))
+
+            # 2. Delete snapshot ZIP and manifest.
+            _cleanup_snapshot_and_manifest()
+
+            log_info("handle_auxiliary_result: SUCCESS — all artifacts cleaned up",
+                     aux_id=aux_id)
+            # workflow_state.json is NOT touched — this is intentional.
+
+        else:
+            # FAILURE: rollback from snapshot, then clean up.
+            log_error("handle_auxiliary_result: FAILURE — rolling back",
+                      aux_id=aux_id, exit_code_success=exit_code_success,
+                      marker_file_success=marker_file_success)
+
+            if self.snapshot_manager.snapshot_exists(aux_id, run_number):
+                # restore_snapshot raises RollbackError on failure — let it propagate
+                # so the UI can display a critical recovery alert.
+                self.snapshot_manager.restore_snapshot(aux_id, run_number)
+                self.snapshot_manager.remove_run_snapshots_from(aux_id, run_number)
+                log_info("handle_auxiliary_result: rollback completed", aux_id=aux_id)
+            else:
+                log_warning("handle_auxiliary_result: no snapshot found for rollback",
+                            aux_id=aux_id)
+
+            # Clean up manifest.
+            _cleanup_snapshot_and_manifest()
+
+            # Clean up any stale marker files left by the failed script.
+            if script_name:
+                script_stem = Path(script_name).stem
+                status_dir = self.path / ".workflow_status"
+                for marker in [
+                    status_dir / f"{script_stem}.success",
+                    status_dir / f"{script_stem}.run_{run_number}.success",
+                ]:
+                    if marker.exists():
+                        marker.unlink()
+                        log_info("handle_auxiliary_result: cleaned up stale marker",
+                                 marker=str(marker))
+
+            # workflow_state.json is NOT touched — this is intentional.
 
     def _check_success_marker(self, script_name: str, run_number: int) -> bool:
         """

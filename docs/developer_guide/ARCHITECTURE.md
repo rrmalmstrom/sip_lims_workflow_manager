@@ -282,3 +282,65 @@ DEV-013 replaces the two-walk pattern with a single `_scan_project()` call that 
 This means automatic rollback on script failure, manual undo, and terminate-and-rollback all complete their directory scan phase in ~0.01 s instead of 4–60 s (depending on FA archive size). See [`docs/developer_guide/undo_system_implementation_notes.md`](undo_system_implementation_notes.md) (DEV-013) for full implementation details.
 
 This native Python architecture ensures optimal performance, simplified deployment, and enhanced reliability while maintaining the scientific reproducibility and robustness required for laboratory environments.
+
+---
+
+## Auxiliary Tools
+
+The **Auxiliary Tools** feature allows workflow-specific convenience scripts to be launched from the GUI at any time, without affecting the workflow state.
+
+### Key Properties
+
+- Auxiliary scripts are declared in the `auxiliary_scripts` key of each workflow YAML (e.g. [`sip_workflow.yml`](../../templates/sip_workflow.yml)), using the same `id`, `name`, `script` fields as workflow steps.
+- They live in the same `scripts/` directory as workflow scripts.
+- **`workflow_state.json` is never read, written, or modified** during an auxiliary script run — not even temporarily.
+- They do not appear in the undo stack and cannot be rolled back via the manual Undo button.
+- Only one script (workflow or auxiliary) can run at a time — the shared terminal is used for output.
+
+### Lifecycle
+
+```
+Before launch:  scan_manifest() + take_selective_snapshot(snapshot_items=[])
+                → manifest + empty ZIP written to .snapshots/
+
+Script runs:    output streams to shared terminal area in the GUI
+
+On SUCCESS (exit code 0 + .success marker present):
+                → delete .success marker from .workflow_status/
+                → delete snapshot ZIP + manifest from .snapshots/
+                → workflow_state.json unchanged
+                → any output files created are picked up by the next
+                  workflow step's manifest diff automatically
+
+On FAILURE (non-zero exit OR missing .success marker):
+                → restore_snapshot() rolls back any partial file changes
+                → delete snapshot ZIP + manifest from .snapshots/
+                → workflow_state.json unchanged
+```
+
+### YAML Schema
+
+```yaml
+auxiliary_scripts:
+  - id: aux_example_tool
+    name: "Example Auxiliary Tool"
+    script: "example_auxiliary_tool.py"
+```
+
+Auxiliary scripts must write a `<script_stem>.success` marker file to `.workflow_status/` (same contract as workflow scripts) for the two-factor success check to work.
+
+### Interactive Input
+
+The auxiliary terminal supports the same interactive PTY input as workflow steps. While an auxiliary script is running, the GUI shows:
+- Live terminal output streamed from the PTY
+- A text input box and **Send Input** button for responding to script prompts
+- A **🛑 Terminate** button to stop the script and rollback any partial changes
+
+### Implementation
+
+- **[`src/core.py`](../../src/core.py)** — `Workflow.get_auxiliary_script_by_id()`, `Project.run_auxiliary_script()`, `Project.handle_auxiliary_result()`
+- **[`app.py`](../../app.py)** — `running_auxiliary_id` session state key, Auxiliary Tools UI section (with input box + Send Input + Terminate), terminal display extension, polling loop extension
+
+### Known Pitfalls
+
+- **Do not use `import threading` inside `main()` in `app.py`**: Python treats any name imported or assigned anywhere in a function scope as a local variable for the entire function. A local `import threading` inside a conditional block will shadow the module-level `import threading` and cause `UnboundLocalError` at any earlier reference to `threading` in the same function. The module-level import at the top of `app.py` is sufficient.

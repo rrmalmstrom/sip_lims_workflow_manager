@@ -95,3 +95,12 @@ steps:
   - id: transfer_pools
     name: "20. Transfer Pools to Final Tubes"
     script: "transfer.pools.to.final.tubes.py"
+
+# Auxiliary scripts can be launched at any time and do not affect workflow state.
+# On success: snapshot, manifest, and success marker are deleted (no trace left).
+# On failure: automatic rollback fires, restoring the project to its pre-run state.
+# Scripts must write a <script_stem>.success marker file (same contract as workflow scripts).
+auxiliary_scripts:
+  - id: aux_plot_manual_fa
+    name: "Plot Manually Updated FA Results"
+    script: "plot.manually.updated.fa.results.py"
