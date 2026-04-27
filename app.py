@@ -562,6 +562,9 @@ def main():
     # Stored as a dict so it survives reruns until the user explicitly dismisses it.
     if 'critical_rollback_alert' not in st.session_state:
         st.session_state.critical_rollback_alert = None
+    # Tracks which auxiliary script is currently running (None when idle).
+    if 'running_auxiliary_id' not in st.session_state:
+        st.session_state.running_auxiliary_id = None
 
     # --- Native Auto-Detection ---
     # Try to auto-detect and load native project
@@ -1194,6 +1197,62 @@ def main():
                         st.rerun()
             
         
+        # Show terminal for running auxiliary scripts
+        elif st.session_state.running_auxiliary_id:
+            aux_id = st.session_state.running_auxiliary_id
+            aux_script = project.workflow.get_auxiliary_script_by_id(aux_id)
+
+            st.markdown("# 🖥️ LIVE TERMINAL")
+            st.warning(f"⏳ **AUXILIARY SCRIPT RUNNING**: {aux_script['name'] if aux_script else aux_id}")
+            st.markdown("""
+            <div style="background-color: #e6d7ff; padding: 10px; border-radius: 5px; border-left: 5px solid #9966cc; color: #4a4a4a;">
+                👇 <strong>AUXILIARY TOOL</strong>: Running — does not affect workflow state
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.subheader("Terminal Output")
+            if st.session_state.terminal_output:
+                st.code(st.session_state.terminal_output, language=None)
+            else:
+                st.text("Waiting for script output...")
+
+            # Terminate button for auxiliary scripts
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col3:
+                if st.button(
+                    "🛑 Terminate",
+                    key="terminate_auxiliary_script",
+                    type="secondary",
+                    help="Stop the auxiliary script and rollback any partial changes"
+                ):
+                    try:
+                        project.script_runner.terminate()
+                        # Rollback from the pre-run snapshot if one exists
+                        if project.snapshot_manager.snapshot_exists(aux_id, 1):
+                            project.snapshot_manager.restore_snapshot(aux_id, 1)
+                            project.snapshot_manager.remove_run_snapshots_from(aux_id, 1)
+                        # Clean up manifest
+                        manifest_path = (
+                            project.snapshot_manager.snapshots_dir
+                            / f"{aux_id}_run_1_manifest.json"
+                        )
+                        if manifest_path.exists():
+                            manifest_path.unlink()
+                        st.session_state.running_auxiliary_id = None
+                        st.session_state.terminal_output = ""
+                        st.success("✅ Auxiliary script terminated and changes rolled back.")
+                        st.rerun()
+                    except RollbackError as rollback_err:
+                        st.session_state.critical_rollback_alert = {
+                            "context": "terminate",
+                            "step_id": aux_id,
+                            "run_number": 1,
+                            "reason": rollback_err.reason,
+                        }
+                        st.session_state.running_auxiliary_id = None
+                        st.session_state.terminal_output = ""
+                        st.rerun()
+
         # Show terminal for completed scripts
         elif st.session_state.completed_script_output and st.session_state.completed_script_step:
             completed_step = project.workflow.get_step_by_id(st.session_state.completed_script_step)
@@ -1388,6 +1447,47 @@ def main():
             # ... (rest of the step display logic) ...
             st.markdown("---")
 
+        # --- Auxiliary Tools Section ---
+        aux_scripts = project.workflow.auxiliary_scripts
+        if aux_scripts:
+            st.markdown("## 🔧 Auxiliary Tools")
+            st.caption(
+                "These scripts can be run at any time and do not affect the workflow state. "
+                "On failure, changes are automatically rolled back."
+            )
+            st.markdown("---")
+
+            for aux in aux_scripts:
+                aux_id = aux['id']
+                aux_name = aux['name']
+                is_running_this_aux = st.session_state.running_auxiliary_id == aux_id
+
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    if is_running_this_aux:
+                        st.warning(f"⏳ {aux_name} (Running...)")
+                    else:
+                        st.info(f"🔧 {aux_name}")
+
+                with col2:
+                    # Disable if any script (workflow or auxiliary) is currently running
+                    launch_disabled = (
+                        st.session_state.running_step_id is not None or
+                        st.session_state.running_auxiliary_id is not None or
+                        not project.has_workflow_state()
+                    )
+                    if st.button("Launch", key=f"aux_{aux_id}", disabled=launch_disabled):
+                        st.session_state.running_auxiliary_id = aux_id
+                        st.session_state.terminal_output = ""
+                        thread = threading.Thread(
+                            target=lambda aid=aux_id: project.run_auxiliary_script(aid)
+                        )
+                        st.session_state['script_thread'] = thread
+                        thread.start()
+                        st.rerun()
+
+                st.markdown("---")
+
     # --- Background Loop for UI Updates & Final Result Processing ---
     if st.session_state.project:
         # Simple polling for both output and completion
@@ -1462,7 +1562,63 @@ def main():
                 # Script still running - schedule a simple rerun to continue polling
                 time.sleep(0.1)  # Small delay to prevent excessive CPU usage
                 st.rerun()
-        
+
+        # Poll for auxiliary script output and completion
+        elif st.session_state.running_auxiliary_id:
+            runner = st.session_state.project.script_runner
+            aux_id = st.session_state.running_auxiliary_id
+
+            # Poll for output (same pattern as workflow steps)
+            output_received = False
+            while True:
+                try:
+                    output = runner.output_queue.get_nowait()
+                    if output is not None:
+                        st.session_state.terminal_output += output
+                        output_received = True
+                    else:
+                        break  # Sentinel value received
+                except queue.Empty:
+                    break
+
+            if output_received:
+                st.rerun()
+
+            # Poll for the final result
+            try:
+                result = runner.result_queue.get_nowait()
+
+                # Handle the result — no workflow state changes
+                try:
+                    st.session_state.project.handle_auxiliary_result(aux_id, result)
+                except RollbackError as rollback_err:
+                    log_error(
+                        "Auxiliary script rollback failed — storing critical alert",
+                        aux_id=aux_id,
+                        reason=rollback_err.reason,
+                    )
+                    st.session_state.critical_rollback_alert = {
+                        "context": "auto_rollback",
+                        "step_id": aux_id,
+                        "run_number": 1,
+                        "reason": rollback_err.reason,
+                    }
+
+                # Preserve terminal output for completed display.
+                # Use result.success directly — there is no workflow state to check.
+                actual_success = result.success
+                st.session_state.completed_script_output = st.session_state.terminal_output
+                st.session_state.completed_script_step = aux_id
+                st.session_state.completed_script_success = actual_success
+
+                st.session_state.running_auxiliary_id = None
+                st.rerun()
+
+            except queue.Empty:
+                # Auxiliary script still running — keep polling
+                time.sleep(0.1)
+                st.rerun()
+
 
 if __name__ == "__main__":
     main()

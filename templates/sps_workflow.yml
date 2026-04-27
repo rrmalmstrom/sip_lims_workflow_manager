@@ -36,3 +36,13 @@ steps:
   - id: conclude_fa_analysis
     name: "Conclude FA Analysis and Generate ESP Smear File"
     script: "SPS_conclude_FA_analysis_generate_ESP_smear_file.py"
+
+# Auxiliary scripts can be launched at any time and do not affect workflow state.
+# On success: snapshot, manifest, and success marker are deleted (no trace left).
+# On failure: automatic rollback fires, restoring the project to its pre-run state.
+# Scripts must write a <script_stem>.success marker file (same contract as workflow scripts).
+auxiliary_scripts: []
+  # Example entry (uncomment and fill in when adding real auxiliary scripts):
+  # - id: aux_example
+  #   name: "Example Auxiliary Tool"
+  #   script: "example_auxiliary_tool.py"
