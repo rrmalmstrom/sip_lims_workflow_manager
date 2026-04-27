@@ -715,7 +715,6 @@ def main():
             try:
                 import os
                 import signal
-                import threading
                 import platform
                 
                 def delayed_shutdown():
@@ -1216,8 +1215,22 @@ def main():
             else:
                 st.text("Waiting for script output...")
 
-            # Terminate button for auxiliary scripts
+            # Input section for auxiliary terminal (same as workflow step terminal)
             col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                user_input = st.text_input(
+                    "Input:",
+                    key="aux_terminal_input_box",
+                    help="Type your input and click 'Send Input' button",
+                    placeholder="Type your input here..."
+                )
+            with col2:
+                st.button(
+                    "Send Input",
+                    key="send_aux_terminal_input",
+                    on_click=send_and_clear_input,
+                    args=(project, user_input)
+                )
             with col3:
                 if st.button(
                     "🛑 Terminate",

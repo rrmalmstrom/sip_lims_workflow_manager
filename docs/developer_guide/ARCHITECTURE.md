@@ -329,7 +329,18 @@ auxiliary_scripts:
 
 Auxiliary scripts must write a `<script_stem>.success` marker file to `.workflow_status/` (same contract as workflow scripts) for the two-factor success check to work.
 
+### Interactive Input
+
+The auxiliary terminal supports the same interactive PTY input as workflow steps. While an auxiliary script is running, the GUI shows:
+- Live terminal output streamed from the PTY
+- A text input box and **Send Input** button for responding to script prompts
+- A **🛑 Terminate** button to stop the script and rollback any partial changes
+
 ### Implementation
 
 - **[`src/core.py`](../../src/core.py)** — `Workflow.get_auxiliary_script_by_id()`, `Project.run_auxiliary_script()`, `Project.handle_auxiliary_result()`
-- **[`app.py`](../../app.py)** — `running_auxiliary_id` session state key, Auxiliary Tools UI section, terminal display extension, polling loop extension
+- **[`app.py`](../../app.py)** — `running_auxiliary_id` session state key, Auxiliary Tools UI section (with input box + Send Input + Terminate), terminal display extension, polling loop extension
+
+### Known Pitfalls
+
+- **Do not use `import threading` inside `main()` in `app.py`**: Python treats any name imported or assigned anywhere in a function scope as a local variable for the entire function. A local `import threading` inside a conditional block will shadow the module-level `import threading` and cause `UnboundLocalError` at any earlier reference to `threading` in the same function. The module-level import at the top of `app.py` is sufficient.
